@@ -1,7 +1,3 @@
-<<<<<<< HEAD
-# hub-kealex
-hub-kealex
-=======
 # hubKealex — Backend Microserviços
 
 Backend do sistema Kealex em arquitetura de microserviços Python/FastAPI.
@@ -122,4 +118,3 @@ O `Jenkinsfile` executa:
 Configure as credentials no Jenkins:
 - `kealex-secret-key` — Secret text com o valor de SECRET_KEY
 - `registry-creds` — Username/Password do registry Docker
->>>>>>> 1e50ad0 (feat: initialize project structure and microservices)
