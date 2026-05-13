@@ -70,18 +70,16 @@ class CfgDatabase(Base):
 
 class CfgIa(Base):
     __tablename__ = "cfg_ia"
-    tenant_id         = Column(String(36),  primary_key=True)
-    user_id           = Column(String(36),  nullable=False)
-    escritorio_id     = Column(String(36),  nullable=True)
-    provider          = Column(String(50),  default="cerebras")
-    api_key           = Column(String(255), nullable=True)  # Deprecated, manter por compatibilidade
-    cerebras_api_key  = Column(String(255), nullable=True)
-    groq_api_key      = Column(String(255), nullable=True)
-    modelo            = Column(String(100), default="llama-3.3-70b")
-    max_tokens        = Column(Integer,     default=8192)
-    system_prompt     = Column(Text,        nullable=True)
-    ativo             = Column(Boolean,     default=True)
-    updated_at        = Column(DateTime,    default=datetime.utcnow, onupdate=datetime.utcnow)
+    tenant_id     = Column(String(36),  primary_key=True)
+    user_id       = Column(String(36),  nullable=False)
+    escritorio_id = Column(String(36),  nullable=True)
+    provider      = Column(String(50),  default="cerebras")
+    api_key       = Column(String(255), nullable=True)
+    modelo        = Column(String(100), default="llama-3.3-70b")
+    max_tokens    = Column(Integer,     default=8192)
+    system_prompt = Column(Text,        nullable=True)
+    ativo         = Column(Boolean,     default=True)
+    updated_at    = Column(DateTime,    default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class CfgUsuarios(Base):
     __tablename__ = "cfg_usuarios"
@@ -237,11 +235,15 @@ class CdnIn(BaseModel):
 
 @app.get("/configuracoes/cdn")
 def get_cdn(db: Session = Depends(get_db), payload=Depends(require_admin)):
-    return _row(_get_or_create(db, CfgCdn, payload["tenant_id"], payload["sub"]))
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_id = payload.get("sub")
+    return _row(_get_or_create(db, CfgCdn, tenant_id, user_id))
 
 @app.post("/configuracoes/cdn")
 def save_cdn(body: CdnIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
-    return _row(_upsert(db, CfgCdn, payload["tenant_id"], payload["sub"], body.model_dump(exclude_none=True)))
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_id = payload.get("sub")
+    return _row(_upsert(db, CfgCdn, tenant_id, user_id, body.model_dump(exclude_none=True)))
 
 # ── Database ──────────────────────────────────────────────────────────────────
 
@@ -258,140 +260,93 @@ class DatabaseIn(BaseModel):
 
 @app.get("/configuracoes/database")
 def get_database(db: Session = Depends(get_db), payload=Depends(require_admin)):
-    return _row(_get_or_create(db, CfgDatabase, payload["tenant_id"], payload["sub"]))
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_id = payload.get("sub")
+    return _row(_get_or_create(db, CfgDatabase, tenant_id, user_id))
 
 @app.post("/configuracoes/database")
 def save_database(body: DatabaseIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
-    return _row(_upsert(db, CfgDatabase, payload["tenant_id"], payload["sub"], body.model_dump(exclude_none=True)))
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_id = payload.get("sub")
+    return _row(_upsert(db, CfgDatabase, tenant_id, user_id, body.model_dump(exclude_none=True)))
 
 # ── IA ────────────────────────────────────────────────────────────────────────
 
+# Modelos disponíveis por provider
+MODELOS_DISPONIVEIS = {
+    "cerebras": [
+        "llama-3.3-70b",
+        "llama-3.1-70b",
+        "llama-3.1-8b"
+    ],
+    "groq": [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-70b-versatile", 
+        "llama-3.1-8b-instant",
+        "llama-3.2-90b-text-preview",
+        "llama-3.2-11b-text-preview",
+        "llama-3.2-3b-preview",
+        "llama-3.2-1b-preview",
+        "gemma2-9b-it",
+        "gemma-7b-it"
+    ]
+}
+
 class IaIn(BaseModel):
-    provider:          Optional[str]  = None
-    api_key:           Optional[str]  = None  # Deprecated
-    cerebras_api_key:  Optional[str]  = None
-    groq_api_key:      Optional[str]  = None
-    modelo:            Optional[str]  = None
-    max_tokens:        Optional[int]  = None
-    system_prompt:     Optional[str]  = None
-    ativo:             Optional[bool] = None
+    provider:      Optional[str]  = None
+    api_key:       Optional[str]  = None
+    modelo:        Optional[str]  = None
+    max_tokens:    Optional[int]  = None
+    system_prompt: Optional[str]  = None
+    ativo:         Optional[bool] = None
 
 @app.get("/configuracoes/ia")
 def get_ia(db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
-    row = _get_or_create(db, CfgIa, tenant_id, user_id)
-    data = _row(row)
-    
-    # Retornar api_key baseado no provider atual
-    provider = data.get('provider', 'cerebras')
-    if provider == 'cerebras':
-        data['api_key'] = data.get('cerebras_api_key') or data.get('api_key')
-    elif provider == 'groq':
-        data['api_key'] = data.get('groq_api_key') or data.get('api_key')
-    else:
-        data['api_key'] = data.get('api_key')
-    
-    print(f"[IA Config GET] Provider: {provider}, API Key: {'Configurada' if data['api_key'] else 'Vazia'}")
-    
-    return data
+    return _row(_get_or_create(db, CfgIa, tenant_id, user_id))
+
+@app.get("/configuracoes/ia/modelos")
+def get_modelos_disponiveis():
+    """Retorna a lista de modelos disponíveis por provider"""
+    return MODELOS_DISPONIVEIS
 
 @app.get("/configuracoes/ia/ativa")
 def get_ia_ativa(db: Session = Depends(get_db), payload=Depends(verify_token)):
     """Retorna a configuração de IA ativa para o tenant (não requer admin)"""
     tenant_id = payload.get("tenant_id") or payload.get("sub")
-    
-    # Buscar configuração ativa (ativo = 1 / True)
-    row = db.query(CfgIa).filter(
-        CfgIa.tenant_id == tenant_id, 
-        CfgIa.ativo == True
-    ).first()
-    
-    if not row:
-        print(f"[IA Config] Nenhuma configuração ativa encontrada para tenant: {tenant_id}")
-        raise HTTPException(404, "Nenhuma configuração de IA ativa encontrada")
-    
-    data = _row(row)
-    
-    # Retornar api_key baseado no provider da configuração ativa
-    provider = data.get('provider', 'cerebras')
-    
-    if provider == 'cerebras':
-        api_key = data.get('cerebras_api_key') or data.get('api_key')
-        data['api_key'] = api_key
-        print(f"[IA Config] Cerebras ativo - API Key: {'Configurada' if api_key else 'Não configurada'}")
-    elif provider == 'groq':
-        api_key = data.get('groq_api_key') or data.get('api_key')
-        data['api_key'] = api_key
-        print(f"[IA Config] Groq ativo - API Key: {'Configurada' if api_key else 'Não configurada'}")
-    else:
-        api_key = data.get('api_key')
-        data['api_key'] = api_key
-        print(f"[IA Config] Provider desconhecido: {provider}")
-    
-    print(f"[IA Config] Retornando configuração: provider={provider}, modelo={data.get('modelo')}, ativo={data.get('ativo')}")
-    
-    return data
+    user_id = payload.get("sub")
+    return _row(_get_or_create(db, CfgIa, tenant_id, user_id))
 
 @app.post("/configuracoes/ia")
 def save_ia(body: IaIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
     data = body.model_dump(exclude_none=True)
     
-    print(f"[IA Config SAVE] Dados recebidos: provider={data.get('provider')}, ativo={data.get('ativo')}")
-    
     # Validar provider
     if "provider" in data and data["provider"] not in ["cerebras", "groq"]:
         raise HTTPException(400, "Provider inválido. Use 'cerebras' ou 'groq'")
     
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
-    existing = db.get(CfgIa, tenant_id)
-    provider = data.get("provider") or (existing.provider if existing else "cerebras")
+    # Validar modelo
+    if "modelo" in data and "provider" in data:
+        provider = data["provider"]
+        modelo = data["modelo"]
+        if modelo not in MODELOS_DISPONIVEIS.get(provider, []):
+            modelos_validos = ", ".join(MODELOS_DISPONIVEIS.get(provider, []))
+            raise HTTPException(400, f"Modelo '{modelo}' inválido para provider '{provider}'. Modelos válidos: {modelos_validos}")
     
-    print(f"[IA Config SAVE] Provider final: {provider}, Tenant: {tenant_id}")
-    
-    # Se api_key foi enviada, salvar no campo correto do provider
+    # Validar prefixo da API key
     if "api_key" in data and data["api_key"]:
-        api_key = data["api_key"]
-        
-        if provider == "cerebras":
-            if not api_key.startswith("csk-"):
-                raise HTTPException(400, "API key Cerebras deve começar com 'csk-'")
-            data["cerebras_api_key"] = api_key
-            print(f"[IA Config SAVE] Salvando Cerebras API Key: {api_key[:8]}...")
-        elif provider == "groq":
-            if not (api_key.startswith("gsk-") or api_key.startswith("gsk_")):
-                raise HTTPException(400, "API key Groq deve começar com 'gsk-' ou 'gsk_'")
-            data["groq_api_key"] = api_key
-            print(f"[IA Config SAVE] Salvando Groq API Key: {api_key[:8]}...")
-        
-        # Remover api_key do data para não salvar no campo deprecated
-        del data["api_key"]
-    
-    # Validar prefixo das API keys específicas
-    if "cerebras_api_key" in data and data["cerebras_api_key"]:
-        if not data["cerebras_api_key"].startswith("csk-"):
+        tenant_id = payload.get("tenant_id") or payload.get("sub")
+        existing = db.get(CfgIa, tenant_id)
+        provider = data.get("provider") or (existing.provider if existing else "cerebras")
+        if provider == "cerebras" and not data["api_key"].startswith("csk-"):
             raise HTTPException(400, "API key Cerebras deve começar com 'csk-'")
-    
-    if "groq_api_key" in data and data["groq_api_key"]:
-        if not (data["groq_api_key"].startswith("gsk-") or data["groq_api_key"].startswith("gsk_")):
+        if provider == "groq" and not (data["api_key"].startswith("gsk-") or data["api_key"].startswith("gsk_")):
             raise HTTPException(400, "API key Groq deve começar com 'gsk-' ou 'gsk_'")
     
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
-    result = _upsert(db, CfgIa, tenant_id, user_id, data)
-    response = _row(result)
-    
-    # Retornar api_key baseado no provider salvo
-    final_provider = response.get('provider', 'cerebras')
-    if final_provider == 'cerebras':
-        response['api_key'] = response.get('cerebras_api_key')
-    elif final_provider == 'groq':
-        response['api_key'] = response.get('groq_api_key')
-    else:
-        response['api_key'] = response.get('api_key')
-    
-    print(f"[IA Config SAVE] Salvo com sucesso: provider={final_provider}, ativo={response.get('ativo')}, api_key={'Configurada' if response['api_key'] else 'Vazia'}")
-    
-    return response
+    return _row(_upsert(db, CfgIa, tenant_id, user_id, data))
 
 # ── Usuários ──────────────────────────────────────────────────────────────────
 
@@ -408,11 +363,15 @@ class UsuariosIn(BaseModel):
 
 @app.get("/configuracoes/usuarios")
 def get_usuarios(db: Session = Depends(get_db), payload=Depends(require_admin)):
-    return _row(_get_or_create(db, CfgUsuarios, payload["tenant_id"], payload["sub"]))
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_id = payload.get("sub")
+    return _row(_get_or_create(db, CfgUsuarios, tenant_id, user_id))
 
 @app.post("/configuracoes/usuarios")
 def save_usuarios(body: UsuariosIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
-    return _row(_upsert(db, CfgUsuarios, payload["tenant_id"], payload["sub"], body.model_dump(exclude_none=True)))
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_id = payload.get("sub")
+    return _row(_upsert(db, CfgUsuarios, tenant_id, user_id, body.model_dump(exclude_none=True)))
 
 # ── Segurança ─────────────────────────────────────────────────────────────────
 
@@ -431,11 +390,15 @@ class SegurancaIn(BaseModel):
 
 @app.get("/configuracoes/seguranca")
 def get_seguranca(db: Session = Depends(get_db), payload=Depends(require_admin)):
-    return _row(_get_or_create(db, CfgSeguranca, payload["tenant_id"], payload["sub"]))
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_id = payload.get("sub")
+    return _row(_get_or_create(db, CfgSeguranca, tenant_id, user_id))
 
 @app.post("/configuracoes/seguranca")
 def save_seguranca(body: SegurancaIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
-    return _row(_upsert(db, CfgSeguranca, payload["tenant_id"], payload["sub"], body.model_dump(exclude_none=True)))
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_id = payload.get("sub")
+    return _row(_upsert(db, CfgSeguranca, tenant_id, user_id, body.model_dump(exclude_none=True)))
 
 # ── Notificações ──────────────────────────────────────────────────────────────
 
@@ -454,8 +417,12 @@ class NotificacoesIn(BaseModel):
 
 @app.get("/configuracoes/notificacoes")
 def get_notificacoes(db: Session = Depends(get_db), payload=Depends(require_admin)):
-    return _row(_get_or_create(db, CfgNotificacoes, payload["tenant_id"], payload["sub"]))
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_id = payload.get("sub")
+    return _row(_get_or_create(db, CfgNotificacoes, tenant_id, user_id))
 
 @app.post("/configuracoes/notificacoes")
 def save_notificacoes(body: NotificacoesIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
-    return _row(_upsert(db, CfgNotificacoes, payload["tenant_id"], payload["sub"], body.model_dump(exclude_none=True)))
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_id = payload.get("sub")
+    return _row(_upsert(db, CfgNotificacoes, tenant_id, user_id, body.model_dump(exclude_none=True)))

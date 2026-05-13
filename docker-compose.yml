@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  # API Gateway
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "8000:80"
+    depends_on:
+      - svc-auth
+      - svc-processos
+      - svc-documentos
+      - svc-financeiro
+      - svc-prazos
+      - svc-usuarios
+      - svc-configuracoes
+      - svc-escritorios
+      - svc-clientes
+
+  # Microservices
+  svc-auth:
+    build: ./svc-auth
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+
+  svc-processos:
+    build: ./svc-processos
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+
+  svc-documentos:
+    build: ./svc-documentos
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+
+  svc-financeiro:
+    build: ./svc-financeiro
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+
+  svc-prazos:
+    build: ./svc-prazos
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+
+  svc-usuarios:
+    build: ./svc-usuarios
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+
+  svc-configuracoes:
+    build: ./svc-configuracoes
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+
+  svc-escritorios:
+    build: ./svc-escritorios
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+
+  svc-clientes:
+    build: ./svc-clientes
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}

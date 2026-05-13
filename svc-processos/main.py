@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from jose import jwt, JWTError
-from sqlalchemy import create_engine, Column, String, DateTime, Enum as SAEnum
+from sqlalchemy import create_engine, Column, String, DateTime, Enum as SAEnum, Text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 DATABASE_URL = os.getenv("DATABASE_URL", "mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex")
@@ -18,6 +18,20 @@ SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 bearer       = HTTPBearer()
 
 class Base(DeclarativeBase): pass
+
+class Cliente(Base):
+    __tablename__ = "clientes"
+    id          = Column(String(36),  primary_key=True)
+    tenant_id   = Column(String(36),  nullable=False)
+    advogado_id = Column(String(36),  nullable=False)
+    nome        = Column(String(255), nullable=False)
+    email       = Column(String(255), nullable=False)
+    telefone    = Column(String(50),  nullable=True)
+    cpf_cnpj    = Column(String(20),  nullable=True)
+    endereco    = Column(String(500), nullable=True)
+    observacoes = Column(Text,        nullable=True)
+    created_at  = Column(DateTime,    default=datetime.utcnow)
+    updated_at  = Column(DateTime,    default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class StatusEnum(str, enum.Enum):
     ativo     = "ativo"
@@ -86,14 +100,21 @@ class ProcessoUpdate(BaseModel):
 class ProcessoDeleteIn(BaseModel):
     id: str
 
-def _to_dict(p: Processo):
+def _to_dict(p: Processo, cliente: Cliente = None):
     return {
         "id": p.id, "tenantId": p.tenant_id, "userId": p.user_id, "escritorioId": p.escritorio_id,
         "numero": p.numero, "titulo": p.titulo, "descricao": p.descricao, "status": p.status,
         "advogadoId": p.advogado_id, "clienteId": p.cliente_id,
+        "clienteNome": cliente.nome if cliente else None,
+        "clienteEmail": cliente.email if cliente else None,
         "vara": p.vara, "tribunal": p.tribunal,
         "createdAt": p.created_at.isoformat(), "updatedAt": p.updated_at.isoformat()
     }
+
+def _enrich(db: Session, processos: list[Processo]):
+    ids = list({p.cliente_id for p in processos})
+    clientes = {c.id: c for c in db.query(Cliente).filter(Cliente.id.in_(ids)).all()}
+    return [_to_dict(p, clientes.get(p.cliente_id)) for p in processos]
 
 @app.get("/processos")
 def list_processos(db: Session = Depends(get_db), payload=Depends(verify_token)):
@@ -103,7 +124,7 @@ def list_processos(db: Session = Depends(get_db), payload=Depends(verify_token))
         q = q.filter_by(cliente_id=uid)
     elif role == "advogado":
         q = q.filter_by(advogado_id=uid)
-    return [_to_dict(p) for p in q.all()]
+    return _enrich(db, q.all())
 
 @app.post("/processos/get")
 def get_processo(body: ProcessoGetIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
@@ -111,16 +132,21 @@ def get_processo(body: ProcessoGetIn, db: Session = Depends(get_db), payload=Dep
     p = db.query(Processo).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not p:
         raise HTTPException(404, "Não encontrado")
-    return _to_dict(p)
+    cliente = db.query(Cliente).filter_by(id=p.cliente_id).first()
+    return _to_dict(p, cliente)
 
 @app.post("/processos", status_code=201)
 def create_processo(body: ProcessoIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
+    # valida que o cliente existe e pertence ao tenant
+    cliente = db.query(Cliente).filter_by(id=body.clienteId, tenant_id=tenant_id).first()
+    if not cliente:
+        raise HTTPException(404, "Cliente não encontrado")
     p = Processo(tenant_id=tenant_id, user_id=payload["sub"], escritorio_id=body.escritorioId,
                  numero=body.numero, titulo=body.titulo, descricao=body.descricao,
                  advogado_id=payload["sub"], cliente_id=body.clienteId, vara=body.vara, tribunal=body.tribunal)
     db.add(p); db.commit(); db.refresh(p)
-    return _to_dict(p)
+    return _to_dict(p, cliente)
 
 @app.post("/processos/update")
 def update_processo(body: ProcessoUpdate, db: Session = Depends(get_db), payload=Depends(verify_token)):
@@ -132,7 +158,8 @@ def update_processo(body: ProcessoUpdate, db: Session = Depends(get_db), payload
         setattr(p, k, v)
     p.updated_at = datetime.utcnow()
     db.commit(); db.refresh(p)
-    return _to_dict(p)
+    cliente = db.query(Cliente).filter_by(id=p.cliente_id).first()
+    return _to_dict(p, cliente)
 
 @app.post("/processos/delete")
 def delete_processo(body: ProcessoDeleteIn, db: Session = Depends(get_db), payload=Depends(verify_token)):

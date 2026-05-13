@@ -98,6 +98,8 @@ POST   /configuracoes/cdn
 GET    /configuracoes/database
 POST   /configuracoes/database
 GET    /configuracoes/ia
+GET    /configuracoes/ia/modelos
+GET    /configuracoes/ia/ativa
 POST   /configuracoes/ia
 GET    /configuracoes/usuarios
 POST   /configuracoes/usuarios
@@ -118,3 +120,43 @@ O `Jenkinsfile` executa:
 Configure as credentials no Jenkins:
 - `kealex-secret-key` — Secret text com o valor de SECRET_KEY
 - `registry-creds` — Username/Password do registry Docker
+
+## Configuração de IA
+
+### Providers Suportados
+- **Cerebras**: Modelos Llama otimizados
+- **Groq**: Modelos Llama e Gemma com alta velocidade
+
+### Modelos Disponíveis
+
+**Cerebras:**
+- `llama-3.3-70b` (padrão)
+- `llama-3.1-70b`
+- `llama-3.1-8b`
+
+**Groq:**
+- `llama-3.3-70b-versatile`
+- `llama-3.1-70b-versatile`
+- `llama-3.1-8b-instant`
+- `llama-3.2-90b-text-preview`
+- `llama-3.2-11b-text-preview`
+- `llama-3.2-3b-preview`
+- `llama-3.2-1b-preview`
+- `gemma2-9b-it`
+- `gemma-7b-it`
+
+### Migração de Modelos Descontinuados
+
+Se você estiver usando modelos Groq descontinuados, execute:
+
+```bash
+cd migrations
+./update_groq_models.bat  # Windows
+# ou
+mysql -h host -u user -p database < update_groq_models.sql  # Linux/Mac
+```
+
+**Modelos migrados automaticamente:**
+- `mixtral-8x7b-32768` → `llama-3.1-70b-versatile`
+- `llama2-70b-4096` → `llama-3.1-70b-versatile`
+- `gemma-7b-it` → `gemma2-9b-it`
