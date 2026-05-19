@@ -1,0 +1,519 @@
+{
+  "info": {
+    "name": "Kealex - Testes Avançados",
+    "description": "Testes avançados e cenários de integração para o sistema Kealex",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "🔄 Fluxo Completo - Processo",
+      "item": [
+        {
+          "name": "1. Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Login realizado com sucesso', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('accessToken');",
+                  "    pm.collectionVariables.set('access_token', response.accessToken);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@kealex.com\",\n  \"senha\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "2. Listar Clientes",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Clientes listados com sucesso', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const clientes = pm.response.json();",
+                  "    if (clientes.length > 0) {",
+                  "        pm.collectionVariables.set('cliente_id', clientes[0].id);",
+                  "        console.log('Cliente ID salvo:', clientes[0].id);",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/clientes",
+              "host": ["{{base_url}}"],
+              "path": ["clientes"]
+            }
+          }
+        },
+        {
+          "name": "3. Criar Processo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Processo criado com sucesso', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    const processo = pm.response.json();",
+                  "    pm.expect(processo).to.have.property('id');",
+                  "    pm.collectionVariables.set('processo_id', processo.id);",
+                  "    console.log('Processo ID salvo:', processo.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"numero\": \"{{$randomInt}}-{{$randomInt}}.2024.8.26.{{$randomInt}}\",\n  \"titulo\": \"Ação Trabalhista - {{$randomCompanyName}}\",\n  \"descricao\": \"Processo trabalhista para cobrança de verbas rescisórias e horas extras não pagas.\",\n  \"clienteId\": \"{{cliente_id}}\",\n  \"vara\": \"{{$randomInt}}ª Vara do Trabalho de São Paulo\",\n  \"tribunal\": \"Tribunal Regional do Trabalho da 2ª Região\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/processos",
+              "host": ["{{base_url}}"],
+              "path": ["processos"]
+            }
+          }
+        },
+        {
+          "name": "4. Buscar Processo Criado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Processo encontrado', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const processo = pm.response.json();",
+                  "    pm.expect(processo.id).to.equal(pm.collectionVariables.get('processo_id'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{processo_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/processos/get",
+              "host": ["{{base_url}}"],
+              "path": ["processos", "get"]
+            }
+          }
+        },
+        {
+          "name": "5. Atualizar Status para Arquivado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status atualizado para arquivado', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const processo = pm.response.json();",
+                  "    pm.expect(processo.status).to.equal('arquivado');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{processo_id}}\",\n  \"status\": \"arquivado\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/processos/update",
+              "host": ["{{base_url}}"],
+              "path": ["processos", "update"]
+            }
+          }
+        },
+        {
+          "name": "6. Reativar Processo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Processo reativado', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const processo = pm.response.json();",
+                  "    pm.expect(processo.status).to.equal('ativo');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{processo_id}}\",\n  \"status\": \"ativo\",\n  \"titulo\": \"Ação Trabalhista - REATIVADA\",\n  \"descricao\": \"Processo reativado após análise da documentação complementar.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/processos/update",
+              "host": ["{{base_url}}"],
+              "path": ["processos", "update"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📊 Testes de Performance",
+      "item": [
+        {
+          "name": "Criar 10 Processos Sequenciais",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Processo criado', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Tempo de resposta < 2s', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"numero\": \"PERF-{{$randomInt}}-{{$timestamp}}\",\n  \"titulo\": \"Processo Performance Test {{$randomInt}}\",\n  \"descricao\": \"Processo criado para teste de performance - {{$timestamp}}\",\n  \"clienteId\": \"{{cliente_id}}\",\n  \"vara\": \"Vara de Performance {{$randomInt}}\",\n  \"tribunal\": \"Tribunal de Teste\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/processos",
+              "host": ["{{base_url}}"],
+              "path": ["processos"]
+            }
+          }
+        },
+        {
+          "name": "Listar Todos os Processos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Lista carregada com sucesso', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Tempo de resposta < 3s', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(3000);",
+                  "});",
+                  "",
+                  "pm.test('Retorna array de processos', function () {",
+                  "    const processos = pm.response.json();",
+                  "    pm.expect(processos).to.be.an('array');",
+                  "    console.log('Total de processos:', processos.length);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/processos",
+              "host": ["{{base_url}}"],
+              "path": ["processos"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🔒 Testes de Segurança",
+      "item": [
+        {
+          "name": "Acesso sem Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Acesso negado sem token', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/processos",
+              "host": ["{{base_url}}"],
+              "path": ["processos"]
+            }
+          }
+        },
+        {
+          "name": "Token Inválido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Token inválido rejeitado', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "token-invalido-123",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/processos",
+              "host": ["{{base_url}}"],
+              "path": ["processos"]
+            }
+          }
+        },
+        {
+          "name": "SQL Injection - Número do Processo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('SQL Injection bloqueado', function () {",
+                  "    // Deve retornar erro de validação ou 404, não 500",
+                  "    pm.expect(pm.response.code).to.not.equal(500);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"numero\": \"'; DROP TABLE processos; --\",\n  \"titulo\": \"Teste SQL Injection\",\n  \"descricao\": \"Tentativa de SQL Injection\",\n  \"clienteId\": \"{{cliente_id}}\",\n  \"vara\": \"Vara de Teste\",\n  \"tribunal\": \"Tribunal de Teste\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/processos",
+              "host": ["{{base_url}}"],
+              "path": ["processos"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🧪 Testes de Validação",
+      "item": [
+        {
+          "name": "Campos Obrigatórios - Número",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Erro de validação para número obrigatório', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Processo sem número\",\n  \"descricao\": \"Teste de validação\",\n  \"clienteId\": \"{{cliente_id}}\",\n  \"vara\": \"Vara de Teste\",\n  \"tribunal\": \"Tribunal de Teste\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/processos",
+              "host": ["{{base_url}}"],
+              "path": ["processos"]
+            }
+          }
+        },
+        {
+          "name": "Campos Obrigatórios - Título",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Erro de validação para título obrigatório', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"numero\": \"TESTE-SEM-TITULO-001\",\n  \"descricao\": \"Teste de validação\",\n  \"clienteId\": \"{{cliente_id}}\",\n  \"vara\": \"Vara de Teste\",\n  \"tribunal\": \"Tribunal de Teste\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/processos",
+              "host": ["{{base_url}}"],
+              "path": ["processos"]
+            }
+          }
+        },
+        {
+          "name": "Status Inválido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status inválido rejeitado', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{processo_id}}\",\n  \"status\": \"status_inexistente\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/processos/update",
+              "host": ["{{base_url}}"],
+              "path": ["processos", "update"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

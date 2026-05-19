@@ -1,0 +1,375 @@
+{
+  "info": {
+    "name": "Kealex - Processos API",
+    "description": "Coleção completa para testar a API de processos do sistema Kealex",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "processo_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cliente_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "🔐 Autenticação",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('access_token', response.accessToken);",
+                  "    console.log('✅ Token salvo:', response.accessToken.substring(0, 20) + '...');",
+                  "} else {",
+                  "    console.log('❌ Erro no login:', pm.response.text());",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@kealex.com\",\n  \"senha\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Fazer login e obter token JWT"
+          }
+        },
+        {
+          "name": "Verificar Token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/me",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "me"]
+            },
+            "description": "Verificar se o token está válido"
+          }
+        }
+      ]
+    },
+    {
+      "name": "📋 Processos - CRUD",
+      "item": [
+        {
+          "name": "Listar Processos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const processos = pm.response.json();",
+                  "    console.log('✅ Processos encontrados:', processos.length);",
+                  "    if (processos.length > 0) {",
+                  "        pm.collectionVariables.set('processo_id', processos[0].id);",
+                  "        console.log('📋 Primeiro processo ID:', processos[0].id);",
+                  "    }",
+                  "} else {",
+                  "    console.log('❌ Erro ao listar processos:', pm.response.text());",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/processos",
+              "host": ["{{base_url}}"],
+              "path": ["processos"]
+            },
+            "description": "Listar todos os processos do usuário/tenant"
+          }
+        },
+        {
+          "name": "Buscar Processo por ID",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{processo_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/processos/get",
+              "host": ["{{base_url}}"],
+              "path": ["processos", "get"]
+            },
+            "description": "Buscar um processo específico por ID"
+          }
+        },
+        {
+          "name": "Criar Processo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const processo = pm.response.json();",
+                  "    pm.collectionVariables.set('processo_id', processo.id);",
+                  "    console.log('✅ Processo criado com ID:', processo.id);",
+                  "} else {",
+                  "    console.log('❌ Erro ao criar processo:', pm.response.text());",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"numero\": \"5001234-12.2024.8.26.0001\",\n  \"titulo\": \"Ação de Cobrança - Teste Postman\",\n  \"descricao\": \"Processo de cobrança de valores em atraso referente a prestação de serviços jurídicos.\",\n  \"clienteId\": \"{{cliente_id}}\",\n  \"vara\": \"1ª Vara Cível da Comarca de São Paulo\",\n  \"tribunal\": \"Tribunal de Justiça de São Paulo\",\n  \"escritorioId\": null\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/processos",
+              "host": ["{{base_url}}"],
+              "path": ["processos"]
+            },
+            "description": "Criar um novo processo"
+          }
+        },
+        {
+          "name": "Atualizar Processo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{processo_id}}\",\n  \"titulo\": \"Ação de Cobrança - ATUALIZADA\",\n  \"descricao\": \"Processo atualizado via API Postman\",\n  \"status\": \"ativo\",\n  \"vara\": \"2ª Vara Cível da Comarca de São Paulo\",\n  \"tribunal\": \"TJSP - Tribunal de Justiça de São Paulo\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/processos/update",
+              "host": ["{{base_url}}"],
+              "path": ["processos", "update"]
+            },
+            "description": "Atualizar um processo existente"
+          }
+        },
+        {
+          "name": "Deletar Processo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{processo_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/processos/delete",
+              "host": ["{{base_url}}"],
+              "path": ["processos", "delete"]
+            },
+            "description": "Deletar um processo"
+          }
+        }
+      ]
+    },
+    {
+      "name": "🧪 Testes de Status",
+      "item": [
+        {
+          "name": "Status - Ativo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{processo_id}}\",\n  \"status\": \"ativo\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/processos/update",
+              "host": ["{{base_url}}"],
+              "path": ["processos", "update"]
+            },
+            "description": "Alterar status para ativo"
+          }
+        },
+        {
+          "name": "Status - Arquivado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{processo_id}}\",\n  \"status\": \"arquivado\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/processos/update",
+              "host": ["{{base_url}}"],
+              "path": ["processos", "update"]
+            },
+            "description": "Alterar status para arquivado"
+          }
+        },
+        {
+          "name": "Status - Encerrado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{processo_id}}\",\n  \"status\": \"encerrado\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/processos/update",
+              "host": ["{{base_url}}"],
+              "path": ["processos", "update"]
+            },
+            "description": "Alterar status para encerrado"
+          }
+        }
+      ]
+    },
+    {
+      "name": "❌ Testes de Erro",
+      "item": [
+        {
+          "name": "Processo Inexistente",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"processo-inexistente-123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/processos/get",
+              "host": ["{{base_url}}"],
+              "path": ["processos", "get"]
+            },
+            "description": "Buscar processo inexistente (404)"
+          }
+        },
+        {
+          "name": "Cliente Inexistente",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"numero\": \"TESTE-ERRO-001\",\n  \"titulo\": \"Processo de Teste - Erro\",\n  \"descricao\": \"Teste com cliente inexistente\",\n  \"clienteId\": \"cliente-inexistente-123\",\n  \"vara\": \"Vara de Teste\",\n  \"tribunal\": \"Tribunal de Teste\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/processos",
+              "host": ["{{base_url}}"],
+              "path": ["processos"]
+            },
+            "description": "Criar processo com cliente inexistente (404)"
+          }
+        },
+        {
+          "name": "Sem Autenticação",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/processos",
+              "host": ["{{base_url}}"],
+              "path": ["processos"]
+            },
+            "description": "Acesso sem token (401)"
+          }
+        }
+      ]
+    }
+  ]
+}

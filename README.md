@@ -121,6 +121,25 @@ Configure as credentials no Jenkins:
 - `kealex-secret-key` — Secret text com o valor de SECRET_KEY
 - `registry-creds` — Username/Password do registry Docker
 
+## Testes API (Postman)
+
+Coleções completas para testar todas as APIs:
+
+```bash
+cd postman
+# Importar no Postman:
+# - Kealex-Processos-API.postman_collection.json
+# - Kealex-Environment.postman_environment.json
+
+# Ou executar via Newman (CLI):
+npm install -g newman
+./run-tests.bat  # Windows
+```
+
+**Coleções disponíveis:**
+- `Kealex-Processos-API` — CRUD completo de processos
+- `Kealex-Testes-Avancados` — Testes de performance e segurança
+
 ## Configuração de IA
 
 ### Providers Suportados

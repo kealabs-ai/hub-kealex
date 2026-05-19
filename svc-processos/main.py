@@ -118,17 +118,21 @@ def _enrich(db: Session, processos: list[Processo]):
 
 @app.get("/processos")
 def list_processos(db: Session = Depends(get_db), payload=Depends(verify_token)):
-    role, uid, tid = payload.get("role"), payload.get("sub"), payload.get("tenant_id") or payload.get("sub")
+    role, uid, tid = payload.get("role"), payload.get("sub"), payload.get("tenant_id")
     q = db.query(Processo).filter_by(tenant_id=tid)
+    
+    # Aplicar filtros apenas para roles específicos, admin vê tudo do tenant
     if role == "cliente":
         q = q.filter_by(cliente_id=uid)
     elif role == "advogado":
         q = q.filter_by(advogado_id=uid)
+    # admin não tem filtro adicional - vê todos os processos do tenant
+    
     return _enrich(db, q.all())
 
 @app.post("/processos/get")
 def get_processo(body: ProcessoGetIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     p = db.query(Processo).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not p:
         raise HTTPException(404, "Não encontrado")
@@ -137,7 +141,7 @@ def get_processo(body: ProcessoGetIn, db: Session = Depends(get_db), payload=Dep
 
 @app.post("/processos", status_code=201)
 def create_processo(body: ProcessoIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     # valida que o cliente existe e pertence ao tenant
     cliente = db.query(Cliente).filter_by(id=body.clienteId, tenant_id=tenant_id).first()
     if not cliente:
@@ -150,7 +154,7 @@ def create_processo(body: ProcessoIn, db: Session = Depends(get_db), payload=Dep
 
 @app.post("/processos/update")
 def update_processo(body: ProcessoUpdate, db: Session = Depends(get_db), payload=Depends(verify_token)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     p = db.query(Processo).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not p:
         raise HTTPException(404, "Não encontrado")
@@ -163,7 +167,7 @@ def update_processo(body: ProcessoUpdate, db: Session = Depends(get_db), payload
 
 @app.post("/processos/delete")
 def delete_processo(body: ProcessoDeleteIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     p = db.query(Processo).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not p:
         raise HTTPException(404, "Não encontrado")
