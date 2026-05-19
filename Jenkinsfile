@@ -78,11 +78,13 @@ pipeline {
 
     post {
         always {
-            sh """
-                for svc in svc-auth svc-processos svc-documentos svc-financeiro svc-prazos svc-usuarios api-gateway; do
-                    docker rmi ${IMAGE_PREFIX}/\$svc:${TAG} || true
-                done
-            """
+            script {
+                sh """
+                    for svc in svc-auth svc-processos svc-documentos svc-financeiro svc-prazos svc-usuarios api-gateway; do
+                        docker rmi registry.kealex.io/kealex/\$svc:${BUILD_NUMBER} || true
+                    done
+                """
+            }
         }
         failure { echo "Pipeline falhou — verifique os logs acima." }
     }
