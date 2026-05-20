@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  # API Gateway
+  api-gateway:
+    image: ${REGISTRY:-registry.kealex.io}/kealex/api-gateway:${TAG:-latest}
+    ports:
+      - "8000:80"
+    depends_on:
+      - svc-auth
+      - svc-processos
+      - svc-documentos
+      - svc-financeiro
+      - svc-prazos
+      - svc-usuarios
+      - svc-configuracoes
+      - svc-escritorios
+      - svc-clientes
+    restart: unless-stopped
+
+  # Microservices
+  svc-auth:
+    image: ${REGISTRY:-registry.kealex.io}/kealex/svc-auth:${TAG:-latest}
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+    restart: unless-stopped
+
+  svc-processos:
+    image: ${REGISTRY:-registry.kealex.io}/kealex/svc-processos:${TAG:-latest}
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+    restart: unless-stopped
+
+  svc-documentos:
+    image: ${REGISTRY:-registry.kealex.io}/kealex/svc-documentos:${TAG:-latest}
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+    restart: unless-stopped
+
+  svc-financeiro:
+    image: ${REGISTRY:-registry.kealex.io}/kealex/svc-financeiro:${TAG:-latest}
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+    restart: unless-stopped
+
+  svc-prazos:
+    image: ${REGISTRY:-registry.kealex.io}/kealex/svc-prazos:${TAG:-latest}
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+    restart: unless-stopped
+
+  svc-usuarios:
+    image: ${REGISTRY:-registry.kealex.io}/kealex/svc-usuarios:${TAG:-latest}
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+    restart: unless-stopped
+
+  svc-configuracoes:
+    image: ${REGISTRY:-registry.kealex.io}/kealex/svc-configuracoes:${TAG:-latest}
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+    restart: unless-stopped
+
+  svc-escritorios:
+    image: ${REGISTRY:-registry.kealex.io}/kealex/svc-escritorios:${TAG:-latest}
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+    restart: unless-stopped
+
+  svc-clientes:
+    image: ${REGISTRY:-registry.kealex.io}/kealex/svc-clientes:${TAG:-latest}
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+    restart: unless-stopped
