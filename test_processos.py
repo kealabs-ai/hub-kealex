@@ -11,7 +11,7 @@ login_data = {
 try:
     # Login
     print("=== TESTANDO LOGIN ===")
-    response = requests.post("http://localhost:8000/auth/login", json=login_data)
+    response = requests.post("http://localhost:8000/v1/lex/auth/login", json=login_data)
     print(f"Status: {response.status_code}")
     
     if response.status_code == 200:
@@ -23,7 +23,7 @@ try:
         # Testar endpoint de processos
         print("\n=== TESTANDO ENDPOINT PROCESSOS ===")
         headers = {"Authorization": f"Bearer {token}"}
-        response = requests.get("http://localhost:8000/processos", headers=headers)
+        response = requests.get("http://localhost:8000/v1/lex/processos", headers=headers)
         print(f"Status: {response.status_code}")
         
         if response.status_code == 200:
@@ -33,6 +33,18 @@ try:
                 print(f"  {i+1}. {processo['numero']} - {processo['titulo']}")
         else:
             print(f"Erro: {response.text}")
+            
+        # Testar endpoint de usuários
+        print("\n=== TESTANDO ENDPOINT USUÁRIOS ===")
+        response = requests.get("http://localhost:8000/v1/lex/usuarios", headers=headers)
+        print(f"Status: {response.status_code}")
+        
+        if response.status_code == 200:
+            usuarios = response.json()
+            print(f"Usuários encontrados: {len(usuarios)}")
+        else:
+            print(f"Erro: {response.text}")
+            
     else:
         print(f"Erro no login: {response.text}")
 

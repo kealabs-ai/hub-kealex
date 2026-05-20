@@ -46,67 +46,74 @@ Frontend (ViewKealex) aponta para `http://localhost:8000` via proxy Vite.
 - Padrão GET/POST (não REST tradicional)
 - POST para creates, updates e deletes
 - Sufixos: `/get`, `/update`, `/delete`
+- **Base URL**: `http://localhost:8000/v1/lex/`
 
 ```
-POST   /auth/login
-GET    /auth/me
+POST   /v1/lex/auth/login
+GET    /v1/lex/auth/me
 
-GET    /processos
-POST   /processos
-GET    /processos/:id
-PATCH  /processos/:id
-DELETE /processos/:id
+GET    /v1/lex/processos
+POST   /v1/lex/processos
+POST   /v1/lex/processos/get
+POST   /v1/lex/processos/update
+POST   /v1/lex/processos/delete
 
-GET    /documentos
-GET    /documentos/processo/:processoId
-POST   /documentos
-GET    /documentos/:id
-PATCH  /documentos/:id
-DELETE /documentos/:id
+GET    /v1/lex/documentos
+GET    /v1/lex/documentos/processo/:processoId
+POST   /v1/lex/documentos
+POST   /v1/lex/documentos/get
+POST   /v1/lex/documentos/update
+POST   /v1/lex/documentos/delete
 
-GET    /financeiro
-GET    /financeiro/dashboard
-POST   /financeiro
-GET    /financeiro/:id
-PATCH  /financeiro/:id
-DELETE /financeiro/:id
+GET    /v1/lex/financeiro
+GET    /v1/lex/financeiro/dashboard
+POST   /v1/lex/financeiro
+POST   /v1/lex/financeiro/get
+POST   /v1/lex/financeiro/update
+POST   /v1/lex/financeiro/delete
 
-GET    /prazos
-GET    /prazos/vencendo?dias=7
-GET    /prazos/processo/:processoId
-POST   /prazos
-GET    /prazos/:id
-PATCH  /prazos/:id
-DELETE /prazos/:id
+GET    /v1/lex/prazos
+GET    /v1/lex/prazos/vencendo?dias=7
+GET    /v1/lex/prazos/processo/:processoId
+POST   /v1/lex/prazos
+POST   /v1/lex/prazos/get
+POST   /v1/lex/prazos/update
+POST   /v1/lex/prazos/delete
 
-GET    /usuarios?role=
-POST   /usuarios
-GET    /usuarios/:id
-PATCH  /usuarios/:id
-DELETE /usuarios/:id
+GET    /v1/lex/usuarios?role=
+POST   /v1/lex/usuarios
+POST   /v1/lex/usuarios/get
+POST   /v1/lex/usuarios/update
+POST   /v1/lex/usuarios/delete
 
-GET    /escritorios
-POST   /escritorios
-GET    /escritorios/:id
-PATCH  /escritorios/:id
-DELETE /escritorios/:id
+GET    /v1/lex/escritorios
+POST   /v1/lex/escritorios
+POST   /v1/lex/escritorios/get
+POST   /v1/lex/escritorios/update
+POST   /v1/lex/escritorios/delete
 
-GET    /configuracoes/geral
-POST   /configuracoes/geral
-GET    /configuracoes/cdn
-POST   /configuracoes/cdn
-GET    /configuracoes/database
-POST   /configuracoes/database
-GET    /configuracoes/ia
-GET    /configuracoes/ia/modelos
-GET    /configuracoes/ia/ativa
-POST   /configuracoes/ia
-GET    /configuracoes/usuarios
-POST   /configuracoes/usuarios
-GET    /configuracoes/seguranca
-POST   /configuracoes/seguranca
-GET    /configuracoes/notificacoes
-POST   /configuracoes/notificacoes
+GET    /v1/lex/clientes
+POST   /v1/lex/clientes
+POST   /v1/lex/clientes/get
+POST   /v1/lex/clientes/update
+POST   /v1/lex/clientes/delete
+
+GET    /v1/lex/configuracoes/geral
+POST   /v1/lex/configuracoes/geral
+GET    /v1/lex/configuracoes/cdn
+POST   /v1/lex/configuracoes/cdn
+GET    /v1/lex/configuracoes/database
+POST   /v1/lex/configuracoes/database
+GET    /v1/lex/configuracoes/ia
+GET    /v1/lex/configuracoes/ia/modelos
+GET    /v1/lex/configuracoes/ia/ativa
+POST   /v1/lex/configuracoes/ia
+GET    /v1/lex/configuracoes/usuarios
+POST   /v1/lex/configuracoes/usuarios
+GET    /v1/lex/configuracoes/seguranca
+POST   /v1/lex/configuracoes/seguranca
+GET    /v1/lex/configuracoes/notificacoes
+POST   /v1/lex/configuracoes/notificacoes
 ```
 
 ## CI/CD (Jenkins)
