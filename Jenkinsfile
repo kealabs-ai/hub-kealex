@@ -288,7 +288,7 @@ pipeline {
                         
                         if [ "\$PORT_USER" = "livre" ]; then
                             echo "[OK] Porta 8000 está livre"
-                        elif echo "\$PORT_USER" | grep -q "docker\|nginx"; then
+                        elif echo "\$PORT_USER" | grep -E "docker|nginx" >/dev/null; then
                             echo "[OK] Porta 8000 sendo usada por Docker/Nginx (será substituído)"
                         else
                             echo "[AVISO] Porta 8000 sendo usada por: \$PORT_USER"
