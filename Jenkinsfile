@@ -18,23 +18,38 @@ pipeline {
                     sh "docker --version"
                     sh "docker info --format 'Server Version: {{.ServerVersion}}'"
                     
-                    // Instalar docker-compose se não existir
+                    // Instalar docker-compose se não existir (sem sudo)
                     sh """
                         if ! command -v docker-compose &> /dev/null; then
                             echo 'Instalando docker-compose...'
-                            curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-linux-x86_64" -o /tmp/docker-compose
-                            sudo mv /tmp/docker-compose /usr/local/bin/docker-compose
-                            sudo chmod +x /usr/local/bin/docker-compose
-                            sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
+                            
+                            # Criar diretório bin do usuário
+                            mkdir -p \$HOME/bin
+                            
+                            # Baixar docker-compose
+                            curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-linux-x86_64" -o \$HOME/bin/docker-compose
+                            
+                            # Dar permissão de execução
+                            chmod +x \$HOME/bin/docker-compose
+                            
+                            # Adicionar ao PATH
+                            export PATH=\$HOME/bin:\$PATH
+                            
+                            echo 'docker-compose instalado em \$HOME/bin/docker-compose'
                         fi
+                        
+                        # Garantir que está no PATH
+                        export PATH=\$HOME/bin:\$PATH
                         
                         echo 'Verificando docker-compose:'
                         docker-compose --version
+                        echo 'Localização:'
+                        which docker-compose
                     """
                     
                     // Verificar permissões
                     sh "whoami"
-                    sh "groups || true"
+                    sh "id"
                     
                     // Verificar diretório
                     sh "pwd"
@@ -222,6 +237,7 @@ EOF
                         
                         // Deploy usando docker-compose
                         sh """
+                            export PATH=\$HOME/bin:\$PATH
                             export SECRET_KEY=${SECRET_KEY}
                             export DATABASE_URL=${DATABASE_URL}
                             export TAG=${TAG}
@@ -232,7 +248,10 @@ EOF
                         sh "sleep 45"
                         
                         // Verificar status
-                        sh "docker-compose ps"
+                        sh """
+                            export PATH=\$HOME/bin:\$PATH
+                            docker-compose ps
+                        """
                         
                         echo "=== DEPLOY CONCLUÍDO ==="
                     }
@@ -247,11 +266,20 @@ EOF
                     echo "=== VERIFICAÇÃO DE SAÚDE ==="
                     
                     // Verificar containers
-                    sh "docker-compose ps"
+                    sh """
+                        export PATH=\$HOME/bin:\$PATH
+                        docker-compose ps
+                    """
                     
                     // Verificar logs
-                    sh "docker-compose logs --tail=10 api-gateway || true"
-                    sh "docker-compose logs --tail=10 svc-auth || true"
+                    sh """
+                        export PATH=\$HOME/bin:\$PATH
+                        docker-compose logs --tail=10 api-gateway || true
+                    """
+                    sh """
+                        export PATH=\$HOME/bin:\$PATH
+                        docker-compose logs --tail=10 svc-auth || true
+                    """
                     
                     // Teste de conectividade
                     sh """
@@ -263,6 +291,7 @@ EOF
                                 break
                             elif [ \$i -eq 12 ]; then
                                 echo '[ERRO] API nao respondeu apos 12 tentativas'
+                                export PATH=\$HOME/bin:\$PATH
                                 docker-compose logs api-gateway
                                 exit 1
                             else
@@ -299,7 +328,10 @@ EOF
                 sh "rm -f .env.deploy || true"
                 
                 // Mostrar status final
-                sh "docker-compose ps || true"
+                sh """
+                    export PATH=\$HOME/bin:\$PATH
+                    docker-compose ps || true
+                """
             }
         }
         success {
@@ -308,7 +340,10 @@ EOF
         }
         failure {
             echo "[ERRO] Pipeline falhou - verificando logs..."
-            sh "docker-compose logs --tail=50 || true"
+            sh """
+                export PATH=\$HOME/bin:\$PATH
+                docker-compose logs --tail=50 || true
+            """
         }
     }
 }
