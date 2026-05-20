@@ -9,12 +9,46 @@ pipeline {
     }
 
     stages {
+        stage('Check Environment') {
+            steps {
+                script {
+                    echo "=== VERIFICANDO AMBIENTE ==="
+                    
+                    // Verificar Docker
+                    sh "docker --version"
+                    sh "docker info --format 'Server Version: {{.ServerVersion}}'"
+                    
+                    // Verificar Docker Compose
+                    sh """
+                        echo 'Testando docker-compose...'
+                        if command -v docker-compose &> /dev/null; then
+                            echo 'docker-compose disponível:'
+                            docker-compose --version
+                        else
+                            echo 'docker-compose NÃO disponível'
+                            exit 1
+                        fi
+                    """
+                    
+                    // Verificar permissões
+                    sh "whoami"
+                    sh "groups || true"
+                    
+                    // Verificar diretório
+                    sh "pwd"
+                    sh "ls -la docker-compose.yml"
+                    
+                    echo "=== AMBIENTE VERIFICADO ==="
+                }
+            }
+        }
+
         stage('Cleanup') {
             steps {
                 script {
-                    // Parar containers antigos se existirem
-                    sh "docker compose down || true"
-                    sh "docker system prune -f || true"
+                    // Limpar apenas imagens não utilizadas, sem derrubar containers
+                    sh "docker image prune -f || true"
+                    sh "docker builder prune -f || true"
                 }
             }
         }
@@ -189,14 +223,14 @@ EOF
                             export SECRET_KEY=${SECRET_KEY}
                             export DATABASE_URL=${DATABASE_URL}
                             export TAG=${TAG}
-                            docker compose up -d --build --remove-orphans
+                            docker-compose up -d --build --remove-orphans
                         """
                         
                         // Aguardar inicialização
                         sh "sleep 45"
                         
                         // Verificar status
-                        sh "docker compose ps"
+                        sh "docker-compose ps"
                         
                         echo "=== DEPLOY CONCLUÍDO ==="
                     }
@@ -211,11 +245,11 @@ EOF
                     echo "=== VERIFICAÇÃO DE SAÚDE ==="
                     
                     // Verificar containers
-                    sh "docker compose ps"
+                    sh "docker-compose ps"
                     
                     // Verificar logs
-                    sh "docker compose logs --tail=10 api-gateway || true"
-                    sh "docker compose logs --tail=10 svc-auth || true"
+                    sh "docker-compose logs --tail=10 api-gateway || true"
+                    sh "docker-compose logs --tail=10 svc-auth || true"
                     
                     // Teste de conectividade
                     sh """
@@ -227,7 +261,7 @@ EOF
                                 break
                             elif [ \$i -eq 12 ]; then
                                 echo '[ERRO] API nao respondeu apos 12 tentativas'
-                                docker compose logs api-gateway
+                                docker-compose logs api-gateway
                                 exit 1
                             else
                                 sleep 10
@@ -263,7 +297,7 @@ EOF
                 sh "rm -f .env.deploy || true"
                 
                 // Mostrar status final
-                sh "docker compose ps || true"
+                sh "docker-compose ps || true"
             }
         }
         success {
@@ -272,7 +306,7 @@ EOF
         }
         failure {
             echo "[ERRO] Pipeline falhou - verificando logs..."
-            sh "docker compose logs --tail=50 || true"
+            sh "docker-compose logs --tail=50 || true"
         }
     }
 }
