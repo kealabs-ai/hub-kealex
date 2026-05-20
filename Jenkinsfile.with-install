@@ -9,6 +9,43 @@ pipeline {
     }
 
     stages {
+        stage('Setup Docker Compose') {
+            steps {
+                script {
+                    echo "=== CONFIGURANDO DOCKER-COMPOSE ==="
+                    
+                    // Verificar e instalar docker-compose se necessário
+                    sh '''
+                        if ! command -v docker-compose &> /dev/null; then
+                            echo "docker-compose não encontrado. Instalando..."
+                            
+                            # Baixar docker-compose
+                            curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-linux-x86_64" -o /tmp/docker-compose
+                            
+                            # Instalar (tenta com sudo, se falhar usa sem sudo)
+                            if sudo mv /tmp/docker-compose /usr/local/bin/docker-compose 2>/dev/null; then
+                                sudo chmod +x /usr/local/bin/docker-compose
+                                sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
+                            else
+                                # Fallback: instalar no diretório do usuário
+                                mkdir -p $HOME/bin
+                                mv /tmp/docker-compose $HOME/bin/docker-compose
+                                chmod +x $HOME/bin/docker-compose
+                                export PATH=$HOME/bin:$PATH
+                            fi
+                        fi
+                        
+                        # Verificar instalação
+                        echo "Verificando docker-compose:"
+                        docker-compose --version
+                        which docker-compose
+                    '''
+                    
+                    echo "=== DOCKER-COMPOSE CONFIGURADO ==="
+                }
+            }
+        }
+
         stage('Check Environment') {
             steps {
                 script {
@@ -18,19 +55,8 @@ pipeline {
                     sh "docker --version"
                     sh "docker info --format 'Server Version: {{.ServerVersion}}'"
                     
-                    // Instalar docker-compose se não existir
-                    sh """
-                        if ! command -v docker-compose &> /dev/null; then
-                            echo 'Instalando docker-compose...'
-                            curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-linux-x86_64" -o /tmp/docker-compose
-                            sudo mv /tmp/docker-compose /usr/local/bin/docker-compose
-                            sudo chmod +x /usr/local/bin/docker-compose
-                            sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
-                        fi
-                        
-                        echo 'Verificando docker-compose:'
-                        docker-compose --version
-                    """
+                    // Verificar docker-compose
+                    sh "docker-compose --version"
                     
                     // Verificar permissões
                     sh "whoami"
@@ -135,10 +161,10 @@ pipeline {
                     
                     // Teste básico de importação
                     sh """
-                        docker run --rm \
-                          -e DATABASE_URL=sqlite:///./test.db \
-                          -e SECRET_KEY=test-key \
-                          ${IMAGE_PREFIX}/svc-auth:${TAG} \
+                        docker run --rm \\
+                          -e DATABASE_URL=sqlite:///./test.db \\
+                          -e SECRET_KEY=test-key \\
+                          ${IMAGE_PREFIX}/svc-auth:${TAG} \\
                           python -c "import main; print('svc-auth: OK')"
                     """
                 }
@@ -210,16 +236,6 @@ pipeline {
                     script {
                         echo "=== INICIANDO DEPLOY ==="
                         
-                        // Criar arquivo .env temporário
-                        sh """
-                            cat > .env.deploy << EOF
-SECRET_KEY=${SECRET_KEY}
-DATABASE_URL=${DATABASE_URL}
-REGISTRY=${REGISTRY}
-TAG=${TAG}
-EOF
-                        """
-                        
                         // Deploy usando docker-compose
                         sh """
                             export SECRET_KEY=${SECRET_KEY}
@@ -257,11 +273,11 @@ EOF
                     sh """
                         echo 'Testando conectividade...'
                         for i in {1..12}; do
-                            echo "Tentativa \$i/12"
+                            echo "Tentativa \\$i/12"
                             if curl -f -s http://localhost:8000/v1/lex/auth/me >/dev/null 2>&1; then
                                 echo '[OK] API respondendo!'
                                 break
-                            elif [ \$i -eq 12 ]; then
+                            elif [ \\$i -eq 12 ]; then
                                 echo '[ERRO] API nao respondeu apos 12 tentativas'
                                 docker-compose logs api-gateway
                                 exit 1
@@ -274,15 +290,15 @@ EOF
                     // Teste de login
                     sh """
                         echo 'Testando login...'
-                        RESPONSE=\$(curl -s -w "%{http_code}" -X POST http://localhost:8000/v1/lex/auth/login \
-                            -H "Content-Type: application/json" \
+                        RESPONSE=\\$(curl -s -w "%{http_code}" -X POST http://localhost:8000/v1/lex/auth/login \\
+                            -H "Content-Type: application/json" \\
                             -d '{"email": "admin@kealex.com", "senha": "admin123"}')
                         
-                        if echo "\$RESPONSE" | grep -q "200"; then
+                        if echo "\\$RESPONSE" | grep -q "200"; then
                             echo '[OK] Login funcionando!'
                         else
                             echo '[ERRO] Problema no login:'
-                            echo "\$RESPONSE"
+                            echo "\\$RESPONSE"
                         fi
                     """
                     
