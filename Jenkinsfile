@@ -130,7 +130,7 @@ pipeline {
                         docker run --rm \
                           -e DATABASE_URL=sqlite:///./test.db \
                           -e SECRET_KEY=test-key \
-                          ${IMAGE_PREFIX}/svc-auth:${TAG} \
+                          ${IMAGE_PREFIX}/svc-auth:latest \
                           python -c "import main; print('svc-auth: OK')"
                     """
                 }
@@ -144,12 +144,12 @@ pipeline {
                     
                     sh """
                         echo "Testando sintaxe da configuração do nginx..."
-                        docker run --rm ${IMAGE_PREFIX}/api-gateway:${TAG} nginx -t
+                        docker run --rm ${IMAGE_PREFIX}/api-gateway:latest nginx -t
                     """
                     
                     sh """
                         echo "Verificando arquivos de configuração..."
-                        docker run --rm ${IMAGE_PREFIX}/api-gateway:${TAG} ls -la /etc/nginx/conf.d/
+                        docker run --rm ${IMAGE_PREFIX}/api-gateway:latest ls -la /etc/nginx/conf.d/
                     """
                     
                     echo "=== CONFIGURAÇÃO DO NGINX VALIDADA ==="
