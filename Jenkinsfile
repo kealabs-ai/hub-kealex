@@ -498,6 +498,7 @@ EOF
                 }
             }
         }
+        stage('Post-Deploy Validation') {
             when { branch 'main' }
             steps {
                 script {
