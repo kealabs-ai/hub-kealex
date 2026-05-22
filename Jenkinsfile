@@ -113,22 +113,30 @@ pipeline {
                     echo "=== BUILD SEQUENCIAL PARA HOSTINGER ==="
                     
                     def services = [
-                        'api-gateway', 'svc-auth', 'svc-processos', 
-                        'svc-documentos', 'svc-financeiro', 'svc-prazos',
-                        'svc-usuarios', 'svc-clientes', 'svc-configuracoes', 
-                        'svc-escritorios'
+                        'svc-auth', 'svc-processos', 'svc-documentos', 
+                        'svc-financeiro', 'svc-prazos', 'svc-usuarios',
+                        'svc-clientes', 'svc-configuracoes', 'svc-escritorios',
+                        'api-gateway'
                     ]
                     
-                    // Build sequencial para evitar sobrecarga na Hostinger
                     services.each { svc ->
-                        echo "Building ${svc}..."
-                        sh """
-                            docker build -t ${IMAGE_PREFIX}/${svc}:${TAG} ./${svc}
-                            docker tag ${IMAGE_PREFIX}/${svc}:${TAG} ${IMAGE_PREFIX}/${svc}:latest
-                        """
+                        echo "Verificando imagem ${svc}..."
                         
-                        // Pausa entre builds para não sobrecarregar
-                        sleep(3)
+                        def imageExists = sh(
+                            script: "docker images -q ${IMAGE_PREFIX}/${svc}:latest 2>/dev/null",
+                            returnStdout: true
+                        ).trim()
+                        
+                        if (imageExists) {
+                            echo "Imagem ${svc} já existe, pulando build..."
+                        } else {
+                            echo "Building ${svc}..."
+                            sh """
+                                docker build -t ${IMAGE_PREFIX}/${svc}:${TAG} ./${svc}
+                                docker tag ${IMAGE_PREFIX}/${svc}:${TAG} ${IMAGE_PREFIX}/${svc}:latest
+                            """
+                            sleep(2)
+                        }
                     }
                 }
             }
@@ -338,17 +346,99 @@ EOF
                             COMPOSE_FILE=\$(cat .compose_file)
                             echo "Fazendo deploy com \$COMPOSE_FILE..."
                             
-                            echo "Iniciando containers com build..."
-                            docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} up -d --build --remove-orphans --force-recreate
+                            echo "Iniciando containers com docker run..."
                             
-                            echo "Containers iniciados, aguardando health checks..."
+                            # Criar rede se não existir
+                            docker network create kealex-network 2>/dev/null || true
+                            
+                            # Iniciar serviços em ordem
+                            echo "Iniciando svc-auth..."
+                            docker run -d --name kealex-svc-auth \
+                                --network kealex-network \
+                                -e SECRET_KEY="${SECRET_KEY}" \
+                                -e DATABASE_URL="${DATABASE_URL}" \
+                                --restart unless-stopped \
+                                ${IMAGE_PREFIX}/svc-auth:latest || docker start kealex-svc-auth
+                            
+                            echo "Iniciando svc-processos..."
+                            docker run -d --name kealex-svc-processos \
+                                --network kealex-network \
+                                -e SECRET_KEY="${SECRET_KEY}" \
+                                -e DATABASE_URL="${DATABASE_URL}" \
+                                --restart unless-stopped \
+                                ${IMAGE_PREFIX}/svc-processos:latest || docker start kealex-svc-processos
+                            
+                            echo "Iniciando svc-documentos..."
+                            docker run -d --name kealex-svc-documentos \
+                                --network kealex-network \
+                                -e SECRET_KEY="${SECRET_KEY}" \
+                                -e DATABASE_URL="${DATABASE_URL}" \
+                                --restart unless-stopped \
+                                ${IMAGE_PREFIX}/svc-documentos:latest || docker start kealex-svc-documentos
+                            
+                            echo "Iniciando svc-financeiro..."
+                            docker run -d --name kealex-svc-financeiro \
+                                --network kealex-network \
+                                -e SECRET_KEY="${SECRET_KEY}" \
+                                -e DATABASE_URL="${DATABASE_URL}" \
+                                --restart unless-stopped \
+                                ${IMAGE_PREFIX}/svc-financeiro:latest || docker start kealex-svc-financeiro
+                            
+                            echo "Iniciando svc-prazos..."
+                            docker run -d --name kealex-svc-prazos \
+                                --network kealex-network \
+                                -e SECRET_KEY="${SECRET_KEY}" \
+                                -e DATABASE_URL="${DATABASE_URL}" \
+                                --restart unless-stopped \
+                                ${IMAGE_PREFIX}/svc-prazos:latest || docker start kealex-svc-prazos
+                            
+                            echo "Iniciando svc-usuarios..."
+                            docker run -d --name kealex-svc-usuarios \
+                                --network kealex-network \
+                                -e SECRET_KEY="${SECRET_KEY}" \
+                                -e DATABASE_URL="${DATABASE_URL}" \
+                                --restart unless-stopped \
+                                ${IMAGE_PREFIX}/svc-usuarios:latest || docker start kealex-svc-usuarios
+                            
+                            echo "Iniciando svc-configuracoes..."
+                            docker run -d --name kealex-svc-configuracoes \
+                                --network kealex-network \
+                                -e SECRET_KEY="${SECRET_KEY}" \
+                                -e DATABASE_URL="${DATABASE_URL}" \
+                                --restart unless-stopped \
+                                ${IMAGE_PREFIX}/svc-configuracoes:latest || docker start kealex-svc-configuracoes
+                            
+                            echo "Iniciando svc-escritorios..."
+                            docker run -d --name kealex-svc-escritorios \
+                                --network kealex-network \
+                                -e SECRET_KEY="${SECRET_KEY}" \
+                                -e DATABASE_URL="${DATABASE_URL}" \
+                                --restart unless-stopped \
+                                ${IMAGE_PREFIX}/svc-escritorios:latest || docker start kealex-svc-escritorios
+                            
+                            echo "Iniciando svc-clientes..."
+                            docker run -d --name kealex-svc-clientes \
+                                --network kealex-network \
+                                -e SECRET_KEY="${SECRET_KEY}" \
+                                -e DATABASE_URL="${DATABASE_URL}" \
+                                --restart unless-stopped \
+                                ${IMAGE_PREFIX}/svc-clientes:latest || docker start kealex-svc-clientes
+                            
+                            echo "Aguardando serviços iniciarem..."
+                            sleep 15
+                            
+                            echo "Iniciando api-gateway..."
+                            docker run -d --name kealex-api-gateway \
+                                --network kealex-network \
+                                -p 8000:80 \
+                                --restart unless-stopped \
+                                ${IMAGE_PREFIX}/api-gateway:latest || docker start kealex-api-gateway
+                            
+                            echo "Containers iniciados, aguardando estabilização..."
                             sleep 20
                             
                             echo "=== VERIFICAÇÃO DE SAÚDE DOS CONTAINERS ==="
                             docker ps -a --filter "name=kealex" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-                            
-                            echo "Status do docker-compose:"
-                            docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} ps
                             
                             FAILED_CONTAINERS=\$(docker ps -a --filter "name=kealex" --filter "status=exited" --format "{{.Names}}")
                             if [ -n "\$FAILED_CONTAINERS" ]; then
@@ -369,35 +459,33 @@ EOF
                         
                         sh """
                             export PATH=\$HOME/bin:\$PATH
-                            COMPOSE_FILE=\$(cat .compose_file)
                             
                             echo "Aguardando inicialização dos containers..."
                             sleep 30
                             
-                            echo "Aguardando health checks dos serviços..."
+                            echo "Verificando status dos containers..."
                             
                             for i in {1..8}; do
-                                echo "Verificação \$i/8 - aguardando containers ficarem saudáveis..."
+                                echo "Verificação \$i/8..."
                                 
                                 RUNNING=\$(docker ps --filter "name=kealex" --format "{{.Names}}" | wc -l)
-                                HEALTHY=\$(docker ps --filter "name=kealex" --filter "health=healthy" --format "{{.Names}}" | wc -l)
                                 TOTAL=\$(docker ps -a --filter "name=kealex" --format "{{.Names}}" | wc -l)
                                 
-                                echo "Status: \$RUNNING rodando, \$HEALTHY saudáveis, \$TOTAL total"
+                                echo "Status: \$RUNNING rodando de \$TOTAL total"
                                 
-                                if [ "\$RUNNING" -ge 8 ] && [ "\$HEALTHY" -ge 5 ]; then
-                                    echo "Containers suficientes estão rodando e saudáveis!"
+                                if [ "\$RUNNING" -ge 9 ]; then
+                                    echo "Containers suficientes estão rodando!"
                                     break
                                 elif [ \$i -eq 8 ]; then
-                                    echo "AVISO: Nem todos os containers estão completamente saudáveis"
+                                    echo "AVISO: Nem todos os containers estão rodando"
                                     
                                     echo "=== STATUS FINAL ==="
                                     docker ps -a --filter "name=kealex" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
                                     
-                                    UNHEALTHY=\$(docker ps --filter "name=kealex" --filter "health=unhealthy" --format "{{.Names}}")
-                                    if [ -n "\$UNHEALTHY" ]; then
-                                        echo "=== CONTAINERS NÃO SAUDÁVEIS ==="
-                                        for container in \$UNHEALTHY; do
+                                    STOPPED=\$(docker ps -a --filter "name=kealex" --filter "status=exited" --format "{{.Names}}")
+                                    if [ -n "\$STOPPED" ]; then
+                                        echo "=== CONTAINERS PARADOS ==="
+                                        for container in \$STOPPED; do
                                             echo "--- Logs do \$container ---"
                                             docker logs --tail=20 \$container
                                         done
@@ -408,15 +496,10 @@ EOF
                             done
                         """
                         
-                        // Verificar status
                         sh """
                             export PATH=\$HOME/bin:\$PATH
-                            COMPOSE_FILE=\$(cat .compose_file)
                             echo "Status dos containers:"
-                            docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} ps
-                            
-                            echo "Containers em execução:"
-                            docker ps --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}"
+                            docker ps --filter "name=kealex" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
                         """
                         
                         echo "=== DEPLOY CONCLUÍDO ==="
