@@ -327,7 +327,6 @@ EOF
                             echo "\$COMPOSE_FILE" > .compose_file
                         """
                         
-                        // Deploy com verificação de saúde
                         sh """
                             export PATH=\$HOME/bin:\$PATH
                             export SECRET_KEY=${SECRET_KEY}
@@ -339,21 +338,18 @@ EOF
                             COMPOSE_FILE=\$(cat .compose_file)
                             echo "Fazendo deploy com \$COMPOSE_FILE..."
                             
-                            # Sempre usar build local para garantir que as imagens estejam disponíveis
                             echo "Iniciando containers com build..."
                             docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} up -d --build --remove-orphans --force-recreate
                             
                             echo "Containers iniciados, aguardando health checks..."
                             sleep 20
-                        """
-                            // Verificar se containers foram criados e estão saudáveis
+                            
                             echo "=== VERIFICAÇÃO DE SAÚDE DOS CONTAINERS ==="
                             docker ps -a --filter "name=kealex" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
                             
                             echo "Status do docker-compose:"
                             docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} ps
                             
-                            // Verificar containers que falharam imediatamente
                             FAILED_CONTAINERS=\$(docker ps -a --filter "name=kealex" --filter "status=exited" --format "{{.Names}}")
                             if [ -n "\$FAILED_CONTAINERS" ]; then
                                 echo "CONTAINERS COM FALHA IMEDIATA: \$FAILED_CONTAINERS"
@@ -371,23 +367,18 @@ EOF
                             fi
                         """
                         
-                        // Aguardar inicialização com verificação ativa
                         sh """
                             export PATH=\$HOME/bin:\$PATH
                             COMPOSE_FILE=\$(cat .compose_file)
                             
                             echo "Aguardando inicialização dos containers..."
-                            
-                            # Aguardar 30s inicial
                             sleep 30
                             
-                            // Aguardar health checks e verificar containers rodando
                             echo "Aguardando health checks dos serviços..."
                             
                             for i in {1..8}; do
                                 echo "Verificação \$i/8 - aguardando containers ficarem saudáveis..."
                                 
-                                // Contar containers por status
                                 RUNNING=\$(docker ps --filter "name=kealex" --format "{{.Names}}" | wc -l)
                                 HEALTHY=\$(docker ps --filter "name=kealex" --filter "health=healthy" --format "{{.Names}}" | wc -l)
                                 TOTAL=\$(docker ps -a --filter "name=kealex" --format "{{.Names}}" | wc -l)
@@ -403,7 +394,6 @@ EOF
                                     echo "=== STATUS FINAL ==="
                                     docker ps -a --filter "name=kealex" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
                                     
-                                    // Mostrar logs de containers não saudáveis
                                     UNHEALTHY=\$(docker ps --filter "name=kealex" --filter "health=unhealthy" --format "{{.Names}}")
                                     if [ -n "\$UNHEALTHY" ]; then
                                         echo "=== CONTAINERS NÃO SAUDÁVEIS ==="
