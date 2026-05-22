@@ -1,0 +1,276 @@
+pipeline {
+    agent any
+
+    environment {
+        REGISTRY = "registry.kealex.io"
+        IMAGE_PREFIX = "${REGISTRY}/kealex"
+        TAG = "${env.BUILD_NUMBER}"
+        DATABASE_URL = "mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex"
+        COMPOSE_PROJECT_NAME = "kealex"
+    }
+
+    stages {
+        stage('Environment Setup') {
+            steps {
+                script {
+                    echo "=== CONFIGURAÇÃO DO AMBIENTE HOSTINGER ==="
+                    
+                    // Verificar Docker
+                    sh "docker --version"
+                    sh "docker info --format 'Server Version: {{.ServerVersion}}'"
+                    
+                    // Instalar docker-compose se necessário
+                    sh """
+                        if ! command -v docker-compose &> /dev/null; then
+                            echo 'Instalando docker-compose...'
+                            mkdir -p \$HOME/bin
+                            curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-linux-x86_64" -o \$HOME/bin/docker-compose
+                            chmod +x \$HOME/bin/docker-compose
+                            export PATH=\$HOME/bin:\$PATH
+                        fi
+                        
+                        export PATH=\$HOME/bin:\$PATH
+                        docker-compose --version
+                    """
+                    
+                    // Verificar recursos disponíveis
+                    sh """
+                        echo "Recursos do sistema:"
+                        df -h .
+                        free -h
+                        whoami
+                        pwd
+                    """
+                }
+            }
+        }
+
+        stage('Cleanup') {
+            steps {
+                script {
+                    echo "=== LIMPEZA HOSTINGER ==="
+                    
+                    // Parar containers antigos
+                    sh """
+                        export PATH=\$HOME/bin:\$PATH
+                        
+                        # Parar projeto anterior
+                        docker-compose -p ${COMPOSE_PROJECT_NAME} down --remove-orphans 2>/dev/null || true
+                        
+                        # Remover containers órfãos específicos
+                        docker ps -aq --filter "name=kealex" --filter "name=svc-" --filter "name=api-gateway" | xargs -r docker rm -f 2>/dev/null || true
+                        
+                        # Limpeza conservadora de imagens
+                        docker image prune -f --filter "until=24h" || true
+                        docker container prune -f || true
+                        docker network prune -f || true
+                        
+                        echo "Espaço após limpeza:"
+                        df -h .
+                    """
+                }
+            }
+        }
+
+        stage('Checkout') {
+            steps { 
+                checkout scm 
+                sh "ls -la"
+            }
+        }
+
+        stage('Build Images') {
+            steps {
+                script {
+                    echo "=== BUILD SEQUENCIAL PARA HOSTINGER ==="
+                    
+                    def services = [
+                        'api-gateway', 'svc-auth', 'svc-processos', 
+                        'svc-documentos', 'svc-financeiro', 'svc-prazos',
+                        'svc-usuarios', 'svc-clientes', 'svc-configuracoes', 
+                        'svc-escritorios'
+                    ]
+                    
+                    // Build sequencial para evitar sobrecarga
+                    services.each { svc ->
+                        echo "Building ${svc}..."
+                        sh """
+                            docker build -t ${IMAGE_PREFIX}/${svc}:${TAG} ./${svc}
+                            docker tag ${IMAGE_PREFIX}/${svc}:${TAG} ${IMAGE_PREFIX}/${svc}:latest
+                        """
+                        
+                        // Pequena pausa entre builds
+                        sleep(5)
+                    }
+                }
+            }
+        }
+
+        stage('Test Images') {
+            steps {
+                script {
+                    echo "=== TESTE DAS IMAGENS ==="
+                    
+                    sh "docker images | grep kealex"
+                    
+                    // Teste básico apenas do svc-auth
+                    sh """
+                        docker run --rm \
+                          -e DATABASE_URL=sqlite:///./test.db \
+                          -e SECRET_KEY=test-key \
+                          ${IMAGE_PREFIX}/svc-auth:${TAG} \
+                          python -c "import main; print('svc-auth: OK')"
+                    """
+                }
+            }
+        }
+
+        stage('Deploy') {
+            when { branch 'main' }
+            steps {
+                withCredentials([string(credentialsId: 'kealex-secret-key', variable: 'SECRET_KEY')]) {
+                    script {
+                        echo "=== DEPLOY HOSTINGER ==="
+                        
+                        // Criar .env
+                        sh """
+                            cat > .env << EOF
+SECRET_KEY=${SECRET_KEY}
+DATABASE_URL=${DATABASE_URL}
+REGISTRY=${REGISTRY}
+TAG=${TAG}
+COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
+EOF
+                        """
+                        
+                        // Deploy com docker-compose
+                        sh """
+                            export PATH=\$HOME/bin:\$PATH
+                            export SECRET_KEY=${SECRET_KEY}
+                            export DATABASE_URL=${DATABASE_URL}
+                            export REGISTRY=${REGISTRY}
+                            export TAG=${TAG}
+                            export COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
+                            
+                            echo "Fazendo deploy..."
+                            docker-compose -p ${COMPOSE_PROJECT_NAME} up -d --build --remove-orphans
+                            
+                            echo "Aguardando inicialização..."
+                            sleep 45
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Health Check') {
+            when { branch 'main' }
+            steps {
+                script {
+                    echo "=== VERIFICAÇÃO DE SAÚDE ==="
+                    
+                    sh """
+                        export PATH=\$HOME/bin:\$PATH
+                        
+                        echo "Status dos containers:"
+                        docker-compose -p ${COMPOSE_PROJECT_NAME} ps
+                        
+                        echo "Containers em execução:"
+                        docker ps --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}"
+                        
+                        echo "Verificando porta 8000..."
+                        netstat -tlnp | grep :8000 || ss -tlnp | grep :8000 || echo "Porta não encontrada"
+                    """
+                    
+                    // Teste de conectividade robusto
+                    sh """
+                        echo 'Testando conectividade...'
+                        
+                        for i in {1..20}; do
+                            echo "Tentativa \$i/20..."
+                            
+                            if curl -s --connect-timeout 3 --max-time 5 http://localhost:8000 >/dev/null 2>&1; then
+                                echo '[OK] Porta 8000 respondendo!'
+                                break
+                            elif [ \$i -eq 20 ]; then
+                                echo '[ERRO] Porta não respondeu após 20 tentativas'
+                                
+                                # Diagnóstico
+                                export PATH=\$HOME/bin:\$PATH
+                                echo "Logs do API Gateway:"
+                                docker-compose -p ${COMPOSE_PROJECT_NAME} logs --tail=20 api-gateway || true
+                                
+                                echo "Status detalhado:"
+                                docker ps -a --filter "name=api-gateway"
+                                
+                                exit 1
+                            else
+                                sleep 6
+                            fi
+                        done
+                    """
+                    
+                    // Teste de login
+                    sh """
+                        echo 'Testando login...'
+                        
+                        RESPONSE=\$(curl -s -w "%{http_code}" --connect-timeout 5 --max-time 10 \\
+                            -X POST http://localhost:8000/v1/lex/auth/login \\
+                            -H "Content-Type: application/json" \\
+                            -d '{"email": "admin@kealex.com", "senha": "admin123"}' 2>/dev/null || echo "000")
+                        
+                        HTTP_CODE="\${RESPONSE: -3}"
+                        
+                        if [ "\$HTTP_CODE" = "200" ]; then
+                            echo '[OK] Login funcionando!'
+                        else
+                            echo '[AVISO] Login retornou código: \$HTTP_CODE'
+                        fi
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                sh "rm -f .env || true"
+                
+                sh """
+                    export PATH=\$HOME/bin:\$PATH
+                    
+                    echo "=== STATUS FINAL ==="
+                    docker ps --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}" --filter "name=kealex" || true
+                    
+                    echo "=== RECURSOS ==="
+                    df -h . || true
+                    docker system df || true
+                """
+            }
+        }
+        success {
+            echo "[SUCESSO] Deploy concluído na Hostinger!"
+            echo "[INFO] API: http://localhost:8000/v1/lex/"
+            echo "[INFO] Docs: http://localhost:8000/docs"
+            echo "[INFO] Login: admin@kealex.com / admin123"
+        }
+        failure {
+            echo "[ERRO] Deploy falhou - diagnóstico:"
+            sh """
+                export PATH=\$HOME/bin:\$PATH
+                
+                echo "=== LOGS DE ERRO ==="
+                docker-compose -p ${COMPOSE_PROJECT_NAME} logs --tail=30 api-gateway 2>/dev/null || true
+                docker-compose -p ${COMPOSE_PROJECT_NAME} logs --tail=30 svc-auth 2>/dev/null || true
+                
+                echo "=== CONTAINERS ==="
+                docker ps -a --filter "name=kealex" || true
+                
+                echo "=== RECURSOS ==="
+                df -h || true
+                free -h || true
+            """
+        }
+    }
+}

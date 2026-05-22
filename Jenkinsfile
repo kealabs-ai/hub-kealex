@@ -6,6 +6,7 @@ pipeline {
         IMAGE_PREFIX = "${REGISTRY}/kealex"
         TAG = "${env.BUILD_NUMBER}"
         DATABASE_URL = "mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex"
+        COMPOSE_PROJECT_NAME = "kealex"
     }
 
     stages {
@@ -107,66 +108,28 @@ pipeline {
         }
 
         stage('Build Images') {
-            parallel {
-                stage('svc-auth') { 
-                    steps { 
-                        sh "docker build -t ${IMAGE_PREFIX}/svc-auth:${TAG} ./svc-auth"
-                        sh "docker tag ${IMAGE_PREFIX}/svc-auth:${TAG} ${IMAGE_PREFIX}/svc-auth:latest"
-                    } 
-                }
-                stage('svc-processos') { 
-                    steps { 
-                        sh "docker build -t ${IMAGE_PREFIX}/svc-processos:${TAG} ./svc-processos"
-                        sh "docker tag ${IMAGE_PREFIX}/svc-processos:${TAG} ${IMAGE_PREFIX}/svc-processos:latest"
-                    } 
-                }
-                stage('svc-documentos') { 
-                    steps { 
-                        sh "docker build -t ${IMAGE_PREFIX}/svc-documentos:${TAG} ./svc-documentos"
-                        sh "docker tag ${IMAGE_PREFIX}/svc-documentos:${TAG} ${IMAGE_PREFIX}/svc-documentos:latest"
-                    } 
-                }
-                stage('svc-financeiro') { 
-                    steps { 
-                        sh "docker build -t ${IMAGE_PREFIX}/svc-financeiro:${TAG} ./svc-financeiro"
-                        sh "docker tag ${IMAGE_PREFIX}/svc-financeiro:${TAG} ${IMAGE_PREFIX}/svc-financeiro:latest"
-                    } 
-                }
-                stage('svc-prazos') { 
-                    steps { 
-                        sh "docker build -t ${IMAGE_PREFIX}/svc-prazos:${TAG} ./svc-prazos"
-                        sh "docker tag ${IMAGE_PREFIX}/svc-prazos:${TAG} ${IMAGE_PREFIX}/svc-prazos:latest"
-                    } 
-                }
-                stage('svc-usuarios') { 
-                    steps { 
-                        sh "docker build -t ${IMAGE_PREFIX}/svc-usuarios:${TAG} ./svc-usuarios"
-                        sh "docker tag ${IMAGE_PREFIX}/svc-usuarios:${TAG} ${IMAGE_PREFIX}/svc-usuarios:latest"
-                    } 
-                }
-                stage('svc-clientes') { 
-                    steps { 
-                        sh "docker build -t ${IMAGE_PREFIX}/svc-clientes:${TAG} ./svc-clientes"
-                        sh "docker tag ${IMAGE_PREFIX}/svc-clientes:${TAG} ${IMAGE_PREFIX}/svc-clientes:latest"
-                    } 
-                }
-                stage('svc-configuracoes') { 
-                    steps { 
-                        sh "docker build -t ${IMAGE_PREFIX}/svc-configuracoes:${TAG} ./svc-configuracoes"
-                        sh "docker tag ${IMAGE_PREFIX}/svc-configuracoes:${TAG} ${IMAGE_PREFIX}/svc-configuracoes:latest"
-                    } 
-                }
-                stage('svc-escritorios') { 
-                    steps { 
-                        sh "docker build -t ${IMAGE_PREFIX}/svc-escritorios:${TAG} ./svc-escritorios"
-                        sh "docker tag ${IMAGE_PREFIX}/svc-escritorios:${TAG} ${IMAGE_PREFIX}/svc-escritorios:latest"
-                    } 
-                }
-                stage('api-gateway') { 
-                    steps { 
-                        sh "docker build -t ${IMAGE_PREFIX}/api-gateway:${TAG} ./api-gateway"
-                        sh "docker tag ${IMAGE_PREFIX}/api-gateway:${TAG} ${IMAGE_PREFIX}/api-gateway:latest"
-                    } 
+            steps {
+                script {
+                    echo "=== BUILD SEQUENCIAL PARA HOSTINGER ==="
+                    
+                    def services = [
+                        'api-gateway', 'svc-auth', 'svc-processos', 
+                        'svc-documentos', 'svc-financeiro', 'svc-prazos',
+                        'svc-usuarios', 'svc-clientes', 'svc-configuracoes', 
+                        'svc-escritorios'
+                    ]
+                    
+                    // Build sequencial para evitar sobrecarga na Hostinger
+                    services.each { svc ->
+                        echo "Building ${svc}..."
+                        sh """
+                            docker build -t ${IMAGE_PREFIX}/${svc}:${TAG} ./${svc}
+                            docker tag ${IMAGE_PREFIX}/${svc}:${TAG} ${IMAGE_PREFIX}/${svc}:latest
+                        """
+                        
+                        // Pausa entre builds para não sobrecarregar
+                        sleep(3)
+                    }
                 }
             }
         }
@@ -311,10 +274,11 @@ pipeline {
                         sh """
                             export PATH=\$HOME/bin:\$PATH
                             echo 'Parando containers antigos...'
-                            docker-compose down 2>/dev/null || true
+                            docker-compose -p ${COMPOSE_PROJECT_NAME} down --remove-orphans 2>/dev/null || true
                             docker-compose -f docker-compose.prod.yml down 2>/dev/null || true
+                            docker-compose -f docker-compose.hostinger.yml down 2>/dev/null || true
                             
-                            # Remover containers órfãos
+                            # Remover containers órfãos específicos
                             docker ps -aq --filter "name=kealex" --filter "name=svc-" --filter "name=api-gateway" | xargs -r docker rm -f 2>/dev/null || true
                         """
                         
@@ -325,15 +289,19 @@ SECRET_KEY=${SECRET_KEY}
 DATABASE_URL=${DATABASE_URL}
 REGISTRY=${REGISTRY}
 TAG=${TAG}
+COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
 EOF
                         """
                         
-                        // Escolher arquivo docker-compose
+                        // Escolher arquivo docker-compose otimizado para Hostinger
                         sh """
                             export PATH=\$HOME/bin:\$PATH
                             
-                            # Verificar se deve usar produção ou desenvolvimento
-                            if [ -f "docker-compose.prod.yml" ]; then
+                            # Priorizar arquivo específico da Hostinger
+                            if [ -f "docker-compose.hostinger.yml" ]; then
+                                echo 'Usando docker-compose.hostinger.yml (otimizado para Hostinger)'
+                                COMPOSE_FILE="docker-compose.hostinger.yml"
+                            elif [ -f "docker-compose.prod.yml" ]; then
                                 echo 'Testando registry...'
                                 if docker pull ${REGISTRY}/kealex/api-gateway:${TAG} 2>/dev/null; then
                                     echo 'Registry acessível - usando docker-compose.prod.yml'
@@ -350,36 +318,37 @@ EOF
                             echo "\$COMPOSE_FILE" > .compose_file
                         """
                         
-                        // Deploy
+                        // Deploy otimizado para Hostinger
                         sh """
                             export PATH=\$HOME/bin:\$PATH
                             export SECRET_KEY=${SECRET_KEY}
                             export DATABASE_URL=${DATABASE_URL}
                             export REGISTRY=${REGISTRY}
                             export TAG=${TAG}
+                            export COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
                             
                             COMPOSE_FILE=\$(cat .compose_file)
                             echo "Fazendo deploy com \$COMPOSE_FILE..."
                             
                             if [ "\$COMPOSE_FILE" = "docker-compose.prod.yml" ]; then
                                 # Modo produção - pull das imagens
-                                docker-compose -f \$COMPOSE_FILE pull
-                                docker-compose -f \$COMPOSE_FILE up -d --remove-orphans
+                                docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} pull
+                                docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} up -d --remove-orphans
                             else
-                                # Modo desenvolvimento - build local
-                                docker-compose -f \$COMPOSE_FILE up -d --build --remove-orphans
+                                # Modo desenvolvimento/hostinger - build local
+                                docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} up -d --build --remove-orphans
                             fi
                         """
                         
-                        // Aguardar inicialização
-                        sh "sleep 60"
+                        // Aguardar inicialização (tempo reduzido para Hostinger)
+                        sh "sleep 45"
                         
                         // Verificar status
                         sh """
                             export PATH=\$HOME/bin:\$PATH
                             COMPOSE_FILE=\$(cat .compose_file)
                             echo "Status dos containers:"
-                            docker-compose -f \$COMPOSE_FILE ps
+                            docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} ps
                             
                             echo "Containers em execução:"
                             docker ps --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}"
@@ -407,14 +376,14 @@ EOF
                         
                         echo "Verificando status de todos os containers..."
                         
-                        FAILED_SERVICES=\$(docker-compose -f \$COMPOSE_FILE ps --services --filter "status=exited")
+                        FAILED_SERVICES=\$(docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} ps --services --filter "status=exited")
                         
                         if [ -n "\$FAILED_SERVICES" ]; then
                             echo "[ERRO] Serviços com falha: \$FAILED_SERVICES"
                             
                             for service in \$FAILED_SERVICES; do
                                 echo "--- Logs do \$service ---"
-                                docker-compose -f \$COMPOSE_FILE logs --tail=20 \$service
+                                docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} logs --tail=20 \$service
                             done
                             
                             exit 1
@@ -439,7 +408,7 @@ EOF
                         export PATH=\$HOME/bin:\$PATH
                         COMPOSE_FILE=\$(cat .compose_file)
                         echo "Verificando containers com \$COMPOSE_FILE..."
-                        docker-compose -f \$COMPOSE_FILE ps
+                        docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} ps
                     """
                     
                     // Verificar logs de serviços críticos
@@ -448,13 +417,13 @@ EOF
                         COMPOSE_FILE=\$(cat .compose_file)
                         
                         echo "=== Logs do API Gateway ==="
-                        docker-compose -f \$COMPOSE_FILE logs --tail=15 api-gateway || echo "Serviço api-gateway não encontrado"
+                        docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} logs --tail=15 api-gateway || echo "Serviço api-gateway não encontrado"
                         
                         echo "=== Logs do SVC Auth ==="
-                        docker-compose -f \$COMPOSE_FILE logs --tail=15 svc-auth || echo "Serviço svc-auth não encontrado"
+                        docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} logs --tail=15 svc-auth || echo "Serviço svc-auth não encontrado"
                         
                         echo "=== Logs do SVC Processos ==="
-                        docker-compose -f \$COMPOSE_FILE logs --tail=10 svc-processos || echo "Serviço svc-processos não encontrado"
+                        docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} logs --tail=10 svc-processos || echo "Serviço svc-processos não encontrado"
                     """
                     
                     // Verificar se a porta está sendo usada
@@ -485,7 +454,7 @@ EOF
                                 docker ps -a --filter "name=api-gateway" --filter "name=svc-"
                                 
                                 echo "Logs detalhados do API Gateway:"
-                                docker-compose -f \$COMPOSE_FILE logs --tail=30 api-gateway || true
+                                docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} logs --tail=30 api-gateway || true
                                 
                                 echo "Verificando se nginx está rodando:"
                                 docker exec \$(docker ps -q --filter "name=api-gateway") ps aux | grep nginx || echo "Nginx não encontrado"
@@ -586,10 +555,10 @@ EOF
                 echo "Usando arquivo: \$COMPOSE_FILE"
                 
                 echo "--- Logs do API Gateway ---"
-                docker-compose -f \$COMPOSE_FILE logs --tail=30 api-gateway 2>/dev/null || echo "Serviço não encontrado"
+                docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} logs --tail=30 api-gateway 2>/dev/null || echo "Serviço não encontrado"
                 
                 echo "--- Logs do SVC Auth ---"
-                docker-compose -f \$COMPOSE_FILE logs --tail=30 svc-auth 2>/dev/null || echo "Serviço não encontrado"
+                docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} logs --tail=30 svc-auth 2>/dev/null || echo "Serviço não encontrado"
                 
                 echo "--- Status dos Containers ---"
                 docker ps -a --filter "name=kealex" --filter "name=svc-" --filter "name=api-gateway" || true
