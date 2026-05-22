@@ -270,16 +270,25 @@ pipeline {
                     script {
                         echo "=== INICIANDO DEPLOY ==="
                         
-                        // Parar containers antigos primeiro
+                        // Parar containers antigos com limpeza completa
                         sh """
                             export PATH=\$HOME/bin:\$PATH
                             echo 'Parando containers antigos...'
-                            docker-compose -p ${COMPOSE_PROJECT_NAME} down --remove-orphans 2>/dev/null || true
-                            docker-compose -f docker-compose.prod.yml down 2>/dev/null || true
-                            docker-compose -f docker-compose.hostinger.yml down 2>/dev/null || true
                             
-                            # Remover containers órfãos específicos
-                            docker ps -aq --filter "name=kealex" --filter "name=svc-" --filter "name=api-gateway" | xargs -r docker rm -f 2>/dev/null || true
+                            # Parar todos os projetos relacionados
+                            docker-compose -p ${COMPOSE_PROJECT_NAME} down --remove-orphans --volumes 2>/dev/null || true
+                            docker-compose -f docker-compose.prod.yml down --remove-orphans --volumes 2>/dev/null || true
+                            docker-compose -f docker-compose.hostinger.yml down --remove-orphans --volumes 2>/dev/null || true
+                            docker-compose down --remove-orphans --volumes 2>/dev/null || true
+                            
+                            # Forçar remoção de containers específicos
+                            docker ps -aq --filter "name=kealex" --filter "name=svc-" --filter "name=api-gateway" --filter "name=hubkealex" | xargs -r docker rm -f 2>/dev/null || true
+                            
+                            # Remover redes antigas que podem causar conflito
+                            docker network ls --filter "name=kealex" --format "{{.Name}}" | xargs -r docker network rm 2>/dev/null || true
+                            docker network ls --filter "name=hubkealex" --format "{{.Name}}" | xargs -r docker network rm 2>/dev/null || true
+                            
+                            echo 'Limpeza de containers concluída'
                         """
                         
                         // Criar arquivo .env
@@ -318,7 +327,7 @@ EOF
                             echo "\$COMPOSE_FILE" > .compose_file
                         """
                         
-                        // Deploy otimizado para Hostinger
+                        // Deploy otimizado para Hostinger com força total
                         sh """
                             export PATH=\$HOME/bin:\$PATH
                             export SECRET_KEY=${SECRET_KEY}
@@ -333,15 +342,58 @@ EOF
                             if [ "\$COMPOSE_FILE" = "docker-compose.prod.yml" ]; then
                                 # Modo produção - pull das imagens
                                 docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} pull
-                                docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} up -d --remove-orphans
+                                docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} up -d --remove-orphans --force-recreate
                             else
-                                # Modo desenvolvimento/hostinger - build local
-                                docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} up -d --build --remove-orphans
+                                # Modo desenvolvimento/hostinger - build local com força total
+                                docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} up -d --build --remove-orphans --force-recreate
                             fi
+                            
+                            echo "Containers iniciados, verificando status inicial..."
+                            sleep 15
+                            docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} ps
                         """
                         
-                        // Aguardar inicialização (tempo reduzido para Hostinger)
-                        sh "sleep 45"
+                        // Aguardar inicialização com verificação ativa
+                        sh """
+                            export PATH=\$HOME/bin:\$PATH
+                            COMPOSE_FILE=\$(cat .compose_file)
+                            
+                            echo "Aguardando inicialização dos containers..."
+                            
+                            # Aguardar 30s inicial
+                            sleep 30
+                            
+                            # Verificar se containers estão rodando
+                            for i in {1..6}; do
+                                echo "Verificação \$i/6..."
+                                
+                                RUNNING=\$(docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} ps --services --filter "status=running" | wc -l)
+                                TOTAL=\$(docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} ps --services | wc -l)
+                                
+                                echo "Containers rodando: \$RUNNING/\$TOTAL"
+                                
+                                if [ "\$RUNNING" -eq "\$TOTAL" ] && [ "\$TOTAL" -gt 0 ]; then
+                                    echo "Todos os containers estão rodando!"
+                                    break
+                                elif [ \$i -eq 6 ]; then
+                                    echo "Nem todos os containers iniciaram corretamente"
+                                    docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} ps
+                                    
+                                    # Mostrar logs dos containers com problema
+                                    FAILED=\$(docker ps -a --filter "name=kealex" --filter "status=exited" --format "{{.Names}}")
+                                    if [ -n "\$FAILED" ]; then
+                                        echo "Containers com falha: \$FAILED"
+                                        for container in \$FAILED; do
+                                            echo "--- Logs do \$container ---"
+                                            docker logs --tail=15 \$container
+                                        done
+                                    fi
+                                else
+                                    echo "Aguardando mais containers iniciarem..."
+                                    sleep 15
+                                fi
+                            done
+                        """
                         
                         // Verificar status
                         sh """
