@@ -120,13 +120,18 @@ POST   /v1/lex/configuracoes/notificacoes
 
 O `Jenkinsfile` executa:
 1. Build paralelo de todas as imagens
-2. Smoke test de importação
-3. Push para registry (branch `main`)
-4. Deploy via `docker compose` (branch `main`)
+2. Teste de sintaxe e configuração do nginx
+3. Smoke test de importação
+4. Validação do nginx após deploy
+5. Health checks completos (nginx + microserviços)
+6. Push para registry (branch `main`)
+7. Deploy via `docker compose` (branch `main`)
 
 Configure as credentials no Jenkins:
 - `kealex-secret-key` — Secret text com o valor de SECRET_KEY
 - `registry-creds` — Username/Password do registry Docker
+
+**Documentação detalhada:** [JENKINS_NGINX.md](JENKINS_NGINX.md)
 
 ## Testes API (Postman)
 

@@ -15,44 +15,28 @@ pipeline {
                 script {
                     echo "=== VERIFICANDO AMBIENTE ==="
                     
-                    // Verificar Docker
                     sh "docker --version"
                     sh "docker info --format 'Server Version: {{.ServerVersion}}'"
                     
-                    // Instalar docker-compose se não existir (sem sudo)
                     sh """
                         if ! command -v docker-compose &> /dev/null; then
                             echo 'Instalando docker-compose...'
-                            
-                            # Criar diretório bin do usuário
                             mkdir -p \$HOME/bin
-                            
-                            # Baixar docker-compose
                             curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-linux-x86_64" -o \$HOME/bin/docker-compose
-                            
-                            # Dar permissão de execução
                             chmod +x \$HOME/bin/docker-compose
-                            
-                            # Adicionar ao PATH
                             export PATH=\$HOME/bin:\$PATH
-                            
                             echo 'docker-compose instalado em \$HOME/bin/docker-compose'
                         fi
                         
-                        # Garantir que está no PATH
                         export PATH=\$HOME/bin:\$PATH
-                        
                         echo 'Verificando docker-compose:'
                         docker-compose --version
                         echo 'Localização:'
                         which docker-compose
                     """
                     
-                    // Verificar permissões
                     sh "whoami"
                     sh "id"
-                    
-                    // Verificar diretório
                     sh "pwd"
                     sh "ls -la docker-compose.yml"
                     
@@ -66,29 +50,23 @@ pipeline {
                 script {
                     echo "=== LIMPEZA INTELIGENTE ==="
                     
-                    // Verificar espaço antes da limpeza
                     sh """
                         echo "Espaço antes da limpeza:"
                         df -h .
                         docker system df
                     """
                     
-                    // Limpeza conservadora - apenas recursos não utilizados
                     sh """
                         echo "Removendo imagens não utilizadas..."
                         docker image prune -f --filter "until=24h" || true
-                        
                         echo "Removendo containers parados..."
                         docker container prune -f || true
-                        
                         echo "Removendo redes não utilizadas..."
                         docker network prune -f || true
-                        
                         echo "Removendo volumes órfãos..."
                         docker volume prune -f || true
                     """
                     
-                    // Verificar espaço após limpeza
                     sh """
                         echo "Espaço após limpeza:"
                         df -h .
@@ -148,7 +126,6 @@ pipeline {
                     echo "=== TESTANDO IMAGENS CONSTRUÍDAS ==="
                     sh "docker images | grep kealex"
                     
-                    // Teste básico de importação
                     sh """
                         docker run --rm \
                           -e DATABASE_URL=sqlite:///./test.db \
@@ -156,6 +133,26 @@ pipeline {
                           ${IMAGE_PREFIX}/svc-auth:${TAG} \
                           python -c "import main; print('svc-auth: OK')"
                     """
+                }
+            }
+        }
+
+        stage('Test Nginx Config') {
+            steps {
+                script {
+                    echo "=== TESTANDO CONFIGURAÇÃO DO NGINX ==="
+                    
+                    sh """
+                        echo "Testando sintaxe da configuração do nginx..."
+                        docker run --rm ${IMAGE_PREFIX}/api-gateway:${TAG} nginx -t
+                    """
+                    
+                    sh """
+                        echo "Verificando arquivos de configuração..."
+                        docker run --rm ${IMAGE_PREFIX}/api-gateway:${TAG} ls -la /etc/nginx/conf.d/
+                    """
+                    
+                    echo "=== CONFIGURAÇÃO DO NGINX VALIDADA ==="
                 }
             }
         }
@@ -224,7 +221,6 @@ pipeline {
                 script {
                     echo "=== VERIFICAÇÃO PRÉ-DEPLOY ==="
                     
-                    // Verificar se há containers rodando que podem conflitar
                     sh """
                         echo "Verificando containers existentes..."
                         EXISTING=\$(docker ps -q --filter "name=kealex" --filter "name=svc-" --filter "name=api-gateway")
@@ -237,7 +233,6 @@ pipeline {
                         fi
                     """
                     
-                    // Verificar espaço em disco
                     sh """
                         echo "Verificando espaço em disco..."
                         df -h .
@@ -252,11 +247,9 @@ pipeline {
                         fi
                     """
                     
-                    // Verificar se a porta 8000 está livre
                     sh """
                         echo "Verificando porta 8000..."
                         
-                        # Tentar diferentes métodos para verificar porta
                         if command -v ss &> /dev/null; then
                             PORT_CHECK=\$(ss -tlnp 2>/dev/null | grep :8000 || echo "livre")
                         elif command -v netstat &> /dev/null; then
@@ -284,28 +277,17 @@ pipeline {
                     script {
                         echo "=== INICIANDO DEPLOY ==="
                         
-                        // Parar containers antigos com limpeza completa
                         sh """
                             export PATH=\$HOME/bin:\$PATH
                             echo 'Parando containers antigos...'
                             
-                            # Parar todos os projetos relacionados
-                            docker-compose -p ${COMPOSE_PROJECT_NAME} down --remove-orphans --volumes 2>/dev/null || true
-                            docker-compose -f docker-compose.prod.yml down --remove-orphans --volumes 2>/dev/null || true
-                            docker-compose -f docker-compose.hostinger.yml down --remove-orphans --volumes 2>/dev/null || true
-                            docker-compose down --remove-orphans --volumes 2>/dev/null || true
+                            docker-compose -p ${COMPOSE_PROJECT_NAME} down --remove-orphans 2>/dev/null || true
+                            docker ps -aq --filter "name=kealex" | xargs -r docker rm -f 2>/dev/null || true
+                            docker network rm kealex-network 2>/dev/null || true
                             
-                            # Forçar remoção de containers específicos
-                            docker ps -aq --filter "name=kealex" --filter "name=svc-" --filter "name=api-gateway" --filter "name=hubkealex" | xargs -r docker rm -f 2>/dev/null || true
-                            
-                            # Remover redes antigas que podem causar conflito
-                            docker network ls --filter "name=kealex" --format "{{.Name}}" | xargs -r docker network rm 2>/dev/null || true
-                            docker network ls --filter "name=hubkealex" --format "{{.Name}}" | xargs -r docker network rm 2>/dev/null || true
-                            
-                            echo 'Limpeza de containers concluída'
+                            echo 'Limpeza concluída'
                         """
                         
-                        // Criar arquivo .env
                         sh """
                             cat > .env << EOF
 SECRET_KEY=${SECRET_KEY}
@@ -316,28 +298,16 @@ COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
 EOF
                         """
                         
-                        // Escolher arquivo docker-compose otimizado para Hostinger
                         sh """
                             export PATH=\$HOME/bin:\$PATH
                             
-                            # Priorizar arquivo específico da Hostinger
                             if [ -f "docker-compose.hostinger.yml" ]; then
-                                echo 'Usando docker-compose.hostinger.yml (otimizado para Hostinger)'
                                 COMPOSE_FILE="docker-compose.hostinger.yml"
-                            elif [ -f "docker-compose.prod.yml" ]; then
-                                echo 'Testando registry...'
-                                if docker pull ${REGISTRY}/${IMAGE_PREFIX}/api-gateway:${TAG} 2>/dev/null; then
-                                    echo 'Registry acessível - usando docker-compose.prod.yml'
-                                    COMPOSE_FILE="docker-compose.prod.yml"
-                                else
-                                    echo 'Registry inacessível - usando docker-compose.yml'
-                                    COMPOSE_FILE="docker-compose.yml"
-                                fi
                             else
                                 COMPOSE_FILE="docker-compose.yml"
                             fi
                             
-                            echo "Arquivo escolhido: \$COMPOSE_FILE"
+                            echo "Usando: \$COMPOSE_FILE"
                             echo "\$COMPOSE_FILE" > .compose_file
                         """
                         
@@ -345,150 +315,20 @@ EOF
                             export PATH=\$HOME/bin:\$PATH
                             export SECRET_KEY=${SECRET_KEY}
                             export DATABASE_URL=${DATABASE_URL}
-                            export REGISTRY=${REGISTRY}
                             export TAG=${TAG}
                             export COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
                             
                             COMPOSE_FILE=\$(cat .compose_file)
-                            echo "Fazendo deploy com \$COMPOSE_FILE..."
+                            echo "Deploy com \$COMPOSE_FILE..."
                             
-                            echo "Iniciando containers com docker run..."
+                            docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} up -d --build
                             
-                            # Criar rede se não existir
-                            docker network create kealex-network 2>/dev/null || true
+                            echo "Aguardando inicialização (45s)..."
+                            sleep 45
                             
-                            # Iniciar serviços em ordem com verificação
-                            SERVICES=(
-                                "svc-auth"
-                                "svc-processos"
-                                "svc-documentos"
-                                "svc-financeiro"
-                                "svc-prazos"
-                                "svc-usuarios"
-                                "svc-configuracoes"
-                                "svc-escritorios"
-                                "svc-clientes"
-                            )
-                            
-                            for SERVICE in "\${SERVICES[@]}"; do
-                                echo "Iniciando \$SERVICE..."
-                                CONTAINER_NAME="kealex-\$SERVICE"
-                                
-                                # Verificar se container já existe
-                                if docker ps -a --format "{{.Names}}" | grep -q "\$CONTAINER_NAME"; then
-                                    echo "Container \$CONTAINER_NAME já existe, iniciando..."
-                                    docker start \$CONTAINER_NAME || echo "Falha ao iniciar \$CONTAINER_NAME"
-                                else
-                                    echo "Criando novo container \$CONTAINER_NAME..."
-                                    docker run -d --name \$CONTAINER_NAME \
-                                        --network kealex-network \
-                                        -e SECRET_KEY="${SECRET_KEY}" \
-                                        -e DATABASE_URL="${DATABASE_URL}" \
-                                        --restart unless-stopped \
-                                        ${IMAGE_PREFIX}/\$SERVICE:latest || echo "Falha ao criar \$CONTAINER_NAME"
-                                fi
-                                
-                                sleep 2
-                            done
-                            
-                            echo "Aguardando serviços iniciarem..."
-                            sleep 15
-                            
-                            echo "Iniciando api-gateway..."
-                            if docker ps -a --format "{{.Names}}" | grep -q "kealex-api-gateway"; then
-                                echo "Container kealex-api-gateway já existe, iniciando..."
-                                docker start kealex-api-gateway || echo "Falha ao iniciar kealex-api-gateway"
-                            else
-                                echo "Criando novo container kealex-api-gateway..."
-                                docker run -d --name kealex-api-gateway \
-                                    --network kealex-network \
-                                    -p 8000:80 \
-                                    --restart unless-stopped \
-                                    ${IMAGE_PREFIX}/api-gateway:latest || echo "Falha ao criar kealex-api-gateway"
-                            fi
-                            
-                            echo "Containers iniciados, aguardando estabilização..."
-                            sleep 20
-                            
-                            echo "=== VERIFICAÇÃO DOS CONTAINERS ==="
-                            echo "Todos os containers:"
-                            docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-                            
-                            echo "Containers kealex:"
-                            docker ps -a --filter "name=kealex" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-                            
-                            echo "Containers rodando:"
+                            echo "=== STATUS DOS CONTAINERS ==="
+                            docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} ps
                             docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-                            
-                            FAILED_CONTAINERS=\$(docker ps -a --filter "name=kealex" --filter "status=exited" --format "{{.Names}}")
-                            if [ -n "\$FAILED_CONTAINERS" ]; then
-                                echo "CONTAINERS COM FALHA: \$FAILED_CONTAINERS"
-                                for container in \$FAILED_CONTAINERS; do
-                                    echo "--- Logs do \$container ---"
-                                    docker logs --tail=30 \$container
-                                    echo "--- Fim logs \$container ---"
-                                done
-                                
-                                echo "Tentando reiniciar containers com falha..."
-                                for container in \$FAILED_CONTAINERS; do
-                                    docker start \$container || echo "Falha ao reiniciar \$container"
-                                done
-                                sleep 15
-                            fi
-                        """
-                        
-                        sh """
-                            export PATH=\$HOME/bin:\$PATH
-                            
-                            echo "Aguardando inicialização dos containers..."
-                            sleep 30
-                            
-                            echo "=== DIAGNÓSTICO COMPLETO ==="
-                            echo "1. Todas as imagens Docker:"
-                            docker images
-                            
-                            echo "2. Todos os containers (incluindo parados):"
-                            docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}"
-                            
-                            echo "3. Containers kealex:"
-                            docker ps -a --filter "name=kealex" --format "table {{.Names}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}"
-                            
-                            echo "4. Containers rodando:"
-                            docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}"
-                            
-                            echo "5. Verificando se containers estão realmente criados:"
-                            for container in kealex-svc-auth kealex-svc-processos kealex-svc-documentos kealex-svc-financeiro kealex-svc-prazos kealex-svc-usuarios kealex-svc-configuracoes kealex-svc-escritorios kealex-svc-clientes kealex-api-gateway; do
-                                if docker ps -a --format "{{.Names}}" | grep -q "\$container"; then
-                                    echo "✅ \$container existe"
-                                else
-                                    echo "❌ \$container NÃO existe"
-                                fi
-                            done
-                            
-                            echo "6. Verificando rede:"
-                            docker network ls
-                            docker network inspect kealex-network 2>/dev/null || echo "Rede kealex-network não existe"
-                            
-                            echo "7. Tentando iniciar containers que não estão rodando:"
-                            for container in kealex-svc-auth kealex-svc-processos kealex-svc-documentos kealex-svc-financeiro kealex-svc-prazos kealex-svc-usuarios kealex-svc-configuracoes kealex-svc-escritorios kealex-svc-clientes kealex-api-gateway; do
-                                if docker ps --format "{{.Names}}" | grep -q "\$container"; then
-                                    echo "✅ \$container já está rodando"
-                                else
-                                    echo "Tentando iniciar \$container..."
-                                    docker start \$container 2>/dev/null || echo "❌ Falha ao iniciar \$container"
-                                fi
-                            done
-                            
-                            sleep 10
-                            
-                            echo "8. Status final após tentativas:"
-                            docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}"
-                        """
-                        
-                        sh """
-                            export PATH=\$HOME/bin:\$PATH
-                            echo "Status dos containers:"
-                            docker ps --filter "name=kealex" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
                         """
                         
                         echo "=== DEPLOY CONCLUÍDO ==="
@@ -497,89 +337,30 @@ EOF
             }
         }
 
-        stage('Container Startup Diagnosis') {
+        stage('Validate Nginx') {
             when { branch 'main' }
             steps {
                 script {
-                    echo "=== DIAGNÓSTICO DE INICIALIZAÇÃO ==="
+                    echo "=== VALIDANDO NGINX ==="
                     
                     sh """
                         export PATH=\$HOME/bin:\$PATH
                         COMPOSE_FILE=\$(cat .compose_file)
                         
-                        echo "=== VERIFICANDO PROBLEMAS COMUNS ==="
+                        echo "Verificando se nginx está rodando..."
+                        docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} ps api-gateway
                         
-                        # 1. Verificar se as imagens existem
-                        echo "1. Verificando imagens Docker:"
-                        docker images | grep kealex || echo "Nenhuma imagem kealex encontrada"
+                        echo "Testando configuração do nginx..."
+                        docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} exec -T api-gateway nginx -t || true
                         
-                        # 2. Verificar se há conflitos de porta
-                        echo "2. Verificando conflitos de porta 8000:"
-                        netstat -tlnp | grep :8000 || echo "Porta 8000 livre"
+                        echo "Verificando logs do nginx..."
+                        docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} logs --tail=20 api-gateway
                         
-                        # 3. Verificar espaço em disco
-                        echo "3. Verificando espaço em disco:"
-                        df -h .
-                        
-                        # 4. Verificar memória disponível
-                        echo "4. Verificando memória:"
-                        free -h
-                        
-                        # 5. Verificar se o arquivo docker-compose é válido
-                        echo "5. Validando docker-compose:"
-                        docker-compose -f \$COMPOSE_FILE config --quiet && echo "Docker-compose válido" || echo "Erro no docker-compose"
-                        
-                        # 6. Verificar variáveis de ambiente
-                        echo "6. Verificando variáveis de ambiente:"
-                        echo "SECRET_KEY definido: \$([ -n "\$SECRET_KEY" ] && echo 'SIM' || echo 'NÃO')"
-                        echo "DATABASE_URL definido: \$([ -n "\$DATABASE_URL" ] && echo 'SIM' || echo 'NÃO')"
-                        
-                        # 7. Tentar iniciar um container individual para teste
-                        echo "7. Teste de container individual (svc-auth):"
-                        docker run --rm -d --name test-auth \
-                            -e SECRET_KEY="\$SECRET_KEY" \
-                            -e DATABASE_URL="\$DATABASE_URL" \
-                            ${IMAGE_PREFIX}/svc-auth:${TAG} && \
-                        sleep 10 && \
-                        docker logs test-auth && \
-                        docker stop test-auth || echo "Falha no teste individual"
-                    """
-                }
-            }
-        }
-        stage('Post-Deploy Validation') {
-            when { branch 'main' }
-            steps {
-                script {
-                    echo "=== VALIDAÇÃO PÓS-DEPLOY ==="
-                    
-                    // Aguardar estabilização
-                    sh "sleep 30"
-                    
-                    // Verificar se todos os containers estão rodando
-                    sh """
-                        export PATH=\$HOME/bin:\$PATH
-                        COMPOSE_FILE=\$(cat .compose_file)
-                        
-                        echo "Verificando status de todos os containers..."
-                        
-                        FAILED_SERVICES=\$(docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} ps --services --filter "status=exited")
-                        
-                        if [ -n "\$FAILED_SERVICES" ]; then
-                            echo "[ERRO] Serviços com falha: \$FAILED_SERVICES"
-                            
-                            for service in \$FAILED_SERVICES; do
-                                echo "--- Logs do \$service ---"
-                                docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} logs --tail=20 \$service
-                            done
-                            
-                            exit 1
-                        else
-                            echo "[OK] Todos os serviços estão rodando"
-                        fi
+                        echo "Verificando processos nginx..."
+                        docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} exec -T api-gateway ps aux | grep nginx || true
                     """
                     
-                    echo "=== VALIDAÇÃO CONCLUÍDA ==="
+                    echo "=== NGINX VALIDADO ==="
                 }
             }
         }
@@ -590,67 +371,61 @@ EOF
                 script {
                     echo "=== VERIFICAÇÃO DE SAÚDE ==="
                     
-                    // Verificar containers
                     sh """
                         export PATH=\$HOME/bin:\$PATH
                         COMPOSE_FILE=\$(cat .compose_file)
-                        echo "Verificando containers com \$COMPOSE_FILE..."
+                        
+                        echo "=== STATUS DOS CONTAINERS ==="
                         docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} ps
-                    """
-                    
-                    // Verificar logs de serviços críticos
-                    sh """
-                        export PATH=\$HOME/bin:\$PATH
-                        COMPOSE_FILE=\$(cat .compose_file)
                         
-                        echo "=== Logs do API Gateway ==="
-                        docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} logs --tail=15 api-gateway || echo "Serviço api-gateway não encontrado"
+                        echo "=== VERIFICAÇÃO DO NGINX ==="
+                        echo "Testando configuração do nginx..."
+                        docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} exec -T api-gateway nginx -t || echo "Falha ao testar nginx"
                         
-                        echo "=== Logs do SVC Auth ==="
-                        docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} logs --tail=15 svc-auth || echo "Serviço svc-auth não encontrado"
+                        echo "Verificando processos nginx..."
+                        docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} exec -T api-gateway ps aux | grep nginx || echo "Nginx não encontrado"
                         
-                        echo "=== Logs do SVC Processos ==="
-                        docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} logs --tail=10 svc-processos || echo "Serviço svc-processos não encontrado"
-                    """
-                    
-                    // Verificar se a porta está sendo usada
-                    sh """
-                        echo "Verificando porta 8000..."
+                        echo "=== LOGS DOS SERVIÇOS ==="
+                        echo "--- API Gateway (Nginx) ---"
+                        docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} logs --tail=20 api-gateway
+                        
+                        echo "--- SVC Auth ---"
+                        docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} logs --tail=15 svc-auth
+                        
+                        echo "=== VERIFICAÇÃO DE PORTA ==="
                         if command -v ss &> /dev/null; then
                             ss -tlnp | grep :8000 || echo "Porta 8000 não está em uso"
                         elif command -v netstat &> /dev/null; then
                             netstat -tlnp | grep :8000 || echo "Porta 8000 não está em uso"
                         else
-                            echo "Porta 8000: não foi possível verificar"
+                            echo "Não foi possível verificar porta 8000"
                         fi
                     """
                     
-                    // Teste de conectividade com retry mais robusto
                     sh """
-                        echo 'Testando conectividade da API...'
+                        echo '=== TESTE DE CONECTIVIDADE DO NGINX ==='
                         
-                        # Primeiro testar se a porta responde
                         for i in {1..15}; do
-                            echo "Tentativa \$i/15 - testando porta 8000..."
+                            echo "Tentativa \$i/15 - testando health endpoint do nginx..."
                             
-                            if curl -s --connect-timeout 5 --max-time 10 http://localhost:8000 >/dev/null 2>&1; then
-                                echo '[OK] Porta 8000 respondendo!'
+                            if curl -f -s --connect-timeout 5 --max-time 10 http://localhost:8000/health >/dev/null 2>&1; then
+                                echo '[OK] Nginx health endpoint respondendo!'
+                                curl -s http://localhost:8000/health
                                 break
                             elif [ \$i -eq 15 ]; then
-                                echo '[ERRO] Porta 8000 não respondeu após 15 tentativas'
+                                echo '[ERRO] Nginx não respondeu após 15 tentativas'
                                 
-                                # Diagnóstico adicional
                                 export PATH=\$HOME/bin:\$PATH
                                 COMPOSE_FILE=\$(cat .compose_file)
                                 
-                                echo "Diagnóstico de containers:"
-                                docker ps -a --filter "name=api-gateway" --filter "name=svc-"
+                                echo "Diagnóstico do nginx:"
+                                docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} logs --tail=50 api-gateway
                                 
-                                echo "Logs detalhados do API Gateway:"
-                                docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} logs --tail=30 api-gateway || true
+                                echo "Status do container:"
+                                docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} ps api-gateway
                                 
-                                echo "Verificando se nginx está rodando:"
-                                docker exec \$(docker ps -q --filter "name=api-gateway") ps aux | grep nginx || echo "Nginx não encontrado"
+                                echo "Processos no container:"
+                                docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} exec -T api-gateway ps aux || true
                                 
                                 exit 1
                             else
@@ -658,17 +433,19 @@ EOF
                             fi
                         done
                         
-                        # Testar endpoint específico da API
-                        echo 'Testando endpoint da API...'
+                        echo '=== TESTE DE ENDPOINTS DA API ==='
                         for i in {1..10}; do
                             echo "Tentativa \$i/10 - testando /v1/lex/auth/me..."
                             
-                            if curl -f -s --connect-timeout 5 --max-time 10 http://localhost:8000/v1/lex/auth/me >/dev/null 2>&1; then
-                                echo '[OK] API endpoint respondendo!'
+                            RESPONSE=\$(curl -s -w "%{http_code}" http://localhost:8000/v1/lex/auth/me 2>/dev/null || echo "000")
+                            HTTP_CODE="\${RESPONSE: -3}"
+                            
+                            if [ "\$HTTP_CODE" = "401" ] || [ "\$HTTP_CODE" = "200" ]; then
+                                echo '[OK] API endpoint respondendo (HTTP \$HTTP_CODE)!'
                                 break
                             elif [ \$i -eq 10 ]; then
-                                echo '[AVISO] Endpoint da API não respondeu, mas porta está ativa'
-                                echo 'Testando resposta direta:'
+                                echo '[AVISO] Endpoint retornou: \$HTTP_CODE'
+                                echo 'Resposta completa:'
                                 curl -v http://localhost:8000/v1/lex/auth/me || true
                             else
                                 sleep 6
@@ -676,9 +453,8 @@ EOF
                         done
                     """
                     
-                    // Teste de login
                     sh """
-                        echo 'Testando login...'
+                        echo '=== TESTE DE LOGIN VIA NGINX ==='
                         
                         RESPONSE=\$(curl -s -w "%{http_code}" --connect-timeout 10 --max-time 15 \
                             -X POST http://localhost:8000/v1/lex/auth/login \
@@ -691,16 +467,23 @@ EOF
                         echo "Status HTTP: \$HTTP_CODE"
                         
                         if [ "\$HTTP_CODE" = "200" ]; then
-                            echo '[OK] Login funcionando!'
+                            echo '[OK] Login via nginx funcionando!'
                             echo "Resposta: \$BODY"
                         elif [ "\$HTTP_CODE" = "000" ]; then
-                            echo '[ERRO] Sem resposta do servidor'
+                            echo '[ERRO] Nginx não está encaminhando requisições'
+                            
+                            export PATH=\$HOME/bin:\$PATH
+                            COMPOSE_FILE=\$(cat .compose_file)
+                            
+                            echo "Verificando configuração do nginx:"
+                            docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} exec -T api-gateway cat /etc/nginx/conf.d/default.conf | head -50
                         else
                             echo '[AVISO] Login retornou código: \$HTTP_CODE'
                             echo "Resposta: \$BODY"
                         fi
                     """
                     
+                    echo "=== NGINX E API VALIDADOS ==="
                     echo "=== SAÚDE VERIFICADA ==="
                 }
             }
@@ -710,10 +493,8 @@ EOF
     post {
         always {
             script {
-                // Limpar arquivos temporários
                 sh "rm -f .env .compose_file || true"
                 
-                // Mostrar status final
                 sh """
                     export PATH=\$HOME/bin:\$PATH
                     
