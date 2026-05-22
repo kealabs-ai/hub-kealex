@@ -1,73 +1,180 @@
 version: '3.8'
 
-services:
-  # API Gateway
-  api-gateway:
-    build: ./api-gateway
-    ports:
-      - "8000:80"
-    depends_on:
-      - svc-auth
-      - svc-processos
-      - svc-documentos
-      - svc-financeiro
-      - svc-prazos
-      - svc-usuarios
-      - svc-configuracoes
-      - svc-escritorios
-      - svc-clientes
+networks:
+  kealex-network:
+    driver: bridge
 
-  # Microservices
+services:
+  # Microservices (start first)
   svc-auth:
     build: ./svc-auth
+    container_name: kealex-svc-auth
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
+    networks:
+      - kealex-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   svc-processos:
     build: ./svc-processos
+    container_name: kealex-svc-processos
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
+    networks:
+      - kealex-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   svc-documentos:
     build: ./svc-documentos
+    container_name: kealex-svc-documentos
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
+    networks:
+      - kealex-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   svc-financeiro:
     build: ./svc-financeiro
+    container_name: kealex-svc-financeiro
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
+    networks:
+      - kealex-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   svc-prazos:
     build: ./svc-prazos
+    container_name: kealex-svc-prazos
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
+    networks:
+      - kealex-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   svc-usuarios:
     build: ./svc-usuarios
+    container_name: kealex-svc-usuarios
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
+    networks:
+      - kealex-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   svc-configuracoes:
     build: ./svc-configuracoes
+    container_name: kealex-svc-configuracoes
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
+    networks:
+      - kealex-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   svc-escritorios:
     build: ./svc-escritorios
+    container_name: kealex-svc-escritorios
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
+    networks:
+      - kealex-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   svc-clientes:
     build: ./svc-clientes
+    container_name: kealex-svc-clientes
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
+    networks:
+      - kealex-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # API Gateway (start last)
+  api-gateway:
+    build: ./api-gateway
+    container_name: kealex-api-gateway
+    ports:
+      - "8000:80"
+    depends_on:
+      svc-auth:
+        condition: service_healthy
+      svc-processos:
+        condition: service_healthy
+      svc-documentos:
+        condition: service_healthy
+      svc-financeiro:
+        condition: service_healthy
+      svc-prazos:
+        condition: service_healthy
+      svc-usuarios:
+        condition: service_healthy
+      svc-configuracoes:
+        condition: service_healthy
+      svc-escritorios:
+        condition: service_healthy
+      svc-clientes:
+        condition: service_healthy
+    networks:
+      - kealex-network
+    restart: unless-stopped

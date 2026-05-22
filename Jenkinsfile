@@ -327,7 +327,7 @@ EOF
                             echo "\$COMPOSE_FILE" > .compose_file
                         """
                         
-                        // Deploy otimizado para Hostinger com força total
+                        // Deploy com verificação de saúde
                         sh """
                             export PATH=\$HOME/bin:\$PATH
                             export SECRET_KEY=${SECRET_KEY}
@@ -339,35 +339,35 @@ EOF
                             COMPOSE_FILE=\$(cat .compose_file)
                             echo "Fazendo deploy com \$COMPOSE_FILE..."
                             
-                            if [ "\$COMPOSE_FILE" = "docker-compose.prod.yml" ]; then
-                                # Modo produção - pull das imagens
-                                docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} pull
-                                docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} up -d --remove-orphans --force-recreate
-                            else
-                                # Modo desenvolvimento/hostinger - build local com força total
-                                docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} up -d --build --remove-orphans --force-recreate
-                            fi
+                            # Sempre usar build local para garantir que as imagens estejam disponíveis
+                            echo "Iniciando containers com build..."
+                            docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} up -d --build --remove-orphans --force-recreate
                             
-                            echo "Containers iniciados, verificando status inicial..."
-                            sleep 15
-                            
-                            # Verificar se containers foram criados
-                            echo "=== DIAGNÓSTICO INICIAL ==="
-                            echo "Containers criados:"
-                            docker ps -a --filter "name=kealex" --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
+                            echo "Containers iniciados, aguardando health checks..."
+                            sleep 20
+                        """
+                            # Verificar se containers foram criados e estão saudáveis
+                            echo "=== VERIFICAÇÃO DE SAÚDE DOS CONTAINERS ==="
+                            docker ps -a --filter "name=kealex" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
                             
                             echo "Status do docker-compose:"
                             docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} ps
                             
-                            # Verificar se algum container falhou ao iniciar
+                            # Verificar containers que falharam imediatamente
                             FAILED_CONTAINERS=\$(docker ps -a --filter "name=kealex" --filter "status=exited" --format "{{.Names}}")
                             if [ -n "\$FAILED_CONTAINERS" ]; then
-                                echo "CONTAINERS COM FALHA DETECTADOS: \$FAILED_CONTAINERS"
+                                echo "CONTAINERS COM FALHA IMEDIATA: \$FAILED_CONTAINERS"
                                 for container in \$FAILED_CONTAINERS; do
                                     echo "--- Logs do \$container ---"
-                                    docker logs --tail=20 \$container
+                                    docker logs --tail=30 \$container
                                     echo "--- Fim logs \$container ---"
                                 done
+                                
+                                echo "Tentando reiniciar containers com falha..."
+                                for container in \$FAILED_CONTAINERS; do
+                                    docker start \$container || echo "Falha ao reiniciar \$container"
+                                done
+                                sleep 15
                             fi
                         """
                         
@@ -381,52 +381,39 @@ EOF
                             # Aguardar 30s inicial
                             sleep 30
                             
-                            # Verificar se containers estão rodando com diagnóstico detalhado
-                            for i in {1..6}; do
-                                echo "Verificação \$i/6..."
+                            # Aguardar health checks e verificar containers rodando
+                            echo "Aguardando health checks dos serviços..."
+                            
+                            for i in {1..8}; do
+                                echo "Verificação \$i/8 - aguardando containers ficarem saudáveis..."
                                 
                                 # Contar containers por status
                                 RUNNING=\$(docker ps --filter "name=kealex" --format "{{.Names}}" | wc -l)
+                                HEALTHY=\$(docker ps --filter "name=kealex" --filter "health=healthy" --format "{{.Names}}" | wc -l)
                                 TOTAL=\$(docker ps -a --filter "name=kealex" --format "{{.Names}}" | wc -l)
-                                EXITED=\$(docker ps -a --filter "name=kealex" --filter "status=exited" --format "{{.Names}}" | wc -l)
                                 
-                                echo "Status: \$RUNNING rodando, \$EXITED parados, \$TOTAL total"
+                                echo "Status: \$RUNNING rodando, \$HEALTHY saudáveis, \$TOTAL total"
                                 
-                                if [ "\$RUNNING" -ge 8 ]; then
-                                    echo "Containers suficientes estão rodando!"
+                                if [ "\$RUNNING" -ge 8 ] && [ "\$HEALTHY" -ge 5 ]; then
+                                    echo "Containers suficientes estão rodando e saudáveis!"
                                     break
-                                elif [ \$i -eq 6 ]; then
-                                    echo "FALHA: Nem todos os containers iniciaram corretamente"
+                                elif [ \$i -eq 8 ]; then
+                                    echo "AVISO: Nem todos os containers estão completamente saudáveis"
                                     
-                                    echo "=== STATUS DETALHADO ==="
+                                    echo "=== STATUS FINAL ==="
                                     docker ps -a --filter "name=kealex" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
                                     
-                                    echo "=== CONTAINERS COM FALHA ==="
-                                    FAILED=\$(docker ps -a --filter "name=kealex" --filter "status=exited" --format "{{.Names}}")
-                                    if [ -n "\$FAILED" ]; then
-                                        for container in \$FAILED; do
+                                    # Mostrar logs de containers não saudáveis
+                                    UNHEALTHY=\$(docker ps --filter "name=kealex" --filter "health=unhealthy" --format "{{.Names}}")
+                                    if [ -n "\$UNHEALTHY" ]; then
+                                        echo "=== CONTAINERS NÃO SAUDÁVEIS ==="
+                                        for container in \$UNHEALTHY; do
                                             echo "--- Logs do \$container ---"
-                                            docker logs --tail=30 \$container
-                                            echo ""
+                                            docker logs --tail=20 \$container
                                         done
-                                    fi
-                                    
-                                    echo "=== TENTANDO REINICIAR CONTAINERS COM FALHA ==="
-                                    if [ -n "\$FAILED" ]; then
-                                        for container in \$FAILED; do
-                                            echo "Reiniciando \$container..."
-                                            docker start \$container || echo "Falha ao reiniciar \$container"
-                                        done
-                                        
-                                        echo "Aguardando após reinicialização..."
-                                        sleep 20
-                                        
-                                        echo "Status após reinicialização:"
-                                        docker ps -a --filter "name=kealex" --format "table {{.Names}}\t{{.Status}}"
                                     fi
                                 else
-                                    echo "Aguardando mais containers iniciarem..."
-                                    sleep 15
+                                    sleep 20
                                 fi
                             done
                         """
