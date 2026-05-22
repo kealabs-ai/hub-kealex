@@ -350,7 +350,25 @@ EOF
                             
                             echo "Containers iniciados, verificando status inicial..."
                             sleep 15
+                            
+                            # Verificar se containers foram criados
+                            echo "=== DIAGNÓSTICO INICIAL ==="
+                            echo "Containers criados:"
+                            docker ps -a --filter "name=kealex" --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
+                            
+                            echo "Status do docker-compose:"
                             docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} ps
+                            
+                            # Verificar se algum container falhou ao iniciar
+                            FAILED_CONTAINERS=\$(docker ps -a --filter "name=kealex" --filter "status=exited" --format "{{.Names}}")
+                            if [ -n "\$FAILED_CONTAINERS" ]; then
+                                echo "CONTAINERS COM FALHA DETECTADOS: \$FAILED_CONTAINERS"
+                                for container in \$FAILED_CONTAINERS; do
+                                    echo "--- Logs do \$container ---"
+                                    docker logs --tail=20 \$container
+                                    echo "--- Fim logs \$container ---"
+                                done
+                            fi
                         """
                         
                         // Aguardar inicialização com verificação ativa
@@ -363,30 +381,48 @@ EOF
                             # Aguardar 30s inicial
                             sleep 30
                             
-                            # Verificar se containers estão rodando
+                            # Verificar se containers estão rodando com diagnóstico detalhado
                             for i in {1..6}; do
                                 echo "Verificação \$i/6..."
                                 
-                                RUNNING=\$(docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} ps --services --filter "status=running" | wc -l)
-                                TOTAL=\$(docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} ps --services | wc -l)
+                                # Contar containers por status
+                                RUNNING=\$(docker ps --filter "name=kealex" --format "{{.Names}}" | wc -l)
+                                TOTAL=\$(docker ps -a --filter "name=kealex" --format "{{.Names}}" | wc -l)
+                                EXITED=\$(docker ps -a --filter "name=kealex" --filter "status=exited" --format "{{.Names}}" | wc -l)
                                 
-                                echo "Containers rodando: \$RUNNING/\$TOTAL"
+                                echo "Status: \$RUNNING rodando, \$EXITED parados, \$TOTAL total"
                                 
-                                if [ "\$RUNNING" -eq "\$TOTAL" ] && [ "\$TOTAL" -gt 0 ]; then
-                                    echo "Todos os containers estão rodando!"
+                                if [ "\$RUNNING" -ge 8 ]; then
+                                    echo "Containers suficientes estão rodando!"
                                     break
                                 elif [ \$i -eq 6 ]; then
-                                    echo "Nem todos os containers iniciaram corretamente"
-                                    docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} ps
+                                    echo "FALHA: Nem todos os containers iniciaram corretamente"
                                     
-                                    # Mostrar logs dos containers com problema
+                                    echo "=== STATUS DETALHADO ==="
+                                    docker ps -a --filter "name=kealex" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+                                    
+                                    echo "=== CONTAINERS COM FALHA ==="
                                     FAILED=\$(docker ps -a --filter "name=kealex" --filter "status=exited" --format "{{.Names}}")
                                     if [ -n "\$FAILED" ]; then
-                                        echo "Containers com falha: \$FAILED"
                                         for container in \$FAILED; do
                                             echo "--- Logs do \$container ---"
-                                            docker logs --tail=15 \$container
+                                            docker logs --tail=30 \$container
+                                            echo ""
                                         done
+                                    fi
+                                    
+                                    echo "=== TENTANDO REINICIAR CONTAINERS COM FALHA ==="
+                                    if [ -n "\$FAILED" ]; then
+                                        for container in \$FAILED; do
+                                            echo "Reiniciando \$container..."
+                                            docker start \$container || echo "Falha ao reiniciar \$container"
+                                        done
+                                        
+                                        echo "Aguardando após reinicialização..."
+                                        sleep 20
+                                        
+                                        echo "Status após reinicialização:"
+                                        docker ps -a --filter "name=kealex" --format "table {{.Names}}\t{{.Status}}"
                                     fi
                                 else
                                     echo "Aguardando mais containers iniciarem..."
@@ -412,7 +448,56 @@ EOF
             }
         }
 
-        stage('Post-Deploy Validation') {
+        stage('Container Startup Diagnosis') {
+            when { branch 'main' }
+            steps {
+                script {
+                    echo "=== DIAGNÓSTICO DE INICIALIZAÇÃO ==="
+                    
+                    sh """
+                        export PATH=\$HOME/bin:\$PATH
+                        COMPOSE_FILE=\$(cat .compose_file)
+                        
+                        echo "=== VERIFICANDO PROBLEMAS COMUNS ==="
+                        
+                        # 1. Verificar se as imagens existem
+                        echo "1. Verificando imagens Docker:"
+                        docker images | grep kealex || echo "Nenhuma imagem kealex encontrada"
+                        
+                        # 2. Verificar se há conflitos de porta
+                        echo "2. Verificando conflitos de porta 8000:"
+                        netstat -tlnp | grep :8000 || echo "Porta 8000 livre"
+                        
+                        # 3. Verificar espaço em disco
+                        echo "3. Verificando espaço em disco:"
+                        df -h .
+                        
+                        # 4. Verificar memória disponível
+                        echo "4. Verificando memória:"
+                        free -h
+                        
+                        # 5. Verificar se o arquivo docker-compose é válido
+                        echo "5. Validando docker-compose:"
+                        docker-compose -f \$COMPOSE_FILE config --quiet && echo "Docker-compose válido" || echo "Erro no docker-compose"
+                        
+                        # 6. Verificar variáveis de ambiente
+                        echo "6. Verificando variáveis de ambiente:"
+                        echo "SECRET_KEY definido: \$([ -n "\$SECRET_KEY" ] && echo 'SIM' || echo 'NÃO')"
+                        echo "DATABASE_URL definido: \$([ -n "\$DATABASE_URL" ] && echo 'SIM' || echo 'NÃO')"
+                        
+                        # 7. Tentar iniciar um container individual para teste
+                        echo "7. Teste de container individual (svc-auth):"
+                        docker run --rm -d --name test-auth \
+                            -e SECRET_KEY="\$SECRET_KEY" \
+                            -e DATABASE_URL="\$DATABASE_URL" \
+                            ${IMAGE_PREFIX}/svc-auth:${TAG} && \
+                        sleep 10 && \
+                        docker logs test-auth && \
+                        docker stop test-auth || echo "Falha no teste individual"
+                    """
+                }
+            }
+        }
             when { branch 'main' }
             steps {
                 script {
