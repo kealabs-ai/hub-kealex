@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         REGISTRY = "registry.kealex.io"
-        IMAGE_PREFIX = "${REGISTRY}/kealex"
+        IMAGE_PREFIX = "kealex"
         TAG = "${env.BUILD_NUMBER}"
         DATABASE_URL = "mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex"
         COMPOSE_PROJECT_NAME = "kealex"
@@ -202,8 +202,8 @@ pipeline {
                                       'svc-escritorios', 'api-gateway']
                         
                         services.each { svc ->
-                            sh "docker push ${IMAGE_PREFIX}/${svc}:${TAG}"
-                            sh "docker push ${IMAGE_PREFIX}/${svc}:latest"
+                            sh "docker push ${REGISTRY}/${IMAGE_PREFIX}/${svc}:${TAG}"
+                            sh "docker push ${REGISTRY}/${IMAGE_PREFIX}/${svc}:latest"
                         }
                     }
                 }
@@ -312,7 +312,7 @@ EOF
                                 COMPOSE_FILE="docker-compose.hostinger.yml"
                             elif [ -f "docker-compose.prod.yml" ]; then
                                 echo 'Testando registry...'
-                                if docker pull ${REGISTRY}/kealex/api-gateway:${TAG} 2>/dev/null; then
+                                if docker pull ${REGISTRY}/${IMAGE_PREFIX}/api-gateway:${TAG} 2>/dev/null; then
                                     echo 'Registry acessível - usando docker-compose.prod.yml'
                                     COMPOSE_FILE="docker-compose.prod.yml"
                                 else
