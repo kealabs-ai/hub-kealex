@@ -321,7 +321,23 @@ EOF
                             COMPOSE_FILE=\$(cat .compose_file)
                             echo "Deploy com \$COMPOSE_FILE..."
                             
-                            docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} up -d --build
+                            echo "Validando arquivo docker-compose..."
+                            docker-compose -f \$COMPOSE_FILE config --quiet || {
+                                echo "[ERRO] Arquivo docker-compose inválido!"
+                                docker-compose -f \$COMPOSE_FILE config
+                                exit 1
+                            }
+                            
+                            echo "Iniciando containers..."
+                            if docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} up -d --build 2>&1; then
+                                echo "[OK] Containers iniciados com sucesso"
+                            else
+                                EXIT_CODE=\$?
+                                echo "[ERRO] Falha ao iniciar containers (exit code: \$EXIT_CODE)"
+                                echo "Verificando logs de erro..."
+                                docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} logs --tail=50
+                                exit \$EXIT_CODE
+                            fi
                             
                             echo "Aguardando inicialização (45s)..."
                             sleep 45
@@ -329,6 +345,16 @@ EOF
                             echo "=== STATUS DOS CONTAINERS ==="
                             docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} ps
                             docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+                            
+                            echo "Verificando containers com falha..."
+                            FAILED=\$(docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} ps --filter "status=exited" --services)
+                            if [ -n "\$FAILED" ]; then
+                                echo "[AVISO] Containers com falha: \$FAILED"
+                                for service in \$FAILED; do
+                                    echo "--- Logs de \$service ---"
+                                    docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} logs --tail=30 \$service
+                                done
+                            fi
                         """
                         
                         echo "=== DEPLOY CONCLUÍDO ==="
@@ -519,7 +545,6 @@ EOF
                 
                 echo "=== LOGS DE ERRO ==="
                 
-                # Tentar usar o arquivo compose correto
                 if [ -f ".compose_file" ]; then
                     COMPOSE_FILE=\$(cat .compose_file)
                 else
@@ -527,6 +552,12 @@ EOF
                 fi
                 
                 echo "Usando arquivo: \$COMPOSE_FILE"
+                
+                echo "--- Validando docker-compose ---"
+                docker-compose -f \$COMPOSE_FILE config 2>&1 || echo "Erro na validação do docker-compose"
+                
+                echo "--- Verificando imagens ---"
+                docker images | grep kealex || echo "Nenhuma imagem kealex encontrada"
                 
                 echo "--- Logs do API Gateway ---"
                 docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} logs --tail=30 api-gateway 2>/dev/null || echo "Serviço não encontrado"
@@ -536,6 +567,9 @@ EOF
                 
                 echo "--- Status dos Containers ---"
                 docker ps -a --filter "name=kealex" --filter "name=svc-" --filter "name=api-gateway" || true
+                
+                echo "--- Tentando iniciar manualmente para debug ---"
+                docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} up --no-start 2>&1 || echo "Falha ao criar containers"
                 
                 echo "--- Uso de Recursos ---"
                 df -h || true
