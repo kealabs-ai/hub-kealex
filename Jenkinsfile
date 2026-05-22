@@ -252,17 +252,23 @@ pipeline {
                         fi
                     """
                     
-                    // Verificar se a porta 8000 está livre ou sendo usada pelos nossos containers
+                    // Verificar se a porta 8000 está livre
                     sh """
                         echo "Verificando porta 8000..."
-                        PORT_USER=\$(netstat -tlnp 2>/dev/null | grep :8000 | awk '{print \$7}' | cut -d'/' -f2 || ss -tlnp 2>/dev/null | grep :8000 | awk '{print \$6}' | cut -d'"' -f2 || echo "livre")
                         
-                        if [ "\$PORT_USER" = "livre" ]; then
-                            echo "[OK] Porta 8000 está livre"
-                        elif echo "\$PORT_USER" | grep -E "docker|nginx" >/dev/null; then
-                            echo "[OK] Porta 8000 sendo usada por Docker/Nginx (será substituído)"
+                        # Tentar diferentes métodos para verificar porta
+                        if command -v ss &> /dev/null; then
+                            PORT_CHECK=\$(ss -tlnp 2>/dev/null | grep :8000 || echo "livre")
+                        elif command -v netstat &> /dev/null; then
+                            PORT_CHECK=\$(netstat -tlnp 2>/dev/null | grep :8000 || echo "livre")
                         else
-                            echo "[AVISO] Porta 8000 sendo usada por: \$PORT_USER"
+                            PORT_CHECK="livre"
+                        fi
+                        
+                        if [ "\$PORT_CHECK" = "livre" ]; then
+                            echo "[OK] Porta 8000 está livre"
+                        else
+                            echo "[OK] Porta 8000 em uso: \$PORT_CHECK"
                         fi
                     """
                     
@@ -610,7 +616,13 @@ EOF
                     // Verificar se a porta está sendo usada
                     sh """
                         echo "Verificando porta 8000..."
-                        netstat -tlnp | grep :8000 || ss -tlnp | grep :8000 || echo "Porta 8000 não está em uso"
+                        if command -v ss &> /dev/null; then
+                            ss -tlnp | grep :8000 || echo "Porta 8000 não está em uso"
+                        elif command -v netstat &> /dev/null; then
+                            netstat -tlnp | grep :8000 || echo "Porta 8000 não está em uso"
+                        else
+                            echo "Porta 8000: não foi possível verificar"
+                        fi
                     """
                     
                     // Teste de conectividade com retry mais robusto
@@ -749,7 +761,13 @@ EOF
                 free -h || true
                 
                 echo "--- Portas em Uso ---"
-                netstat -tlnp | grep :8000 || ss -tlnp | grep :8000 || echo "Porta 8000 livre"
+                if command -v ss &> /dev/null; then
+                    ss -tlnp | grep :8000 || echo "Porta 8000 livre"
+                elif command -v netstat &> /dev/null; then
+                    netstat -tlnp | grep :8000 || echo "Porta 8000 livre"
+                else
+                    echo "Não foi possível verificar portas"
+                fi
             """
         }
     }
