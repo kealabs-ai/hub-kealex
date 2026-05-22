@@ -351,98 +351,72 @@ EOF
                             # Criar rede se não existir
                             docker network create kealex-network 2>/dev/null || true
                             
-                            # Iniciar serviços em ordem
-                            echo "Iniciando svc-auth..."
-                            docker run -d --name kealex-svc-auth \
-                                --network kealex-network \
-                                -e SECRET_KEY="${SECRET_KEY}" \
-                                -e DATABASE_URL="${DATABASE_URL}" \
-                                --restart unless-stopped \
-                                ${IMAGE_PREFIX}/svc-auth:latest || docker start kealex-svc-auth
+                            # Iniciar serviços em ordem com verificação
+                            SERVICES=(
+                                "svc-auth"
+                                "svc-processos"
+                                "svc-documentos"
+                                "svc-financeiro"
+                                "svc-prazos"
+                                "svc-usuarios"
+                                "svc-configuracoes"
+                                "svc-escritorios"
+                                "svc-clientes"
+                            )
                             
-                            echo "Iniciando svc-processos..."
-                            docker run -d --name kealex-svc-processos \
-                                --network kealex-network \
-                                -e SECRET_KEY="${SECRET_KEY}" \
-                                -e DATABASE_URL="${DATABASE_URL}" \
-                                --restart unless-stopped \
-                                ${IMAGE_PREFIX}/svc-processos:latest || docker start kealex-svc-processos
-                            
-                            echo "Iniciando svc-documentos..."
-                            docker run -d --name kealex-svc-documentos \
-                                --network kealex-network \
-                                -e SECRET_KEY="${SECRET_KEY}" \
-                                -e DATABASE_URL="${DATABASE_URL}" \
-                                --restart unless-stopped \
-                                ${IMAGE_PREFIX}/svc-documentos:latest || docker start kealex-svc-documentos
-                            
-                            echo "Iniciando svc-financeiro..."
-                            docker run -d --name kealex-svc-financeiro \
-                                --network kealex-network \
-                                -e SECRET_KEY="${SECRET_KEY}" \
-                                -e DATABASE_URL="${DATABASE_URL}" \
-                                --restart unless-stopped \
-                                ${IMAGE_PREFIX}/svc-financeiro:latest || docker start kealex-svc-financeiro
-                            
-                            echo "Iniciando svc-prazos..."
-                            docker run -d --name kealex-svc-prazos \
-                                --network kealex-network \
-                                -e SECRET_KEY="${SECRET_KEY}" \
-                                -e DATABASE_URL="${DATABASE_URL}" \
-                                --restart unless-stopped \
-                                ${IMAGE_PREFIX}/svc-prazos:latest || docker start kealex-svc-prazos
-                            
-                            echo "Iniciando svc-usuarios..."
-                            docker run -d --name kealex-svc-usuarios \
-                                --network kealex-network \
-                                -e SECRET_KEY="${SECRET_KEY}" \
-                                -e DATABASE_URL="${DATABASE_URL}" \
-                                --restart unless-stopped \
-                                ${IMAGE_PREFIX}/svc-usuarios:latest || docker start kealex-svc-usuarios
-                            
-                            echo "Iniciando svc-configuracoes..."
-                            docker run -d --name kealex-svc-configuracoes \
-                                --network kealex-network \
-                                -e SECRET_KEY="${SECRET_KEY}" \
-                                -e DATABASE_URL="${DATABASE_URL}" \
-                                --restart unless-stopped \
-                                ${IMAGE_PREFIX}/svc-configuracoes:latest || docker start kealex-svc-configuracoes
-                            
-                            echo "Iniciando svc-escritorios..."
-                            docker run -d --name kealex-svc-escritorios \
-                                --network kealex-network \
-                                -e SECRET_KEY="${SECRET_KEY}" \
-                                -e DATABASE_URL="${DATABASE_URL}" \
-                                --restart unless-stopped \
-                                ${IMAGE_PREFIX}/svc-escritorios:latest || docker start kealex-svc-escritorios
-                            
-                            echo "Iniciando svc-clientes..."
-                            docker run -d --name kealex-svc-clientes \
-                                --network kealex-network \
-                                -e SECRET_KEY="${SECRET_KEY}" \
-                                -e DATABASE_URL="${DATABASE_URL}" \
-                                --restart unless-stopped \
-                                ${IMAGE_PREFIX}/svc-clientes:latest || docker start kealex-svc-clientes
+                            for SERVICE in "\${SERVICES[@]}"; do
+                                echo "Iniciando \$SERVICE..."
+                                CONTAINER_NAME="kealex-\$SERVICE"
+                                
+                                # Verificar se container já existe
+                                if docker ps -a --format "{{.Names}}" | grep -q "\$CONTAINER_NAME"; then
+                                    echo "Container \$CONTAINER_NAME já existe, iniciando..."
+                                    docker start \$CONTAINER_NAME || echo "Falha ao iniciar \$CONTAINER_NAME"
+                                else
+                                    echo "Criando novo container \$CONTAINER_NAME..."
+                                    docker run -d --name \$CONTAINER_NAME \
+                                        --network kealex-network \
+                                        -e SECRET_KEY="${SECRET_KEY}" \
+                                        -e DATABASE_URL="${DATABASE_URL}" \
+                                        --restart unless-stopped \
+                                        ${IMAGE_PREFIX}/\$SERVICE:latest || echo "Falha ao criar \$CONTAINER_NAME"
+                                fi
+                                
+                                sleep 2
+                            done
                             
                             echo "Aguardando serviços iniciarem..."
                             sleep 15
                             
                             echo "Iniciando api-gateway..."
-                            docker run -d --name kealex-api-gateway \
-                                --network kealex-network \
-                                -p 8000:80 \
-                                --restart unless-stopped \
-                                ${IMAGE_PREFIX}/api-gateway:latest || docker start kealex-api-gateway
+                            if docker ps -a --format "{{.Names}}" | grep -q "kealex-api-gateway"; then
+                                echo "Container kealex-api-gateway já existe, iniciando..."
+                                docker start kealex-api-gateway || echo "Falha ao iniciar kealex-api-gateway"
+                            else
+                                echo "Criando novo container kealex-api-gateway..."
+                                docker run -d --name kealex-api-gateway \
+                                    --network kealex-network \
+                                    -p 8000:80 \
+                                    --restart unless-stopped \
+                                    ${IMAGE_PREFIX}/api-gateway:latest || echo "Falha ao criar kealex-api-gateway"
+                            fi
                             
                             echo "Containers iniciados, aguardando estabilização..."
                             sleep 20
                             
-                            echo "=== VERIFICAÇÃO DE SAÚDE DOS CONTAINERS ==="
+                            echo "=== VERIFICAÇÃO DOS CONTAINERS ==="
+                            echo "Todos os containers:"
+                            docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+                            
+                            echo "Containers kealex:"
                             docker ps -a --filter "name=kealex" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+                            
+                            echo "Containers rodando:"
+                            docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
                             
                             FAILED_CONTAINERS=\$(docker ps -a --filter "name=kealex" --filter "status=exited" --format "{{.Names}}")
                             if [ -n "\$FAILED_CONTAINERS" ]; then
-                                echo "CONTAINERS COM FALHA IMEDIATA: \$FAILED_CONTAINERS"
+                                echo "CONTAINERS COM FALHA: \$FAILED_CONTAINERS"
                                 for container in \$FAILED_CONTAINERS; do
                                     echo "--- Logs do \$container ---"
                                     docker logs --tail=30 \$container
@@ -463,37 +437,46 @@ EOF
                             echo "Aguardando inicialização dos containers..."
                             sleep 30
                             
-                            echo "Verificando status dos containers..."
+                            echo "=== DIAGNÓSTICO COMPLETO ==="
+                            echo "1. Todas as imagens Docker:"
+                            docker images
                             
-                            for i in {1..8}; do
-                                echo "Verificação \$i/8..."
-                                
-                                RUNNING=\$(docker ps --filter "name=kealex" --format "{{.Names}}" | wc -l)
-                                TOTAL=\$(docker ps -a --filter "name=kealex" --format "{{.Names}}" | wc -l)
-                                
-                                echo "Status: \$RUNNING rodando de \$TOTAL total"
-                                
-                                if [ "\$RUNNING" -ge 9 ]; then
-                                    echo "Containers suficientes estão rodando!"
-                                    break
-                                elif [ \$i -eq 8 ]; then
-                                    echo "AVISO: Nem todos os containers estão rodando"
-                                    
-                                    echo "=== STATUS FINAL ==="
-                                    docker ps -a --filter "name=kealex" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-                                    
-                                    STOPPED=\$(docker ps -a --filter "name=kealex" --filter "status=exited" --format "{{.Names}}")
-                                    if [ -n "\$STOPPED" ]; then
-                                        echo "=== CONTAINERS PARADOS ==="
-                                        for container in \$STOPPED; do
-                                            echo "--- Logs do \$container ---"
-                                            docker logs --tail=20 \$container
-                                        done
-                                    fi
+                            echo "2. Todos os containers (incluindo parados):"
+                            docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}"
+                            
+                            echo "3. Containers kealex:"
+                            docker ps -a --filter "name=kealex" --format "table {{.Names}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}"
+                            
+                            echo "4. Containers rodando:"
+                            docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}"
+                            
+                            echo "5. Verificando se containers estão realmente criados:"
+                            for container in kealex-svc-auth kealex-svc-processos kealex-svc-documentos kealex-svc-financeiro kealex-svc-prazos kealex-svc-usuarios kealex-svc-configuracoes kealex-svc-escritorios kealex-svc-clientes kealex-api-gateway; do
+                                if docker ps -a --format "{{.Names}}" | grep -q "\$container"; then
+                                    echo "✅ \$container existe"
                                 else
-                                    sleep 20
+                                    echo "❌ \$container NÃO existe"
                                 fi
                             done
+                            
+                            echo "6. Verificando rede:"
+                            docker network ls
+                            docker network inspect kealex-network 2>/dev/null || echo "Rede kealex-network não existe"
+                            
+                            echo "7. Tentando iniciar containers que não estão rodando:"
+                            for container in kealex-svc-auth kealex-svc-processos kealex-svc-documentos kealex-svc-financeiro kealex-svc-prazos kealex-svc-usuarios kealex-svc-configuracoes kealex-svc-escritorios kealex-svc-clientes kealex-api-gateway; do
+                                if docker ps --format "{{.Names}}" | grep -q "\$container"; then
+                                    echo "✅ \$container já está rodando"
+                                else
+                                    echo "Tentando iniciar \$container..."
+                                    docker start \$container 2>/dev/null || echo "❌ Falha ao iniciar \$container"
+                                fi
+                            done
+                            
+                            sleep 10
+                            
+                            echo "8. Status final após tentativas:"
+                            docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}"
                         """
                         
                         sh """
