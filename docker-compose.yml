@@ -3,6 +3,8 @@ version: '3.8'
 networks:
   kealex-network:
     driver: bridge
+  traefik:
+    external: true
 
 services:
   # Microservices (start first)
@@ -14,7 +16,22 @@ services:
       - DATABASE_URL=${DATABASE_URL}
     networks:
       - kealex-network
+      - traefik
     restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kealex-auth.rule=Host(`${DOMAIN}`) && PathPrefix(`/v1/lex/auth`)"
+      - "traefik.http.routers.kealex-auth.entrypoints=https"
+      - "traefik.http.routers.kealex-auth.tls=true"
+      - "traefik.http.middlewares.kealex-strip-auth.stripprefix.prefixes=/v1/lex"
+      - "traefik.http.middlewares.kealex-cors.headers.accesscontrolalloworiginlist=${CORS_ORIGINS}"
+      - "traefik.http.middlewares.kealex-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
+      - "traefik.http.middlewares.kealex-cors.headers.accesscontrolallowheaders=Content-Type,Authorization,Accept,X-Requested-With"
+      - "traefik.http.middlewares.kealex-cors.headers.accesscontrolmaxage=86400"
+      - "traefik.http.middlewares.kealex-cors.headers.addvaryheader=true"
+      - "traefik.http.middlewares.kealex-cors.headers.accesscontrolallowcredentials=true"
+      - "traefik.http.routers.kealex-auth.middlewares=kealex-strip-auth,kealex-cors"
+      - "traefik.http.services.kealex-auth.loadbalancer.server.port=8000"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s
@@ -30,7 +47,15 @@ services:
       - DATABASE_URL=${DATABASE_URL}
     networks:
       - kealex-network
+      - traefik
     restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kealex-processos.rule=Host(`${DOMAIN}`) && PathPrefix(`/v1/lex/processos`)"
+      - "traefik.http.routers.kealex-processos.entrypoints=https"
+      - "traefik.http.routers.kealex-processos.tls=true"
+      - "traefik.http.routers.kealex-processos.middlewares=kealex-strip-auth,kealex-cors"
+      - "traefik.http.services.kealex-processos.loadbalancer.server.port=8000"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s
@@ -46,7 +71,15 @@ services:
       - DATABASE_URL=${DATABASE_URL}
     networks:
       - kealex-network
+      - traefik
     restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kealex-documentos.rule=Host(`${DOMAIN}`) && PathPrefix(`/v1/lex/documentos`)"
+      - "traefik.http.routers.kealex-documentos.entrypoints=https"
+      - "traefik.http.routers.kealex-documentos.tls=true"
+      - "traefik.http.routers.kealex-documentos.middlewares=kealex-strip-auth,kealex-cors"
+      - "traefik.http.services.kealex-documentos.loadbalancer.server.port=8000"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s
@@ -62,7 +95,15 @@ services:
       - DATABASE_URL=${DATABASE_URL}
     networks:
       - kealex-network
+      - traefik
     restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kealex-financeiro.rule=Host(`${DOMAIN}`) && PathPrefix(`/v1/lex/financeiro`)"
+      - "traefik.http.routers.kealex-financeiro.entrypoints=https"
+      - "traefik.http.routers.kealex-financeiro.tls=true"
+      - "traefik.http.routers.kealex-financeiro.middlewares=kealex-strip-auth,kealex-cors"
+      - "traefik.http.services.kealex-financeiro.loadbalancer.server.port=8000"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s
@@ -78,7 +119,15 @@ services:
       - DATABASE_URL=${DATABASE_URL}
     networks:
       - kealex-network
+      - traefik
     restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kealex-prazos.rule=Host(`${DOMAIN}`) && PathPrefix(`/v1/lex/prazos`)"
+      - "traefik.http.routers.kealex-prazos.entrypoints=https"
+      - "traefik.http.routers.kealex-prazos.tls=true"
+      - "traefik.http.routers.kealex-prazos.middlewares=kealex-strip-auth,kealex-cors"
+      - "traefik.http.services.kealex-prazos.loadbalancer.server.port=8000"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s
@@ -94,7 +143,15 @@ services:
       - DATABASE_URL=${DATABASE_URL}
     networks:
       - kealex-network
+      - traefik
     restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kealex-usuarios.rule=Host(`${DOMAIN}`) && PathPrefix(`/v1/lex/usuarios`)"
+      - "traefik.http.routers.kealex-usuarios.entrypoints=https"
+      - "traefik.http.routers.kealex-usuarios.tls=true"
+      - "traefik.http.routers.kealex-usuarios.middlewares=kealex-strip-auth,kealex-cors"
+      - "traefik.http.services.kealex-usuarios.loadbalancer.server.port=8000"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s
@@ -110,7 +167,15 @@ services:
       - DATABASE_URL=${DATABASE_URL}
     networks:
       - kealex-network
+      - traefik
     restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kealex-configuracoes.rule=Host(`${DOMAIN}`) && PathPrefix(`/v1/lex/configuracoes`)"
+      - "traefik.http.routers.kealex-configuracoes.entrypoints=https"
+      - "traefik.http.routers.kealex-configuracoes.tls=true"
+      - "traefik.http.routers.kealex-configuracoes.middlewares=kealex-strip-auth,kealex-cors"
+      - "traefik.http.services.kealex-configuracoes.loadbalancer.server.port=8000"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s
@@ -126,7 +191,15 @@ services:
       - DATABASE_URL=${DATABASE_URL}
     networks:
       - kealex-network
+      - traefik
     restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kealex-escritorios.rule=Host(`${DOMAIN}`) && PathPrefix(`/v1/lex/escritorios`)"
+      - "traefik.http.routers.kealex-escritorios.entrypoints=https"
+      - "traefik.http.routers.kealex-escritorios.tls=true"
+      - "traefik.http.routers.kealex-escritorios.middlewares=kealex-strip-auth,kealex-cors"
+      - "traefik.http.services.kealex-escritorios.loadbalancer.server.port=8000"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s
@@ -142,7 +215,15 @@ services:
       - DATABASE_URL=${DATABASE_URL}
     networks:
       - kealex-network
+      - traefik
     restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kealex-clientes.rule=Host(`${DOMAIN}`) && PathPrefix(`/v1/lex/clientes`)"
+      - "traefik.http.routers.kealex-clientes.entrypoints=https"
+      - "traefik.http.routers.kealex-clientes.tls=true"
+      - "traefik.http.routers.kealex-clientes.middlewares=kealex-strip-auth,kealex-cors"
+      - "traefik.http.services.kealex-clientes.loadbalancer.server.port=8000"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s
@@ -156,6 +237,16 @@ services:
     container_name: kealex-api-gateway
     ports:
       - "8000:80"
+    networks:
+      - kealex-network
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kealex-gateway.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.kealex-gateway.entrypoints=https"
+      - "traefik.http.routers.kealex-gateway.tls=true"
+      - "traefik.http.routers.kealex-gateway.middlewares=kealex-cors"
+      - "traefik.http.services.kealex-gateway.loadbalancer.server.port=80"
     depends_on:
       svc-auth:
         condition: service_healthy
@@ -175,6 +266,4 @@ services:
         condition: service_healthy
       svc-clientes:
         condition: service_healthy
-    networks:
-      - kealex-network
     restart: unless-stopped
