@@ -2,7 +2,16 @@ import os
 import bcrypt
 from sqlalchemy import create_engine, text
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+def _get_database_url() -> str:
+    raw = os.getenv("DATABASE_URL")
+    if raw is None or raw.strip().lower() in ("", "null", "none"):
+        raise RuntimeError(
+            "DATABASE_URL environment variable is missing or invalid. "
+            "Set DATABASE_URL to a valid SQLAlchemy URL."
+        )
+    return raw.strip()
+
+DATABASE_URL = _get_database_url()
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
 new_hash = bcrypt.hashpw(b"admin123", bcrypt.gensalt()).decode()

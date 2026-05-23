@@ -9,11 +9,25 @@ from jose import jwt, JWTError
 from sqlalchemy import create_engine, Column, String, DateTime, Text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-DATABASE_URL = os.getenv("DATABASE_URL", "mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex")
+def _get_database_url(default: str) -> str:
+    raw = os.getenv("DATABASE_URL")
+    if raw is None or raw.strip().lower() in ("", "null", "none"):
+        return default
+    return raw.strip()
+
+DATABASE_URL = _get_database_url(
+    "mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex"
+)
 SECRET_KEY   = os.getenv("SECRET_KEY", "changeme-secret-key")
 ALGORITHM    = "HS256"
 
-engine       = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=280, pool_size=5, max_overflow=10)
+engine       = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    pool_recycle=280,
+    pool_size=5,
+    max_overflow=10,
+)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 bearer       = HTTPBearer()
 
