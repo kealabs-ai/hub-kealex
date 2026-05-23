@@ -1,6 +1,7 @@
 services:
   svc-auth:
-    image: kealex/svc-auth:latest
+    build: ./svc-auth
+    container_name: kealex-svc-auth
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
@@ -24,9 +25,17 @@ services:
         condition: on-failure
     networks:
       - easypanel
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   svc-processos:
-    image: kealex/svc-processos:latest
+    build: ./svc-processos
+    container_name: kealex-svc-processos
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
@@ -35,7 +44,8 @@ services:
       - "traefik.http.routers.kealex-processos.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/v1/lex/processos`)"
       - "traefik.http.routers.kealex-processos.entrypoints=https"
       - "traefik.http.routers.kealex-processos.tls=true"
-      - "traefik.http.routers.kealex-processos.middlewares=kealex-strip-auth,kealex-cors"
+      - "traefik.http.middlewares.kealex-strip-processos.stripprefix.prefixes=/v1/lex"
+      - "traefik.http.routers.kealex-processos.middlewares=kealex-strip-processos,kealex-cors"
       - "traefik.http.services.kealex-processos.loadbalancer.server.port=8000"
     deploy:
       replicas: 1
@@ -43,9 +53,17 @@ services:
         condition: on-failure
     networks:
       - easypanel
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   svc-documentos:
-    image: kealex/svc-documentos:latest
+    build: ./svc-documentos
+    container_name: kealex-svc-documentos
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
@@ -54,7 +72,8 @@ services:
       - "traefik.http.routers.kealex-documentos.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/v1/lex/documentos`)"
       - "traefik.http.routers.kealex-documentos.entrypoints=https"
       - "traefik.http.routers.kealex-documentos.tls=true"
-      - "traefik.http.routers.kealex-documentos.middlewares=kealex-strip-auth,kealex-cors"
+      - "traefik.http.middlewares.kealex-strip-documentos.stripprefix.prefixes=/v1/lex"
+      - "traefik.http.routers.kealex-documentos.middlewares=kealex-strip-documentos,kealex-cors"
       - "traefik.http.services.kealex-documentos.loadbalancer.server.port=8000"
     deploy:
       replicas: 1
@@ -62,9 +81,17 @@ services:
         condition: on-failure
     networks:
       - easypanel
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   svc-financeiro:
-    image: kealex/svc-financeiro:latest
+    build: ./svc-financeiro
+    container_name: kealex-svc-financeiro
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
@@ -73,7 +100,8 @@ services:
       - "traefik.http.routers.kealex-financeiro.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/v1/lex/financeiro`)"
       - "traefik.http.routers.kealex-financeiro.entrypoints=https"
       - "traefik.http.routers.kealex-financeiro.tls=true"
-      - "traefik.http.routers.kealex-financeiro.middlewares=kealex-strip-auth,kealex-cors"
+      - "traefik.http.middlewares.kealex-strip-financeiro.stripprefix.prefixes=/v1/lex"
+      - "traefik.http.routers.kealex-financeiro.middlewares=kealex-strip-financeiro,kealex-cors"
       - "traefik.http.services.kealex-financeiro.loadbalancer.server.port=8000"
     deploy:
       replicas: 1
@@ -81,9 +109,17 @@ services:
         condition: on-failure
     networks:
       - easypanel
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   svc-prazos:
-    image: kealex/svc-prazos:latest
+    build: ./svc-prazos
+    container_name: kealex-svc-prazos
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
@@ -92,7 +128,8 @@ services:
       - "traefik.http.routers.kealex-prazos.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/v1/lex/prazos`)"
       - "traefik.http.routers.kealex-prazos.entrypoints=https"
       - "traefik.http.routers.kealex-prazos.tls=true"
-      - "traefik.http.routers.kealex-prazos.middlewares=kealex-strip-auth,kealex-cors"
+      - "traefik.http.middlewares.kealex-strip-prazos.stripprefix.prefixes=/v1/lex"
+      - "traefik.http.routers.kealex-prazos.middlewares=kealex-strip-prazos,kealex-cors"
       - "traefik.http.services.kealex-prazos.loadbalancer.server.port=8000"
     deploy:
       replicas: 1
@@ -100,9 +137,17 @@ services:
         condition: on-failure
     networks:
       - easypanel
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   svc-usuarios:
-    image: kealex/svc-usuarios:latest
+    build: ./svc-usuarios
+    container_name: kealex-svc-usuarios
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
@@ -111,7 +156,8 @@ services:
       - "traefik.http.routers.kealex-usuarios.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/v1/lex/usuarios`)"
       - "traefik.http.routers.kealex-usuarios.entrypoints=https"
       - "traefik.http.routers.kealex-usuarios.tls=true"
-      - "traefik.http.routers.kealex-usuarios.middlewares=kealex-strip-auth,kealex-cors"
+      - "traefik.http.middlewares.kealex-strip-usuarios.stripprefix.prefixes=/v1/lex"
+      - "traefik.http.routers.kealex-usuarios.middlewares=kealex-strip-usuarios,kealex-cors"
       - "traefik.http.services.kealex-usuarios.loadbalancer.server.port=8000"
     deploy:
       replicas: 1
@@ -119,9 +165,17 @@ services:
         condition: on-failure
     networks:
       - easypanel
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   svc-configuracoes:
-    image: kealex/svc-configuracoes:latest
+    build: ./svc-configuracoes
+    container_name: kealex-svc-configuracoes
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
@@ -130,7 +184,8 @@ services:
       - "traefik.http.routers.kealex-configuracoes.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/v1/lex/configuracoes`)"
       - "traefik.http.routers.kealex-configuracoes.entrypoints=https"
       - "traefik.http.routers.kealex-configuracoes.tls=true"
-      - "traefik.http.routers.kealex-configuracoes.middlewares=kealex-strip-auth,kealex-cors"
+      - "traefik.http.middlewares.kealex-strip-configuracoes.stripprefix.prefixes=/v1/lex"
+      - "traefik.http.routers.kealex-configuracoes.middlewares=kealex-strip-configuracoes,kealex-cors"
       - "traefik.http.services.kealex-configuracoes.loadbalancer.server.port=8000"
     deploy:
       replicas: 1
@@ -138,9 +193,17 @@ services:
         condition: on-failure
     networks:
       - easypanel
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   svc-escritorios:
-    image: kealex/svc-escritorios:latest
+    build: ./svc-escritorios
+    container_name: kealex-svc-escritorios
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
@@ -149,7 +212,8 @@ services:
       - "traefik.http.routers.kealex-escritorios.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/v1/lex/escritorios`)"
       - "traefik.http.routers.kealex-escritorios.entrypoints=https"
       - "traefik.http.routers.kealex-escritorios.tls=true"
-      - "traefik.http.routers.kealex-escritorios.middlewares=kealex-strip-auth,kealex-cors"
+      - "traefik.http.middlewares.kealex-strip-escritorios.stripprefix.prefixes=/v1/lex"
+      - "traefik.http.routers.kealex-escritorios.middlewares=kealex-strip-escritorios,kealex-cors"
       - "traefik.http.services.kealex-escritorios.loadbalancer.server.port=8000"
     deploy:
       replicas: 1
@@ -157,9 +221,17 @@ services:
         condition: on-failure
     networks:
       - easypanel
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   svc-clientes:
-    image: kealex/svc-clientes:latest
+    build: ./svc-clientes
+    container_name: kealex-svc-clientes
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
@@ -168,7 +240,8 @@ services:
       - "traefik.http.routers.kealex-clientes.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/v1/lex/clientes`)"
       - "traefik.http.routers.kealex-clientes.entrypoints=https"
       - "traefik.http.routers.kealex-clientes.tls=true"
-      - "traefik.http.routers.kealex-clientes.middlewares=kealex-strip-auth,kealex-cors"
+      - "traefik.http.middlewares.kealex-strip-clientes.stripprefix.prefixes=/v1/lex"
+      - "traefik.http.routers.kealex-clientes.middlewares=kealex-strip-clientes,kealex-cors"
       - "traefik.http.services.kealex-clientes.loadbalancer.server.port=8000"
     deploy:
       replicas: 1
@@ -176,6 +249,13 @@ services:
         condition: on-failure
     networks:
       - easypanel
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
 networks:
   easypanel:
