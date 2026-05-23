@@ -4,8 +4,6 @@ pipeline {
     environment {
         IMAGE_PREFIX = "kealex"
         TAG = "latest"
-        DATABASE_URL = credentials('kealex-database-url')
-        SECRET_KEY = credentials('kealex-secret-key')
         COMPOSE_PROJECT_NAME = "kealex"
     }
 
@@ -37,20 +35,25 @@ pipeline {
 
         stage('Deploy Containers') {
             steps {
-                script {
-                    echo "=== DEPLOY DOS CONTAINERS ==="
-                    
-                    sh """
-                        docker-compose -p ${COMPOSE_PROJECT_NAME} down --remove-orphans || true
+                withCredentials([
+                    string(credentialsId: 'kealex-secret-key', variable: 'SECRET_KEY'),
+                    string(credentialsId: 'kealex-database-url', variable: 'DATABASE_URL')
+                ]) {
+                    script {
+                        echo "=== DEPLOY DOS CONTAINERS ==="
                         
-                        export SECRET_KEY=${SECRET_KEY}
-                        export DATABASE_URL=${DATABASE_URL}
-                        
-                        docker-compose -p ${COMPOSE_PROJECT_NAME} up -d
-                        
-                        echo "Aguardando inicialização dos serviços..."
-                        sleep 30
-                    """
+                        sh """
+                            docker-compose -p ${COMPOSE_PROJECT_NAME} down --remove-orphans || true
+                            
+                            export SECRET_KEY=${SECRET_KEY}
+                            export DATABASE_URL=${DATABASE_URL}
+                            
+                            docker-compose -p ${COMPOSE_PROJECT_NAME} up -d
+                            
+                            echo "Aguardando inicialização dos serviços..."
+                            sleep 30
+                        """
+                    }
                 }
             }
         }
@@ -84,19 +87,23 @@ pipeline {
 
     post {
         always {
-            sh """
-                echo "=== STATUS FINAL ==="
-                docker-compose -p ${COMPOSE_PROJECT_NAME} ps
-            """
+            script {
+                sh """
+                    echo "=== STATUS FINAL ==="
+                    docker-compose -p ${env.COMPOSE_PROJECT_NAME} ps || true
+                """
+            }
         }
         success {
             echo "[SUCESSO] API disponível em: http://localhost:8000/v1/lex/"
         }
         failure {
-            sh """
-                echo "=== LOGS DE ERRO ==="
-                docker-compose -p ${COMPOSE_PROJECT_NAME} logs --tail=50
-            """
+            script {
+                sh """
+                    echo "=== LOGS DE ERRO ==="
+                    docker-compose -p ${env.COMPOSE_PROJECT_NAME} logs --tail=50 || true
+                """
+            }
         }
     }
 }
