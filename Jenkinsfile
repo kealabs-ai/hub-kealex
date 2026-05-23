@@ -5,6 +5,8 @@ pipeline {
         IMAGE_PREFIX = "kealex"
         TAG = "latest"
         COMPOSE_PROJECT_NAME = "kealex"
+        SECRET_KEY = "${env.SECRET_KEY}"
+        DATABASE_URL = "${env.DATABASE_URL}"
     }
 
     stages {
@@ -27,7 +29,7 @@ pipeline {
                     ]
                     
                     services.each { svc ->
-                        sh "docker build -t ${IMAGE_PREFIX}/${svc}:${TAG} ./${svc}"
+                        sh "docker build -t ${IMAGE_PREFIX}/${svc}:${TAG} ./${svc} || exit 1"
                     }
                 }
             }
@@ -35,25 +37,20 @@ pipeline {
 
         stage('Deploy Containers') {
             steps {
-                withCredentials([
-                    string(credentialsId: 'kealex-secret-key', variable: 'SECRET_KEY'),
-                    string(credentialsId: 'kealex-database-url', variable: 'DATABASE_URL')
-                ]) {
-                    script {
-                        echo "=== DEPLOY DOS CONTAINERS ==="
+                script {
+                    echo "=== DEPLOY DOS CONTAINERS ==="
+                    
+                    sh """
+                        docker compose -p ${COMPOSE_PROJECT_NAME} down --remove-orphans || true
                         
-                        sh """
-                            docker-compose -p ${COMPOSE_PROJECT_NAME} down --remove-orphans || true
-                            
-                            export SECRET_KEY=${SECRET_KEY}
-                            export DATABASE_URL=${DATABASE_URL}
-                            
-                            docker-compose -p ${COMPOSE_PROJECT_NAME} up -d
-                            
-                            echo "Aguardando inicialização dos serviços..."
-                            sleep 30
-                        """
-                    }
+                        export SECRET_KEY='${SECRET_KEY}'
+                        export DATABASE_URL='${DATABASE_URL}'
+                        
+                        docker compose -p ${COMPOSE_PROJECT_NAME} up -d
+                        
+                        echo "Aguardando inicialização dos serviços..."
+                        sleep 30
+                    """
                 }
             }
         }
@@ -64,7 +61,7 @@ pipeline {
                     echo "=== VERIFICAÇÃO DE SAÚDE ==="
                     
                     sh """
-                        docker-compose -p ${COMPOSE_PROJECT_NAME} ps
+                        docker compose -p ${COMPOSE_PROJECT_NAME} ps
                         
                         echo "Testando nginx health endpoint..."
                         for i in {1..10}; do
@@ -90,7 +87,7 @@ pipeline {
             script {
                 sh """
                     echo "=== STATUS FINAL ==="
-                    docker-compose -p ${env.COMPOSE_PROJECT_NAME} ps || true
+                    docker compose -p ${env.COMPOSE_PROJECT_NAME} ps || true
                 """
             }
         }
@@ -101,7 +98,7 @@ pipeline {
             script {
                 sh """
                     echo "=== LOGS DE ERRO ==="
-                    docker-compose -p ${env.COMPOSE_PROJECT_NAME} logs --tail=50 || true
+                    docker compose -p ${env.COMPOSE_PROJECT_NAME} logs --tail=50 || true
                 """
             }
         }
