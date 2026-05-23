@@ -4,7 +4,6 @@ pipeline {
     environment {
         IMAGE_PREFIX = "kealex"
         TAG = "latest"
-        COMPOSE_PROJECT_NAME = "kealex"
         SECRET_KEY = "${env.SECRET_KEY}"
         DATABASE_URL = "${env.DATABASE_URL}"
     }
@@ -41,15 +40,88 @@ pipeline {
                     echo "=== DEPLOY DOS CONTAINERS ==="
                     
                     sh """
-                        docker compose -p ${COMPOSE_PROJECT_NAME} down --remove-orphans || true
+                        # Parar containers existentes
+                        docker ps -aq --filter "name=kealex-" | xargs -r docker rm -f || true
                         
-                        export SECRET_KEY='${SECRET_KEY}'
-                        export DATABASE_URL='${DATABASE_URL}'
+                        # Criar rede se não existir
+                        docker network create kealex-network || true
                         
-                        docker compose -p ${COMPOSE_PROJECT_NAME} up -d
+                        # Iniciar microserviços
+                        docker run -d --name kealex-svc-auth \\
+                            --network kealex-network \\
+                            -e SECRET_KEY='${SECRET_KEY}' \\
+                            -e DATABASE_URL='${DATABASE_URL}' \\
+                            --restart unless-stopped \\
+                            kealex/svc-auth:latest
                         
-                        echo "Aguardando inicialização dos serviços..."
-                        sleep 30
+                        docker run -d --name kealex-svc-processos \\
+                            --network kealex-network \\
+                            -e SECRET_KEY='${SECRET_KEY}' \\
+                            -e DATABASE_URL='${DATABASE_URL}' \\
+                            --restart unless-stopped \\
+                            kealex/svc-processos:latest
+                        
+                        docker run -d --name kealex-svc-documentos \\
+                            --network kealex-network \\
+                            -e SECRET_KEY='${SECRET_KEY}' \\
+                            -e DATABASE_URL='${DATABASE_URL}' \\
+                            --restart unless-stopped \\
+                            kealex/svc-documentos:latest
+                        
+                        docker run -d --name kealex-svc-financeiro \\
+                            --network kealex-network \\
+                            -e SECRET_KEY='${SECRET_KEY}' \\
+                            -e DATABASE_URL='${DATABASE_URL}' \\
+                            --restart unless-stopped \\
+                            kealex/svc-financeiro:latest
+                        
+                        docker run -d --name kealex-svc-prazos \\
+                            --network kealex-network \\
+                            -e SECRET_KEY='${SECRET_KEY}' \\
+                            -e DATABASE_URL='${DATABASE_URL}' \\
+                            --restart unless-stopped \\
+                            kealex/svc-prazos:latest
+                        
+                        docker run -d --name kealex-svc-usuarios \\
+                            --network kealex-network \\
+                            -e SECRET_KEY='${SECRET_KEY}' \\
+                            -e DATABASE_URL='${DATABASE_URL}' \\
+                            --restart unless-stopped \\
+                            kealex/svc-usuarios:latest
+                        
+                        docker run -d --name kealex-svc-clientes \\
+                            --network kealex-network \\
+                            -e SECRET_KEY='${SECRET_KEY}' \\
+                            -e DATABASE_URL='${DATABASE_URL}' \\
+                            --restart unless-stopped \\
+                            kealex/svc-clientes:latest
+                        
+                        docker run -d --name kealex-svc-configuracoes \\
+                            --network kealex-network \\
+                            -e SECRET_KEY='${SECRET_KEY}' \\
+                            -e DATABASE_URL='${DATABASE_URL}' \\
+                            --restart unless-stopped \\
+                            kealex/svc-configuracoes:latest
+                        
+                        docker run -d --name kealex-svc-escritorios \\
+                            --network kealex-network \\
+                            -e SECRET_KEY='${SECRET_KEY}' \\
+                            -e DATABASE_URL='${DATABASE_URL}' \\
+                            --restart unless-stopped \\
+                            kealex/svc-escritorios:latest
+                        
+                        echo "Aguardando inicialização dos microserviços..."
+                        sleep 20
+                        
+                        # Iniciar API Gateway
+                        docker run -d --name kealex-api-gateway \\
+                            --network kealex-network \\
+                            -p 8000:80 \\
+                            --restart unless-stopped \\
+                            kealex/api-gateway:latest
+                        
+                        echo "Aguardando inicialização do nginx..."
+                        sleep 10
                     """
                 }
             }
@@ -61,20 +133,24 @@ pipeline {
                     echo "=== VERIFICAÇÃO DE SAÚDE ==="
                     
                     sh """
-                        docker compose -p ${COMPOSE_PROJECT_NAME} ps
+                        echo "=== STATUS DOS CONTAINERS ==="
+                        docker ps --filter "name=kealex-" --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}"
                         
+                        echo ""
                         echo "Testando nginx health endpoint..."
                         for i in {1..10}; do
-                            if curl -f http://localhost:8000/health; then
+                            if curl -f http://localhost:8000/health 2>/dev/null; then
                                 echo "[OK] Nginx respondendo"
                                 break
                             fi
+                            echo "Tentativa \$i/10..."
                             sleep 5
                         done
                         
+                        echo ""
                         echo "Testando endpoint de autenticação..."
-                        curl -X POST http://localhost:8000/v1/lex/auth/login \
-                            -H "Content-Type: application/json" \
+                        curl -X POST http://localhost:8000/v1/lex/auth/login \\
+                            -H "Content-Type: application/json" \\
                             -d '{"email": "admin@kealex.com", "senha": "admin123"}' || true
                     """
                 }
@@ -87,7 +163,7 @@ pipeline {
             script {
                 sh """
                     echo "=== STATUS FINAL ==="
-                    docker compose -p ${env.COMPOSE_PROJECT_NAME} ps || true
+                    docker ps --filter "name=kealex-" --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}" || true
                 """
             }
         }
@@ -98,7 +174,14 @@ pipeline {
             script {
                 sh """
                     echo "=== LOGS DE ERRO ==="
-                    docker compose -p ${env.COMPOSE_PROJECT_NAME} logs --tail=50 || true
+                    echo "--- API Gateway ---"
+                    docker logs --tail=30 kealex-api-gateway 2>/dev/null || true
+                    echo ""
+                    echo "--- SVC Auth ---"
+                    docker logs --tail=20 kealex-svc-auth 2>/dev/null || true
+                    echo ""
+                    echo "--- SVC Processos ---"
+                    docker logs --tail=20 kealex-svc-processos 2>/dev/null || true
                 """
             }
         }
