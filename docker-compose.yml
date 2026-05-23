@@ -1,4 +1,27 @@
 services:
+  # Nginx API Gateway
+  nginx-gateway:
+    build: ./nginx
+    container_name: kealex-nginx-gateway
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      - svc-auth
+      - svc-processos
+      - svc-documentos
+      - svc-financeiro
+      - svc-prazos
+      - svc-usuarios
+      - svc-configuracoes
+      - svc-escritorios
+      - svc-clientes
+    networks:
+      - easypanel
+    restart: unless-stopped
+
   svc-auth:
     build: ./svc-auth
     container_name: kealex-svc-auth
