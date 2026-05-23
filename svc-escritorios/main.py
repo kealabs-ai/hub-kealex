@@ -101,12 +101,12 @@ def _to_dict(e: Escritorio):
         "createdAt": e.created_at.isoformat(), "updatedAt": e.updated_at.isoformat()
     }
 
-@app.get("/escritorios")
+@app.get("/v1/lex/escritorios")
 def list_escritorios(db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     return [_to_dict(e) for e in db.query(Escritorio).filter_by(tenant_id=tenant_id).all()]
 
-@app.post("/escritorios/get")
+@app.post("/v1/lex/escritorios/get")
 def get_escritorio(body: EscritorioGetIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     e = db.query(Escritorio).filter_by(id=body.id, tenant_id=tenant_id).first()
@@ -114,7 +114,7 @@ def get_escritorio(body: EscritorioGetIn, db: Session = Depends(get_db), payload
         raise HTTPException(404, "Não encontrado")
     return _to_dict(e)
 
-@app.post("/escritorios", status_code=201)
+@app.post("/v1/lex/escritorios", status_code=201)
 def create_escritorio(body: EscritorioIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     e = Escritorio(tenant_id=tenant_id, nome=body.nome, cnpj=body.cnpj,
@@ -122,7 +122,7 @@ def create_escritorio(body: EscritorioIn, db: Session = Depends(get_db), payload
     db.add(e); db.commit(); db.refresh(e)
     return _to_dict(e)
 
-@app.post("/escritorios/update")
+@app.post("/v1/lex/escritorios/update")
 def update_escritorio(body: EscritorioUpdate, db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     e = db.query(Escritorio).filter_by(id=body.id, tenant_id=tenant_id).first()
@@ -134,7 +134,7 @@ def update_escritorio(body: EscritorioUpdate, db: Session = Depends(get_db), pay
     db.commit(); db.refresh(e)
     return _to_dict(e)
 
-@app.post("/escritorios/delete")
+@app.post("/v1/lex/escritorios/delete")
 def delete_escritorio(body: EscritorioDeleteIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     e = db.query(Escritorio).filter_by(id=body.id, tenant_id=tenant_id).first()

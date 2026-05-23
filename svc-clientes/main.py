@@ -104,7 +104,7 @@ def _to_dict(c: Cliente):
         "createdAt": c.created_at.isoformat(), "updatedAt": c.updated_at.isoformat(),
     }
 
-@app.get("/clientes")
+@app.get("/v1/lex/clientes")
 def list_clientes(db: Session = Depends(get_db), payload=Depends(require_admin_or_advogado)):
     tid  = payload.get("tenant_id") or payload.get("sub")
     role = payload.get("role")
@@ -114,7 +114,7 @@ def list_clientes(db: Session = Depends(get_db), payload=Depends(require_admin_o
         q = q.filter_by(advogado_id=uid)
     return [_to_dict(c) for c in q.all()]
 
-@app.post("/clientes/get")
+@app.post("/v1/lex/clientes/get")
 def get_cliente(body: ClienteGetIn, db: Session = Depends(get_db), payload=Depends(require_admin_or_advogado)):
     tid = payload.get("tenant_id") or payload.get("sub")
     c = db.query(Cliente).filter_by(id=body.id, tenant_id=tid).first()
@@ -122,7 +122,7 @@ def get_cliente(body: ClienteGetIn, db: Session = Depends(get_db), payload=Depen
         raise HTTPException(404, "Não encontrado")
     return _to_dict(c)
 
-@app.post("/clientes", status_code=201)
+@app.post("/v1/lex/clientes", status_code=201)
 def create_cliente(body: ClienteIn, db: Session = Depends(get_db), payload=Depends(require_admin_or_advogado)):
     tid = payload.get("tenant_id") or payload.get("sub")
     uid = payload.get("sub")
@@ -136,7 +136,7 @@ def create_cliente(body: ClienteIn, db: Session = Depends(get_db), payload=Depen
     db.add(c); db.commit(); db.refresh(c)
     return _to_dict(c)
 
-@app.post("/clientes/update")
+@app.post("/v1/lex/clientes/update")
 def update_cliente(body: ClienteUpdate, db: Session = Depends(get_db), payload=Depends(require_admin_or_advogado)):
     tid = payload.get("tenant_id") or payload.get("sub")
     c = db.query(Cliente).filter_by(id=body.id, tenant_id=tid).first()
@@ -151,7 +151,7 @@ def update_cliente(body: ClienteUpdate, db: Session = Depends(get_db), payload=D
     db.commit(); db.refresh(c)
     return _to_dict(c)
 
-@app.post("/clientes/delete")
+@app.post("/v1/lex/clientes/delete")
 def delete_cliente(body: ClienteDeleteIn, db: Session = Depends(get_db), payload=Depends(require_admin_or_advogado)):
     tid = payload.get("tenant_id") or payload.get("sub")
     c = db.query(Cliente).filter_by(id=body.id, tenant_id=tid).first()

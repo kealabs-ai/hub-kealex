@@ -130,7 +130,7 @@ def _enrich(db: Session, processos: list[Processo]):
     clientes = {c.id: c for c in db.query(Cliente).filter(Cliente.id.in_(ids)).all()}
     return [_to_dict(p, clientes.get(p.cliente_id)) for p in processos]
 
-@app.get("/processos")
+@app.get("/v1/lex/processos")
 def list_processos(db: Session = Depends(get_db), payload=Depends(verify_token)):
     role, uid, tid = payload.get("role"), payload.get("sub"), payload.get("tenant_id")
     q = db.query(Processo).filter_by(tenant_id=tid)
@@ -144,7 +144,7 @@ def list_processos(db: Session = Depends(get_db), payload=Depends(verify_token))
     
     return _enrich(db, q.all())
 
-@app.post("/processos/get")
+@app.post("/v1/lex/processos/get")
 def get_processo(body: ProcessoGetIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id")
     p = db.query(Processo).filter_by(id=body.id, tenant_id=tenant_id).first()
@@ -153,7 +153,7 @@ def get_processo(body: ProcessoGetIn, db: Session = Depends(get_db), payload=Dep
     cliente = db.query(Cliente).filter_by(id=p.cliente_id).first()
     return _to_dict(p, cliente)
 
-@app.post("/processos", status_code=201)
+@app.post("/v1/lex/processos", status_code=201)
 def create_processo(body: ProcessoIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id")
     # valida que o cliente existe e pertence ao tenant
@@ -166,7 +166,7 @@ def create_processo(body: ProcessoIn, db: Session = Depends(get_db), payload=Dep
     db.add(p); db.commit(); db.refresh(p)
     return _to_dict(p, cliente)
 
-@app.post("/processos/update")
+@app.post("/v1/lex/processos/update")
 def update_processo(body: ProcessoUpdate, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id")
     p = db.query(Processo).filter_by(id=body.id, tenant_id=tenant_id).first()
@@ -179,7 +179,7 @@ def update_processo(body: ProcessoUpdate, db: Session = Depends(get_db), payload
     cliente = db.query(Cliente).filter_by(id=p.cliente_id).first()
     return _to_dict(p, cliente)
 
-@app.post("/processos/delete")
+@app.post("/v1/lex/processos/delete")
 def delete_processo(body: ProcessoDeleteIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id")
     p = db.query(Processo).filter_by(id=body.id, tenant_id=tenant_id).first()

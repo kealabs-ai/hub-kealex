@@ -141,7 +141,7 @@ def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
     except JWTError:
         raise HTTPException(401, "Token inválido")
 
-@app.post("/auth/login", response_model=AuthUser)
+@app.post("/v1/lex/auth/login", response_model=AuthUser)
 def login(body: LoginIn, db: Session = Depends(get_db)):
     user = db.query(Usuario).filter_by(email=body.email, ativo=True).first()
     if not user or not _verify(body.senha, user.senha_hash):
@@ -149,10 +149,10 @@ def login(body: LoginIn, db: Session = Depends(get_db)):
     return AuthUser(nome=user.nome, role=user.role,
                     tenantId=user.tenant_id, accessToken=_make_token(user))
 
-@app.get("/auth/me")
+@app.get("/v1/lex/auth/me")
 def me(payload=Depends(verify_token)):
     return payload
 
-@app.get("/health")
+@app.get("/v1/lex/health")
 def health():
     return {"status": "ok", "service": "svc-auth"}

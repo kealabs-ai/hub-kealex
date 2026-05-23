@@ -108,12 +108,12 @@ def _to_dict(p: Prazo):
         "createdAt": p.created_at.isoformat(), "updatedAt": p.updated_at.isoformat()
     }
 
-@app.get("/prazos")
+@app.get("/v1/lex/prazos")
 def list_prazos(db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     return [_to_dict(p) for p in db.query(Prazo).filter_by(tenant_id=tenant_id).all()]
 
-@app.post("/prazos/get")
+@app.post("/v1/lex/prazos/get")
 def get_prazo(body: PrazoGetIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     p = db.query(Prazo).filter_by(id=body.id, tenant_id=tenant_id).first()
@@ -121,7 +121,7 @@ def get_prazo(body: PrazoGetIn, db: Session = Depends(get_db), payload=Depends(v
         raise HTTPException(404, "Não encontrado")
     return _to_dict(p)
 
-@app.post("/prazos/vencendo")
+@app.post("/v1/lex/prazos/vencendo")
 def vencendo(body: PrazoVencendoIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     hoje   = date.today().isoformat()
@@ -134,13 +134,13 @@ def vencendo(body: PrazoVencendoIn, db: Session = Depends(get_db), payload=Depen
     ).all()
     return [_to_dict(p) for p in rows]
 
-@app.post("/prazos/by-processo")
+@app.post("/v1/lex/prazos/by-processo")
 def by_processo(body: PrazoByProcessoIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     return [_to_dict(p) for p in db.query(Prazo).filter_by(
         tenant_id=tenant_id, processo_id=body.processoId).all()]
 
-@app.post("/prazos", status_code=201)
+@app.post("/v1/lex/prazos", status_code=201)
 def create_prazo(body: PrazoIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     p = Prazo(tenant_id=tenant_id, user_id=payload["sub"], escritorio_id=body.escritorioId,
@@ -149,7 +149,7 @@ def create_prazo(body: PrazoIn, db: Session = Depends(get_db), payload=Depends(v
     db.add(p); db.commit(); db.refresh(p)
     return _to_dict(p)
 
-@app.post("/prazos/update")
+@app.post("/v1/lex/prazos/update")
 def update_prazo(body: PrazoUpdate, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     p = db.query(Prazo).filter_by(id=body.id, tenant_id=tenant_id).first()
@@ -164,7 +164,7 @@ def update_prazo(body: PrazoUpdate, db: Session = Depends(get_db), payload=Depen
     db.commit(); db.refresh(p)
     return _to_dict(p)
 
-@app.post("/prazos/delete")
+@app.post("/v1/lex/prazos/delete")
 def delete_prazo(body: PrazoDeleteIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     p = db.query(Prazo).filter_by(id=body.id, tenant_id=tenant_id).first()

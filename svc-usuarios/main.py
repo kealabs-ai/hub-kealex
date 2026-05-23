@@ -113,12 +113,12 @@ def _to_dict(u: Usuario):
         "createdAt": u.created_at.isoformat(), "updatedAt": u.updated_at.isoformat()
     }
 
-@app.get("/usuarios")
+@app.get("/v1/lex/usuarios")
 def list_usuarios(db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     return [_to_dict(u) for u in db.query(Usuario).filter_by(tenant_id=tenant_id).all()]
 
-@app.post("/usuarios/list")
+@app.post("/v1/lex/usuarios/list")
 def list_usuarios_filtered(body: UsuarioListIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     q = db.query(Usuario).filter_by(tenant_id=tenant_id)
@@ -126,7 +126,7 @@ def list_usuarios_filtered(body: UsuarioListIn, db: Session = Depends(get_db), p
         q = q.filter_by(role=body.role)
     return [_to_dict(u) for u in q.all()]
 
-@app.post("/usuarios/get")
+@app.post("/v1/lex/usuarios/get")
 def get_usuario(body: UsuarioGetIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     u = db.query(Usuario).filter_by(id=body.id, tenant_id=tenant_id).first()
@@ -134,7 +134,7 @@ def get_usuario(body: UsuarioGetIn, db: Session = Depends(get_db), payload=Depen
         raise HTTPException(404, "Não encontrado")
     return _to_dict(u)
 
-@app.post("/usuarios", status_code=201)
+@app.post("/v1/lex/usuarios", status_code=201)
 def create_usuario(body: UsuarioIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
     tid = payload.get("tenant_id") or payload.get("sub")
     if db.query(Usuario).filter_by(email=body.email, tenant_id=tid).first():
@@ -144,7 +144,7 @@ def create_usuario(body: UsuarioIn, db: Session = Depends(get_db), payload=Depen
     db.add(u); db.commit(); db.refresh(u)
     return _to_dict(u)
 
-@app.post("/usuarios/update")
+@app.post("/v1/lex/usuarios/update")
 def update_usuario(body: UsuarioUpdate, db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     u = db.query(Usuario).filter_by(id=body.id, tenant_id=tenant_id).first()
@@ -161,7 +161,7 @@ def update_usuario(body: UsuarioUpdate, db: Session = Depends(get_db), payload=D
     db.commit(); db.refresh(u)
     return _to_dict(u)
 
-@app.post("/usuarios/delete")
+@app.post("/v1/lex/usuarios/delete")
 def delete_usuario(body: UsuarioDeleteIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     u = db.query(Usuario).filter_by(id=body.id, tenant_id=tenant_id).first()
