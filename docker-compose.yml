@@ -275,15 +275,13 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-gw.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/lex`)"
+      - "traefik.http.routers.kealex-gw.rule=Host(`srv1023256.hstgr.cloud`) && (PathPrefix(`/k1/lex`) || PathPrefix(`/docs`))"
       - "traefik.http.routers.kealex-gw.entrypoints=websecure"
       - "traefik.http.routers.kealex-gw.tls=true"
-      - "traefik.http.routers.kealex-gw.priority=100"
+      - "traefik.http.routers.kealex-gw.priority=200"
     networks:
       - easypanel
     restart: unless-stopped
-    ports:
-      - "8000:80"
 
 networks:
   easypanel:
