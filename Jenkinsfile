@@ -38,10 +38,15 @@ pipeline {
             steps {
                 script {
                     echo "=== DEPLOY COM DOCKER COMPOSE ==="
+                    
+                    def composeCmd = sh(script: "docker compose version 2>/dev/null && echo 'docker compose' || echo 'docker-compose'", returnStdout: true).trim()
+                    echo "Usando: ${composeCmd}"
+                    
                     sh """
                         export SECRET_KEY='${SECRET_KEY}'
                         export DATABASE_URL='${DATABASE_URL}'
-                        docker compose up -d --build --remove-orphans || docker-compose up -d --build --remove-orphans
+                        ${composeCmd} down --remove-orphans || true
+                        ${composeCmd} up -d --build --remove-orphans
                     """
 
                     echo "Aguardando inicialização dos microserviços..."
