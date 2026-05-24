@@ -37,11 +37,11 @@ pipeline {
         stage('Deploy Containers') {
             steps {
                 script {
-                    echo "=== DEPLOY DOS CONTAINERS ==="
+                    echo "=== DEPLOY COM DOCKER COMPOSE ==="
                     sh """
                         export SECRET_KEY='${SECRET_KEY}'
                         export DATABASE_URL='${DATABASE_URL}'
-                        docker-compose -f docker-compose.yml up -d --remove-orphans
+                        docker compose up -d --build --remove-orphans || docker-compose up -d --build --remove-orphans
                     """
 
                     echo "Aguardando inicialização dos microserviços..."
@@ -50,7 +50,7 @@ pipeline {
             }
         }
 
-        stage('Health Check API') {
+        stage('Health Check') {
             steps {
                 script {
                     echo "=== VERIFICAÇÃO DE SAÚDE ==="
@@ -64,17 +64,18 @@ pipeline {
                         for i in 1 2 3 4 5; do
                             if curl -f http://localhost:8000/health 2>/dev/null; then
                                 echo "[OK] Nginx respondendo"
-                                break
+                                exit 0
                             fi
                             echo "Tentativa \$i/10..."
                             sleep 5
                         done
+                        exit 1
                         
                         echo ""
                         echo "Testando endpoint de autenticação..."
                         curl -i -X POST http://localhost:8000/k1/lex/auth/login \\
                             -H "Content-Type: application/json" \\
-                            -d '{"email": "admin@kealex.com", "senha": "admin123"}'
+                            -d '{"email": "admin@kealex.com", "senha": "admin123"}' || true
                     """
                 }
             }

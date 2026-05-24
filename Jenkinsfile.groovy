@@ -41,7 +41,7 @@ pipeline {
                     sh """
                         export SECRET_KEY='${SECRET_KEY}'
                         export DATABASE_URL='${DATABASE_URL}'
-                        docker-compose up -d --build --remove-orphans
+                        docker compose up -d --build --remove-orphans || docker-compose up -d --build --remove-orphans
                     """
                 }
             }
@@ -84,7 +84,7 @@ pipeline {
             }
         }
         success {
-            echo "[SUCESSO] API disponível em: http://localhost:8000/v1/lex/"
+            echo "[SUCESSO] API disponível em: http://localhost:8000/k1/lex/"
         }
         failure {
             script {
