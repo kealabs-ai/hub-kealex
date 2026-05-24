@@ -37,38 +37,44 @@ pipeline {
         stage('Deploy Containers') {
             steps {
                 script {
-                    echo "=== DEPLOY COM DOCKER COMPOSE ==="
+                    echo "=== DEPLOY DOS CONTAINERS ==="
                     sh """
-                        # Tenta usar o comando moderno 'docker compose', se falhar usa 'docker-compose'
                         export SECRET_KEY='${SECRET_KEY}'
                         export DATABASE_URL='${DATABASE_URL}'
-                        docker compose up -d --build --remove-orphans || docker-compose up -d --build --remove-orphans
+                        docker-compose -f docker-compose.yml up -d --remove-orphans
                     """
+
+                    echo "Aguardando inicialização dos microserviços..."
+                    sleep 20
                 }
             }
         }
 
-        stage('Health Check') {
-            options {
-                retry(3)
-            }
+        stage('Health Check API') {
             steps {
                 script {
                     echo "=== VERIFICAÇÃO DE SAÚDE ==="
-                    sleep 30
+                    
                     sh """
                         echo "=== STATUS DOS CONTAINERS ==="
                         docker ps --filter "name=kealex-" --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}"
                         
                         echo ""
                         echo "Testando nginx health endpoint..."
-                        curl -f http://localhost:8000/health || (docker logs kealex-api-gateway && exit 1)
+                        for i in 1 2 3 4 5; do
+                            if curl -f http://localhost:8000/health 2>/dev/null; then
+                                echo "[OK] Nginx respondendo"
+                                break
+                            fi
+                            echo "Tentativa \$i/10..."
+                            sleep 5
+                        done
                         
                         echo ""
                         echo "Testando endpoint de autenticação..."
                         curl -i -X POST http://localhost:8000/k1/lex/auth/login \\
                             -H "Content-Type: application/json" \\
-                            -d '{"email": "admin@kealex.com", "senha": "admin123"}' || true
+                            -d '{"email": "admin@kealex.com", "senha": "admin123"}'
                     """
                 }
             }
@@ -85,7 +91,7 @@ pipeline {
             }
         }
         success {
-            echo "[SUCESSO] API disponível em: http://localhost:8000/v1/lex/"
+            echo "[SUCESSO] API disponível em: http://localhost:8000/k1/lex/"
         }
         failure {
             script {

@@ -43,12 +43,12 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-processos.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/kealex/processos`)"
+      - "traefik.http.routers.kealex-processos.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/lex/processos`)"
       - "traefik.http.routers.kealex-processos.entrypoints=websecure"
       - "traefik.http.routers.kealex-processos.tls=true"
       - "traefik.http.routers.kealex-processos.service=kealex-processos"
       - "traefik.http.services.kealex-processos.loadbalancer.server.port=8000"
-      - "traefik.http.middlewares.kealex-proc-strip.stripprefix.prefixes=/k1/kealex"
+      - "traefik.http.middlewares.kealex-proc-strip.stripprefix.prefixes=/k1/lex"
       - "traefik.http.routers.kealex-processos.middlewares=kealex-proc-strip,kealex-auth-cors"
       - "traefik.http.routers.kealex-processos.priority=100"
     networks:
@@ -72,12 +72,12 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-documentos.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/kealex/documentos`)"
+      - "traefik.http.routers.kealex-documentos.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/lex/documentos`)"
       - "traefik.http.routers.kealex-documentos.entrypoints=websecure"
       - "traefik.http.routers.kealex-documentos.tls=true"
       - "traefik.http.routers.kealex-documentos.service=kealex-documentos"
       - "traefik.http.services.kealex-documentos.loadbalancer.server.port=8000"
-      - "traefik.http.middlewares.kealex-doc-strip.stripprefix.prefixes=/k1/kealex"
+      - "traefik.http.middlewares.kealex-doc-strip.stripprefix.prefixes=/k1/lex"
       - "traefik.http.routers.kealex-documentos.middlewares=kealex-doc-strip,kealex-auth-cors"
       - "traefik.http.routers.kealex-documentos.priority=100"
     networks:
@@ -101,12 +101,12 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-financeiro.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/kealex/financeiro`)"
+      - "traefik.http.routers.kealex-financeiro.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/lex/financeiro`)"
       - "traefik.http.routers.kealex-financeiro.entrypoints=websecure"
       - "traefik.http.routers.kealex-financeiro.tls=true"
       - "traefik.http.routers.kealex-financeiro.service=kealex-financeiro"
       - "traefik.http.services.kealex-financeiro.loadbalancer.server.port=8000"
-      - "traefik.http.middlewares.kealex-fin-strip.stripprefix.prefixes=/k1/kealex"
+      - "traefik.http.middlewares.kealex-fin-strip.stripprefix.prefixes=/k1/lex"
       - "traefik.http.routers.kealex-financeiro.middlewares=kealex-fin-strip,kealex-auth-cors"
       - "traefik.http.routers.kealex-financeiro.priority=100"
     networks:
@@ -130,12 +130,12 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-prazos.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/kealex/prazos`)"
+      - "traefik.http.routers.kealex-prazos.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/lex/prazos`)"
       - "traefik.http.routers.kealex-prazos.entrypoints=websecure"
       - "traefik.http.routers.kealex-prazos.tls=true"
       - "traefik.http.routers.kealex-prazos.service=kealex-prazos"
       - "traefik.http.services.kealex-prazos.loadbalancer.server.port=8000"
-      - "traefik.http.middlewares.kealex-praz-strip.stripprefix.prefixes=/k1/kealex"
+      - "traefik.http.middlewares.kealex-praz-strip.stripprefix.prefixes=/k1/lex"
       - "traefik.http.routers.kealex-prazos.middlewares=kealex-praz-strip,kealex-auth-cors"
       - "traefik.http.routers.kealex-prazos.priority=100"
     networks:
@@ -159,12 +159,12 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-usuarios.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/kealex/usuarios`)"
+      - "traefik.http.routers.kealex-usuarios.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/lex/usuarios`)"
       - "traefik.http.routers.kealex-usuarios.entrypoints=websecure"
       - "traefik.http.routers.kealex-usuarios.tls=true"
       - "traefik.http.routers.kealex-usuarios.service=kealex-usuarios"
       - "traefik.http.services.kealex-usuarios.loadbalancer.server.port=8000"
-      - "traefik.http.middlewares.kealex-user-strip.stripprefix.prefixes=/k1/kealex"
+      - "traefik.http.middlewares.kealex-user-strip.stripprefix.prefixes=/k1/lex"
       - "traefik.http.routers.kealex-usuarios.middlewares=kealex-user-strip,kealex-auth-cors"
       - "traefik.http.routers.kealex-usuarios.priority=100"
     networks:
@@ -188,12 +188,12 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-configuracoes.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/kealex/configuracoes`)"
+      - "traefik.http.routers.kealex-configuracoes.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/lex/configuracoes`)"
       - "traefik.http.routers.kealex-configuracoes.entrypoints=websecure"
       - "traefik.http.routers.kealex-configuracoes.tls=true"
       - "traefik.http.routers.kealex-configuracoes.service=kealex-configuracoes"
       - "traefik.http.services.kealex-configuracoes.loadbalancer.server.port=8000"
-      - "traefik.http.middlewares.kealex-conf-strip.stripprefix.prefixes=/k1/kealex"
+      - "traefik.http.middlewares.kealex-conf-strip.stripprefix.prefixes=/k1/lex"
       - "traefik.http.routers.kealex-configuracoes.middlewares=kealex-conf-strip,kealex-auth-cors"
       - "traefik.http.routers.kealex-configuracoes.priority=100"
     networks:
@@ -217,12 +217,12 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-escritorios.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/kealex/escritorios`)"
+      - "traefik.http.routers.kealex-escritorios.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/lex/escritorios`)"
       - "traefik.http.routers.kealex-escritorios.entrypoints=websecure"
       - "traefik.http.routers.kealex-escritorios.tls=true"
       - "traefik.http.routers.kealex-escritorios.service=kealex-escritorios"
       - "traefik.http.services.kealex-escritorios.loadbalancer.server.port=8000"
-      - "traefik.http.middlewares.kealex-esc-strip.stripprefix.prefixes=/k1/kealex"
+      - "traefik.http.middlewares.kealex-esc-strip.stripprefix.prefixes=/k1/lex"
       - "traefik.http.routers.kealex-escritorios.middlewares=kealex-esc-strip,kealex-auth-cors"
       - "traefik.http.routers.kealex-escritorios.priority=100"
     networks:
@@ -246,12 +246,12 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-clientes.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/kealex/clientes`)"
+      - "traefik.http.routers.kealex-clientes.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/lex/clientes`)"
       - "traefik.http.routers.kealex-clientes.entrypoints=websecure"
       - "traefik.http.routers.kealex-clientes.tls=true"
       - "traefik.http.routers.kealex-clientes.service=kealex-clientes"
       - "traefik.http.services.kealex-clientes.loadbalancer.server.port=8000"
-      - "traefik.http.middlewares.kealex-cli-strip.stripprefix.prefixes=/k1/kealex"
+      - "traefik.http.middlewares.kealex-cli-strip.stripprefix.prefixes=/k1/lex"
       - "traefik.http.routers.kealex-clientes.middlewares=kealex-cli-strip,kealex-auth-cors"
       - "traefik.http.routers.kealex-clientes.priority=100"
     networks:
@@ -282,6 +282,8 @@ services:
     networks:
       - easypanel
     restart: unless-stopped
+    ports:
+      - "8000:80"
 
 networks:
   easypanel:
