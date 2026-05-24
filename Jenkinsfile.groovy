@@ -37,31 +37,54 @@ pipeline {
         stage('Deploy Containers') {
             steps {
                 script {
-                    echo "=== DEPLOY COM DOCKER COMPOSE ==="
+                    echo "=== VERIFICANDO AMBIENTE DOCKER ==="
+                    def composeCmd = ""
+                    if (sh(script: "docker-compose version", returnStatus: true) == 0) { // Prioriza docker-compose (v1)
+                        composeCmd = "docker-compose"
+                    } else if (sh(script: "docker-compose version", returnStatus: true) == 0) {
+                        composeCmd = "docker-compose"
+                    } else {
+                        error "Docker Compose (v1 ou v2) não foi encontrado no PATH do Jenkins."
+                    }
+
+                    echo "Usando comando: ${composeCmd}"
+                    
+                    echo "Limpando containers antigos para evitar conflitos..."
+                    sh "${composeCmd} down --remove-orphans || true"
+
+                    echo "Iniciando deploy..."
                     sh """
                         export SECRET_KEY='${SECRET_KEY}'
                         export DATABASE_URL='${DATABASE_URL}'
-                        docker compose up -d --build --remove-orphans || docker-compose up -d --build --remove-orphans
+                        ${composeCmd} up -d --build --remove-orphans
                     """
+
+                    echo "Aguardando inicialização dos microserviços..."
+                    sleep 20
                 }
             }
         }
 
-        stage('Health Check API') {
-            options {
-                retry(3)
-            }
+        stage('Health Check') {
             steps {
                 script {
                     echo "=== VERIFICAÇÃO DE SAÚDE ==="
-                    sleep 30
+                    
                     sh """
                         echo "=== STATUS DOS CONTAINERS ==="
                         docker ps --filter "name=kealex-" --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}"
                         
                         echo ""
                         echo "Testando nginx health endpoint..."
-                        curl -f http://localhost:8000/health || (docker logs kealex-api-gateway && exit 1)
+                        for i in 1 2 3 4 5; do
+                            if curl -f http://localhost:8000/health 2>/dev/null; then
+                                echo "[OK] Nginx respondendo"
+                                exit 0
+                            fi
+                            echo "Tentativa \$i/10..."
+                            sleep 5
+                        done
+                        exit 1
                         
                         echo ""
                         echo "Testando endpoint de autenticação..."
