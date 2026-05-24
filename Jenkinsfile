@@ -4,8 +4,8 @@ pipeline {
     environment {
         IMAGE_PREFIX = "kealex"
         TAG = "latest"
-        SECRET_KEY = "${env.SECRET_KEY}"
-        DATABASE_URL = "${env.DATABASE_URL}"
+        SECRET_KEY = "${env.SECRET_KEY ?: 'fallback-chave-segura'}"
+        DATABASE_URL = "${env.DATABASE_URL ?: 'mysql+pymysql://user:pass@host/db'}"
     }
 
     stages {
@@ -38,78 +38,23 @@ pipeline {
             steps {
                 script {
                     echo "=== DEPLOY DOS CONTAINERS ==="
-                    
+                    // Usar docker-compose é muito mais seguro e mantém as labels do Traefik
                     sh """
-                        # Parar containers existentes
-                        docker ps -aq --filter "name=kealex-" | xargs -r docker rm -f || true
-                        
-                        # Criar rede se não existir
-                        docker network create kealex-network || true
-                        
-                        # Iniciar microserviços
-                        docker run -d --name kealex-svc-auth \\
-                            --network kealex-network \\
-                            -e SECRET_KEY='${SECRET_KEY}' \\
-                            -e DATABASE_URL='${DATABASE_URL}' \\
-                            --restart unless-stopped \\
-                            kealex/svc-auth:latest
-                        
-                        docker run -d --name kealex-svc-processos \\
-                            --network kealex-network \\
-                            -e SECRET_KEY='${SECRET_KEY}' \\
-                            -e DATABASE_URL='${DATABASE_URL}' \\
-                            --restart unless-stopped \\
-                            kealex/svc-processos:latest
-                        
-                        docker run -d --name kealex-svc-documentos \\
-                            --network kealex-network \\
-                            -e SECRET_KEY='${SECRET_KEY}' \\
-                            -e DATABASE_URL='${DATABASE_URL}' \\
-                            --restart unless-stopped \\
-                            kealex/svc-documentos:latest
-                        
-                        docker run -d --name kealex-svc-financeiro \\
-                            --network kealex-network \\
-                            -e SECRET_KEY='${SECRET_KEY}' \\
-                            -e DATABASE_URL='${DATABASE_URL}' \\
-                            --restart unless-stopped \\
-                            kealex/svc-financeiro:latest
-                        
-                        docker run -d --name kealex-svc-prazos \\
-                            --network kealex-network \\
-                            -e SECRET_KEY='${SECRET_KEY}' \\
-                            -e DATABASE_URL='${DATABASE_URL}' \\
-                            --restart unless-stopped \\
-                            kealex/svc-prazos:latest
-                        
-                        docker run -d --name kealex-svc-usuarios \\
-                            --network kealex-network \\
-                            -e SECRET_KEY='${SECRET_KEY}' \\
-                            -e DATABASE_URL='${DATABASE_URL}' \\
-                            --restart unless-stopped \\
-                            kealex/svc-usuarios:latest
-                        
-                        docker run -d --name kealex-svc-clientes \\
-                            --network kealex-network \\
-                            -e SECRET_KEY='${SECRET_KEY}' \\
-                            -e DATABASE_URL='${DATABASE_URL}' \\
-                            --restart unless-stopped \\
-                            kealex/svc-clientes:latest
-                        
-                        docker run -d --name kealex-svc-configuracoes \\
-                            --network kealex-network \\
-                            -e SECRET_KEY='${SECRET_KEY}' \\
-                            -e DATABASE_URL='${DATABASE_URL}' \\
-                            --restart unless-stopped \\
-                            kealex/svc-configuracoes:latest
-                        
-                        docker run -d --name kealex-svc-escritorios \\
-                            --network kealex-network \\
-                            -e SECRET_KEY='${SECRET_KEY}' \\
-                            -e DATABASE_URL='${DATABASE_URL}' \\
-                            --restart unless-stopped \\
-                            kealex/svc-escritorios:latest
-                        
+                        export SECRET_KEY='${SECRET_KEY}'
+                        export DATABASE_URL='${DATABASE_URL}'
+                        docker compose -f docker-compose.yml up -d --remove-orphans
+                    """
+
+                    echo "Aguardando inicialização dos microserviços..."
+                    sleep 20
+                }
+            }
+        }
+
+        stage('Health Check') {
+            steps {
+                script {
+                    sh """
                         echo "Aguardando inicialização dos microserviços..."
                         sleep 20
                         
@@ -138,14 +83,15 @@ pipeline {
                         
                         echo ""
                         echo "Testando nginx health endpoint..."
-                        for i in {1..10}; do
+                        for i in 1 2 3 4 5; do
                             if curl -f http://localhost:8000/health 2>/dev/null; then
                                 echo "[OK] Nginx respondendo"
-                                break
+                                exit 0
                             fi
                             echo "Tentativa \$i/10..."
                             sleep 5
                         done
+                        exit 1
                         
                         echo ""
                         echo "Testando endpoint de autenticação..."
