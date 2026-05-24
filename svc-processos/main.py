@@ -90,6 +90,10 @@ def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
 app = FastAPI(title="svc-processos")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
+@app.get("/health")
+def health():
+    return {"status": "healthy", "service": "svc-processos"}
+
 class ProcessoIn(BaseModel):
     numero:       str
     titulo:       str

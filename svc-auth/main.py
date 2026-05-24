@@ -153,6 +153,10 @@ def login(body: LoginIn, db: Session = Depends(get_db)):
 def me(payload=Depends(verify_token)):
     return payload
 
+@app.get("/health")
+def health_simple():
+    return {"status": "healthy", "service": "svc-auth"}
+
 @app.get("/v1/lex/health")
 def health():
     return {"status": "ok", "service": "svc-auth"}
