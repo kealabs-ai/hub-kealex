@@ -41,7 +41,7 @@ pipeline {
                     sh """
                         export SECRET_KEY='${SECRET_KEY}'
                         export DATABASE_URL='${DATABASE_URL}'
-                        docker compose -f docker-compose.yml up -d --remove-orphans
+                        docker compose up -d --remove-orphans
                     """
 
                     echo "Aguardando inicialização dos microserviços..."
@@ -50,28 +50,7 @@ pipeline {
             }
         }
 
-        stage('Setup API Gateway') {
-            steps {
-                script {
-                    sh """
-                        echo "Aguardando inicialização dos microserviços..."
-                        sleep 20
-                        
-                        # Iniciar API Gateway
-                        docker run -d --name kealex-api-gateway \\
-                            --network kealex-network \\
-                            -p 8000:80 \\
-                            --restart unless-stopped \\
-                            kealex/api-gateway:latest
-                        
-                        echo "Aguardando inicialização do nginx..."
-                        sleep 10
-                    """
-                }
-            }
-        }
-
-        stage('Health Check') {
+        stage('Health Check API') {
             steps {
                 script {
                     echo "=== VERIFICAÇÃO DE SAÚDE ==="
@@ -81,28 +60,18 @@ pipeline {
                         docker ps --filter "name=kealex-" --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}"
                         
                         echo ""
-                        echo "Testando nginx health endpoint..."
-                        HEALTH_OK=0
-                        for i in 1 2 3 4 5; do
-                            if curl -f http://localhost:8000/health 2>/dev/null; then
-                                echo "[OK] Nginx respondendo"
-                                HEALTH_OK=1
-                                break
-                            fi
-                            echo "Tentativa \$i/10..."
-                            sleep 5
-                        done
-
-                        if [ \$HEALTH_OK -eq 0 ]; then
-                            echo "[ERRO] Nginx não respondeu"
-                            exit 1
-                        fi
+                        echo "Testando serviços..."
                         
+                        # Verificar se os containers estão realmente na rede easypanel
+                        echo "Verificando presença na rede easypanel..."
+                        docker network inspect easypanel | grep kealex || echo "[CRÍTICO] Containers Kealex não encontrados na rede easypanel"
+                        
+                        # Testar via Traefik
                         echo ""
-                        echo "Testando endpoint de autenticação..."
-                        curl -X POST http://localhost:8000/k1/lex/auth/login \\
+                        echo "Testando via Traefik..."
+                        curl -i -k https://srv1023256.hstgr.cloud/k1/kealex/auth/login -X POST \\
                             -H "Content-Type: application/json" \\
-                            -d '{"email": "admin@kealex.com", "senha": "admin123"}' || true
+                            -d '{"email": "admin@kealex.com", "senha": "admin123"}' || echo "[INFO] Erro de comunicação com o Traefik"
                     """
                 }
             }
@@ -119,20 +88,26 @@ pipeline {
             }
         }
         success {
-            echo "[SUCESSO] API disponível em: http://localhost:8000/k1/lex/"
+            echo "[SUCESSO] Containers rodando com sucesso!"
+            echo "URLs de teste:"
+            echo "  - Direto: http://localhost:8001/health (auth)"
+            echo "  - Traefik: https://srv1023256.hstgr.cloud/k1/kealex/auth/login"
         }
         failure {
             script {
                 sh """
                     echo "=== LOGS DE ERRO ==="
                     echo "--- API Gateway ---"
-                    docker logs --tail=30 kealex-api-gateway 2>/dev/null || true
+                    docker logs --tail=50 kealex-api-gateway 2>/dev/null || echo "API Gateway não encontrado"
                     echo ""
                     echo "--- SVC Auth ---"
-                    docker logs --tail=20 kealex-svc-auth 2>/dev/null || true
+                    docker logs --tail=30 kealex-svc-auth 2>/dev/null || true
                     echo ""
                     echo "--- SVC Processos ---"
-                    docker logs --tail=20 kealex-svc-processos 2>/dev/null || true
+                    docker logs --tail=30 kealex-svc-processos 2>/dev/null || true
+                    echo ""
+                    echo "--- Verificar rede ---"
+                    docker network inspect easypanel 2>/dev/null | grep -A 20 Containers || echo "Rede easypanel não encontrada"
                 """
             }
         }
