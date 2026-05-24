@@ -102,6 +102,9 @@ pipeline {
             script {
                 sh """
                     echo "=== LOGS DE ERRO ==="
+                    echo "--- API Gateway ---"
+                    docker logs --tail=50 kealex-api-gateway 2>/dev/null || echo "API Gateway não encontrado"
+                    echo ""
                     echo "--- SVC Auth ---"
                     docker logs --tail=30 kealex-svc-auth 2>/dev/null || true
                     echo ""
