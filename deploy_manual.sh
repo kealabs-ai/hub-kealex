@@ -61,7 +61,7 @@ echo "7. TESTE DE CONECTIVIDADE"
 echo "========================"
 for i in {1..10}; do
     echo "Tentativa $i/10"
-    if curl -f -s http://localhost:8000/v1/lex/auth/me >/dev/null 2>&1; then
+    if curl -f -s http://localhost:8000/k1/lex/auth/me >/dev/null 2>&1; then
         echo "[OK] API respondendo!"
         break
     elif [ $i -eq 10 ]; then
@@ -77,7 +77,7 @@ echo ""
 
 echo "8. TESTE DE LOGIN"
 echo "================"
-RESPONSE=$(curl -s -w "%{http_code}" -X POST http://localhost:8000/v1/lex/auth/login \
+RESPONSE=$(curl -s -w "%{http_code}" -X POST http://localhost:8000/k1/lex/auth/login \
     -H "Content-Type: application/json" \
     -d '{"email": "admin@kealex.com", "senha": "admin123"}')
 
@@ -92,7 +92,7 @@ echo ""
 
 echo "9. INFORMACOES FINAIS"
 echo "===================="
-echo "API disponível em: http://localhost:8000/v1/lex/"
+echo "API disponível em: http://localhost:8000/k1/lex/"
 echo "Documentação: http://localhost:8000/docs"
 echo ""
 echo "Containers rodando:"

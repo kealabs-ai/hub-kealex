@@ -38,7 +38,6 @@ pipeline {
             steps {
                 script {
                     echo "=== DEPLOY DOS CONTAINERS ==="
-                    // Usar docker-compose é muito mais seguro e mantém as labels do Traefik
                     sh """
                         export SECRET_KEY='${SECRET_KEY}'
                         export DATABASE_URL='${DATABASE_URL}'
@@ -51,7 +50,7 @@ pipeline {
             }
         }
 
-        stage('Health Check') {
+        stage('Setup API Gateway') {
             steps {
                 script {
                     sh """

@@ -71,7 +71,7 @@ set /a attempts=0
 set /a attempts+=1
 echo Tentativa %attempts%/10
 
-curl -f -s http://localhost:8000/v1/lex/auth/me >nul 2>&1
+curl -f -s http://localhost:8000/k1/lex/auth/me >nul 2>&1
 if %errorlevel% equ 0 (
     echo [OK] API respondendo!
     goto test_success
@@ -93,7 +93,7 @@ echo.
 
 echo 8. TESTE DE LOGIN
 echo =================
-curl -s -X POST http://localhost:8000/v1/lex/auth/login ^
+curl -s -X POST http://localhost:8000/k1/lex/auth/login ^
     -H "Content-Type: application/json" ^
     -d "{\"email\": \"admin@kealex.com\", \"senha\": \"admin123\"}" > temp_login.json
 
@@ -112,7 +112,7 @@ echo.
 
 echo 9. INFORMACOES FINAIS
 echo =====================
-echo API disponível em: http://localhost:8000/v1/lex/
+echo API disponível em: http://localhost:8000/k1/lex/
 echo Documentação: http://localhost:8000/docs
 echo.
 echo Containers rodando:
