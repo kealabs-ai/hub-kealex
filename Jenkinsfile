@@ -38,7 +38,6 @@ pipeline {
             steps {
                 script {
                     echo "=== DEPLOY DOS CONTAINERS ==="
-                    // Usar docker-compose é muito mais seguro e mantém as labels do Traefik
                     sh """
                         export SECRET_KEY='${SECRET_KEY}'
                         export DATABASE_URL='${DATABASE_URL}'
@@ -51,13 +50,10 @@ pipeline {
             }
         }
 
-        stage('Health Check') {
+        stage('Setup API Gateway') {
             steps {
                 script {
                     sh """
-                        echo "Aguardando inicialização dos microserviços..."
-                        sleep 20
-                        
                         # Iniciar API Gateway
                         docker run -d --name kealex-api-gateway \\
                             --network kealex-network \\
@@ -72,7 +68,7 @@ pipeline {
             }
         }
 
-        stage('Health Check') {
+        stage('Health Check API') {
             steps {
                 script {
                     echo "=== VERIFICAÇÃO DE SAÚDE ==="
@@ -83,15 +79,21 @@ pipeline {
                         
                         echo ""
                         echo "Testando nginx health endpoint..."
+                        HEALTH_OK=0
                         for i in 1 2 3 4 5; do
                             if curl -f http://localhost:8000/health 2>/dev/null; then
                                 echo "[OK] Nginx respondendo"
-                                exit 0
+                                HEALTH_OK=1
+                                break
                             fi
                             echo "Tentativa \$i/10..."
                             sleep 5
                         done
-                        exit 1
+                        
+                        if [ \$HEALTH_OK -eq 0 ]; then
+                            echo "[ERRO] Nginx não respondeu"
+                            exit 1
+                        fi
                         
                         echo ""
                         echo "Testando endpoint de autenticação..."

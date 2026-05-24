@@ -82,15 +82,21 @@ pipeline {
                         
                         echo ""
                         echo "Testando nginx health endpoint..."
+                        HEALTH_OK=0
                         for i in 1 2 3 4 5; do
                             if curl -f http://localhost:8000/health 2>/dev/null; then
                                 echo "[OK] Nginx respondendo"
-                                exit 0
+                                HEALTH_OK=1
+                                break
                             fi
                             echo "Tentativa \$i/10..."
                             sleep 5
                         done
-                        exit 1
+                        
+                        if [ \$HEALTH_OK -eq 0 ]; then
+                            echo "[ERRO] Nginx não respondeu"
+                            exit 1
+                        fi
                         
                         echo ""
                         echo "Testando endpoint de autenticação..."
