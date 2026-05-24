@@ -41,7 +41,7 @@ pipeline {
                     sh """
                         export SECRET_KEY='${SECRET_KEY}'
                         export DATABASE_URL='${DATABASE_URL}'
-                        docker-compose -f docker-compose.yml up -d --remove-orphans
+                        docker compose -f docker-compose.yml up -d --remove-orphans
                     """
 
                     echo "Aguardando inicialização dos microserviços..."
@@ -54,12 +54,12 @@ pipeline {
             steps {
                 script {
                     sh """
-                        # Remover se já existir para evitar erro de nome
-                        docker rm -f kealex-api-gateway || true
+                        echo "Aguardando inicialização dos microserviços..."
+                        sleep 20
                         
                         # Iniciar API Gateway
                         docker run -d --name kealex-api-gateway \\
-                            --network easypanel \\
+                            --network kealex-network \\
                             -p 8000:80 \\
                             --restart unless-stopped \\
                             kealex/api-gateway:latest
@@ -92,7 +92,7 @@ pipeline {
                             echo "Tentativa \$i/10..."
                             sleep 5
                         done
-                        
+
                         if [ \$HEALTH_OK -eq 0 ]; then
                             echo "[ERRO] Nginx não respondeu"
                             exit 1
