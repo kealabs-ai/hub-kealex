@@ -38,10 +38,11 @@ pipeline {
             steps {
                 script {
                     echo "=== DEPLOY DOS CONTAINERS ==="
+                    // Usar docker-compose é muito mais seguro e mantém as labels do Traefik
                     sh """
                         export SECRET_KEY='${SECRET_KEY}'
                         export DATABASE_URL='${DATABASE_URL}'
-                        docker compose -f docker-compose.yml up -d --remove-orphans
+                        docker-compose -f docker-compose.yml up -d --remove-orphans
                     """
 
                     echo "Aguardando inicialização dos microserviços..."
@@ -50,13 +51,16 @@ pipeline {
             }
         }
 
-        stage('Setup API Gateway') {
+        stage('Health Check') {
             steps {
                 script {
                     sh """
+                        # Remover se já existir para evitar erro de nome
+                        docker rm -f kealex-api-gateway || true
+                        
                         # Iniciar API Gateway
                         docker run -d --name kealex-api-gateway \\
-                            --network kealex-network \\
+                            --network easypanel \\
                             -p 8000:80 \\
                             --restart unless-stopped \\
                             kealex/api-gateway:latest
@@ -68,7 +72,7 @@ pipeline {
             }
         }
 
-        stage('Health Check API') {
+        stage('Health Check') {
             steps {
                 script {
                     echo "=== VERIFICAÇÃO DE SAÚDE ==="
@@ -79,25 +83,19 @@ pipeline {
                         
                         echo ""
                         echo "Testando nginx health endpoint..."
-                        HEALTH_OK=0
                         for i in 1 2 3 4 5; do
                             if curl -f http://localhost:8000/health 2>/dev/null; then
                                 echo "[OK] Nginx respondendo"
-                                HEALTH_OK=1
-                                break
+                                exit 0
                             fi
                             echo "Tentativa \$i/10..."
                             sleep 5
                         done
-                        
-                        if [ \$HEALTH_OK -eq 0 ]; then
-                            echo "[ERRO] Nginx não respondeu"
-                            exit 1
-                        fi
+                        exit 1
                         
                         echo ""
                         echo "Testando endpoint de autenticação..."
-                        curl -X POST http://localhost:8000/k1/lex/auth/login \\
+                        curl -X POST http://localhost:8000/v1/lex/auth/login \\
                             -H "Content-Type: application/json" \\
                             -d '{"email": "admin@kealex.com", "senha": "admin123"}' || true
                     """
@@ -116,7 +114,7 @@ pipeline {
             }
         }
         success {
-            echo "[SUCESSO] API disponível em: http://localhost:8000/k1/lex/"
+            echo "[SUCESSO] API disponível em: http://localhost:8000/v1/lex/"
         }
         failure {
             script {

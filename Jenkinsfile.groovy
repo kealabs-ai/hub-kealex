@@ -41,7 +41,7 @@ pipeline {
                     sh """
                         export SECRET_KEY='${SECRET_KEY}'
                         export DATABASE_URL='${DATABASE_URL}'
-                        docker compose -f docker-compose.yml up -d --remove-orphans
+                        docker-compose -f docker-compose.yml up -d --remove-orphans
                     """
 
                     echo "Aguardando inicialização dos microserviços..."
@@ -54,12 +54,12 @@ pipeline {
             steps {
                 script {
                     sh """
-                        echo "Aguardando inicialização dos microserviços..."
-                        sleep 20
+                        # Remover se já existir para evitar erro de nome
+                        docker rm -f kealex-api-gateway || true
                         
                         # Iniciar API Gateway
                         docker run -d --name kealex-api-gateway \\
-                            --network kealex-network \\
+                            --network easypanel \\
                             -p 8000:80 \\
                             --restart unless-stopped \\
                             kealex/api-gateway:latest

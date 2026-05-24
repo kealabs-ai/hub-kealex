@@ -131,14 +131,15 @@ services:
       - "traefik.http.routers.kealex-prazos.tls=true"
       - "traefik.http.routers.kealex-prazos.service=kealex-prazos"
       - "traefik.http.services.kealex-prazos.loadbalancer.server.port=8000"
-      - "traefik.http.routers.kealex-prazos.middlewares=kealex-strip,kealex-cors"
+      - "traefik.http.middlewares.kealex-praz-strip.stripprefix.prefixes=/k1/kealex"
+      - "traefik.http.routers.kealex-prazos.middlewares=kealex-praz-strip,kealex-auth-cors"
     networks:
       - easypanel
     restart: unless-stopped
     ports:
       - "8005:8000"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -158,14 +159,15 @@ services:
       - "traefik.http.routers.kealex-usuarios.tls=true"
       - "traefik.http.routers.kealex-usuarios.service=kealex-usuarios"
       - "traefik.http.services.kealex-usuarios.loadbalancer.server.port=8000"
-      - "traefik.http.routers.kealex-usuarios.middlewares=kealex-strip,kealex-cors"
+      - "traefik.http.middlewares.kealex-user-strip.stripprefix.prefixes=/k1/kealex"
+      - "traefik.http.routers.kealex-usuarios.middlewares=kealex-user-strip,kealex-auth-cors"
     networks:
       - easypanel
     restart: unless-stopped
     ports:
       - "8006:8000"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -185,14 +187,15 @@ services:
       - "traefik.http.routers.kealex-configuracoes.tls=true"
       - "traefik.http.routers.kealex-configuracoes.service=kealex-configuracoes"
       - "traefik.http.services.kealex-configuracoes.loadbalancer.server.port=8000"
-      - "traefik.http.routers.kealex-configuracoes.middlewares=kealex-strip,kealex-cors"
+      - "traefik.http.middlewares.kealex-conf-strip.stripprefix.prefixes=/k1/kealex"
+      - "traefik.http.routers.kealex-configuracoes.middlewares=kealex-conf-strip,kealex-auth-cors"
     networks:
       - easypanel
     restart: unless-stopped
     ports:
       - "8007:8000"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -212,14 +215,15 @@ services:
       - "traefik.http.routers.kealex-escritorios.tls=true"
       - "traefik.http.routers.kealex-escritorios.service=kealex-escritorios"
       - "traefik.http.services.kealex-escritorios.loadbalancer.server.port=8000"
-      - "traefik.http.routers.kealex-escritorios.middlewares=kealex-strip,kealex-cors"
+      - "traefik.http.middlewares.kealex-esc-strip.stripprefix.prefixes=/k1/kealex"
+      - "traefik.http.routers.kealex-escritorios.middlewares=kealex-esc-strip,kealex-auth-cors"
     networks:
       - easypanel
     restart: unless-stopped
     ports:
       - "8008:8000"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -239,14 +243,15 @@ services:
       - "traefik.http.routers.kealex-clientes.tls=true"
       - "traefik.http.routers.kealex-clientes.service=kealex-clientes"
       - "traefik.http.services.kealex-clientes.loadbalancer.server.port=8000"
-      - "traefik.http.routers.kealex-clientes.middlewares=kealex-strip,kealex-cors"
+      - "traefik.http.middlewares.kealex-cli-strip.stripprefix.prefixes=/k1/kealex"
+      - "traefik.http.routers.kealex-clientes.middlewares=kealex-cli-strip,kealex-auth-cors"
     networks:
       - easypanel
     restart: unless-stopped
     ports:
       - "8009:8000"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
