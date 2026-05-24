@@ -39,9 +39,11 @@ pipeline {
                 script {
                     echo "=== DEPLOY DOS CONTAINERS ==="
                     sh """
+                        # Limpar containers antigos do Kealex para evitar conflitos de porta/nome
+                        docker ps -aq --filter "name=kealex-" | xargs -r docker rm -f || true
                         export SECRET_KEY='${SECRET_KEY}'
                         export DATABASE_URL='${DATABASE_URL}'
-                        docker compose up -d --remove-orphans
+                        docker compose up -d --build --remove-orphans
                     """
 
                     echo "Aguardando inicialização dos microserviços..."

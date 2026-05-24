@@ -21,6 +21,7 @@ services:
       - "traefik.http.middlewares.kealex-auth-cors.headers.accesscontrolallowheaders=*"
       - "traefik.http.middlewares.kealex-auth-cors.headers.accesscontrolallowcredentials=true"
       - "traefik.http.routers.kealex-auth.middlewares=kealex-auth-strip,kealex-auth-cors"
+      - "traefik.http.routers.kealex-auth.priority=100"
     networks:
       - easypanel
     restart: unless-stopped
@@ -49,6 +50,7 @@ services:
       - "traefik.http.services.kealex-processos.loadbalancer.server.port=8000"
       - "traefik.http.middlewares.kealex-proc-strip.stripprefix.prefixes=/k1/kealex"
       - "traefik.http.routers.kealex-processos.middlewares=kealex-proc-strip,kealex-auth-cors"
+      - "traefik.http.routers.kealex-processos.priority=100"
     networks:
       - easypanel
     restart: unless-stopped
@@ -77,6 +79,7 @@ services:
       - "traefik.http.services.kealex-documentos.loadbalancer.server.port=8000"
       - "traefik.http.middlewares.kealex-doc-strip.stripprefix.prefixes=/k1/kealex"
       - "traefik.http.routers.kealex-documentos.middlewares=kealex-doc-strip,kealex-auth-cors"
+      - "traefik.http.routers.kealex-documentos.priority=100"
     networks:
       - easypanel
     restart: unless-stopped
@@ -105,6 +108,7 @@ services:
       - "traefik.http.services.kealex-financeiro.loadbalancer.server.port=8000"
       - "traefik.http.middlewares.kealex-fin-strip.stripprefix.prefixes=/k1/kealex"
       - "traefik.http.routers.kealex-financeiro.middlewares=kealex-fin-strip,kealex-auth-cors"
+      - "traefik.http.routers.kealex-financeiro.priority=100"
     networks:
       - easypanel
     restart: unless-stopped
@@ -133,6 +137,7 @@ services:
       - "traefik.http.services.kealex-prazos.loadbalancer.server.port=8000"
       - "traefik.http.middlewares.kealex-praz-strip.stripprefix.prefixes=/k1/kealex"
       - "traefik.http.routers.kealex-prazos.middlewares=kealex-praz-strip,kealex-auth-cors"
+      - "traefik.http.routers.kealex-prazos.priority=100"
     networks:
       - easypanel
     restart: unless-stopped
@@ -161,6 +166,7 @@ services:
       - "traefik.http.services.kealex-usuarios.loadbalancer.server.port=8000"
       - "traefik.http.middlewares.kealex-user-strip.stripprefix.prefixes=/k1/kealex"
       - "traefik.http.routers.kealex-usuarios.middlewares=kealex-user-strip,kealex-auth-cors"
+      - "traefik.http.routers.kealex-usuarios.priority=100"
     networks:
       - easypanel
     restart: unless-stopped
@@ -189,6 +195,7 @@ services:
       - "traefik.http.services.kealex-configuracoes.loadbalancer.server.port=8000"
       - "traefik.http.middlewares.kealex-conf-strip.stripprefix.prefixes=/k1/kealex"
       - "traefik.http.routers.kealex-configuracoes.middlewares=kealex-conf-strip,kealex-auth-cors"
+      - "traefik.http.routers.kealex-configuracoes.priority=100"
     networks:
       - easypanel
     restart: unless-stopped
@@ -217,6 +224,7 @@ services:
       - "traefik.http.services.kealex-escritorios.loadbalancer.server.port=8000"
       - "traefik.http.middlewares.kealex-esc-strip.stripprefix.prefixes=/k1/kealex"
       - "traefik.http.routers.kealex-escritorios.middlewares=kealex-esc-strip,kealex-auth-cors"
+      - "traefik.http.routers.kealex-escritorios.priority=100"
     networks:
       - easypanel
     restart: unless-stopped
@@ -245,6 +253,7 @@ services:
       - "traefik.http.services.kealex-clientes.loadbalancer.server.port=8000"
       - "traefik.http.middlewares.kealex-cli-strip.stripprefix.prefixes=/k1/kealex"
       - "traefik.http.routers.kealex-clientes.middlewares=kealex-cli-strip,kealex-auth-cors"
+      - "traefik.http.routers.kealex-clientes.priority=100"
     networks:
       - easypanel
     restart: unless-stopped
@@ -256,6 +265,25 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  api-gateway:
+    image: kealex/api-gateway:latest
+    container_name: kealex-api-gateway
+    build: ./api-gateway
+    depends_on:
+      - svc-auth
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=easypanel"
+      - "traefik.http.routers.kealex-gw.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/lex`)"
+      - "traefik.http.routers.kealex-gw.entrypoints=websecure"
+      - "traefik.http.routers.kealex-gw.tls=true"
+      - "traefik.http.routers.kealex-gw.priority=100"
+    networks:
+      - easypanel
+    restart: unless-stopped
+    ports:
+      - "8000:80"
 
 networks:
   easypanel:
