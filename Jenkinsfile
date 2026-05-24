@@ -42,7 +42,7 @@ pipeline {
                         export SECRET_KEY='${SECRET_KEY}'
                         export DATABASE_URL='${DATABASE_URL}'
                         cd /var/jenkins_home/workspace/hub_kealex
-                        /usr/local/bin/docker-compose -f docker-compose.yml up -d --remove-orphans || docker compose -f docker-compose.yml up -d --remove-orphans
+                        /usr/local/bin/docker-compose -f docker-compose.yml up -d --remove-orphans || docker-compose -f docker-compose.yml up -d --remove-orphans
                     """
 
                     echo "Aguardando inicialização dos microserviços..."
