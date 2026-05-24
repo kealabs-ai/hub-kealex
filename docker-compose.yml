@@ -13,16 +13,19 @@ services:
       - "traefik.http.routers.kealex-auth.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/kealex/auth`)"
       - "traefik.http.routers.kealex-auth.entrypoints=websecure"
       - "traefik.http.routers.kealex-auth.tls=true"
+      - "traefik.http.routers.kealex-auth.service=kealex-auth"
+      - "traefik.http.services.kealex-auth.loadbalancer.server.port=8000"
       - "traefik.http.middlewares.kealex-strip.stripprefix.prefixes=/k1/kealex"
       - "traefik.http.middlewares.kealex-cors.headers.accesscontrolalloworiginlist=*"
       - "traefik.http.middlewares.kealex-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
       - "traefik.http.middlewares.kealex-cors.headers.accesscontrolallowheaders=*"
       - "traefik.http.middlewares.kealex-cors.headers.accesscontrolallowcredentials=true"
       - "traefik.http.routers.kealex-auth.middlewares=kealex-strip,kealex-cors"
-      - "traefik.http.services.kealex-auth.loadbalancer.server.port=8000"
     networks:
       - easypanel
     restart: unless-stopped
+    ports:
+      - "8001:8000"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s
@@ -42,11 +45,14 @@ services:
       - "traefik.http.routers.kealex-processos.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/kealex/processos`)"
       - "traefik.http.routers.kealex-processos.entrypoints=websecure"
       - "traefik.http.routers.kealex-processos.tls=true"
-      - "traefik.http.routers.kealex-processos.middlewares=kealex-strip,kealex-cors"
+      - "traefik.http.routers.kealex-processos.service=kealex-processos"
       - "traefik.http.services.kealex-processos.loadbalancer.server.port=8000"
+      - "traefik.http.routers.kealex-processos.middlewares=kealex-strip,kealex-cors"
     networks:
       - easypanel
     restart: unless-stopped
+    ports:
+      - "8002:8000"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s
@@ -66,11 +72,14 @@ services:
       - "traefik.http.routers.kealex-documentos.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/kealex/documentos`)"
       - "traefik.http.routers.kealex-documentos.entrypoints=websecure"
       - "traefik.http.routers.kealex-documentos.tls=true"
-      - "traefik.http.routers.kealex-documentos.middlewares=kealex-strip,kealex-cors"
+      - "traefik.http.routers.kealex-documentos.service=kealex-documentos"
       - "traefik.http.services.kealex-documentos.loadbalancer.server.port=8000"
+      - "traefik.http.routers.kealex-documentos.middlewares=kealex-strip,kealex-cors"
     networks:
       - easypanel
     restart: unless-stopped
+    ports:
+      - "8003:8000"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s
@@ -90,11 +99,14 @@ services:
       - "traefik.http.routers.kealex-financeiro.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/kealex/financeiro`)"
       - "traefik.http.routers.kealex-financeiro.entrypoints=websecure"
       - "traefik.http.routers.kealex-financeiro.tls=true"
-      - "traefik.http.routers.kealex-financeiro.middlewares=kealex-strip,kealex-cors"
+      - "traefik.http.routers.kealex-financeiro.service=kealex-financeiro"
       - "traefik.http.services.kealex-financeiro.loadbalancer.server.port=8000"
+      - "traefik.http.routers.kealex-financeiro.middlewares=kealex-strip,kealex-cors"
     networks:
       - easypanel
     restart: unless-stopped
+    ports:
+      - "8004:8000"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s
@@ -114,11 +126,14 @@ services:
       - "traefik.http.routers.kealex-prazos.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/kealex/prazos`)"
       - "traefik.http.routers.kealex-prazos.entrypoints=websecure"
       - "traefik.http.routers.kealex-prazos.tls=true"
-      - "traefik.http.routers.kealex-prazos.middlewares=kealex-strip,kealex-cors"
+      - "traefik.http.routers.kealex-prazos.service=kealex-prazos"
       - "traefik.http.services.kealex-prazos.loadbalancer.server.port=8000"
+      - "traefik.http.routers.kealex-prazos.middlewares=kealex-strip,kealex-cors"
     networks:
       - easypanel
     restart: unless-stopped
+    ports:
+      - "8005:8000"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s
@@ -138,11 +153,14 @@ services:
       - "traefik.http.routers.kealex-usuarios.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/kealex/usuarios`)"
       - "traefik.http.routers.kealex-usuarios.entrypoints=websecure"
       - "traefik.http.routers.kealex-usuarios.tls=true"
-      - "traefik.http.routers.kealex-usuarios.middlewares=kealex-strip,kealex-cors"
+      - "traefik.http.routers.kealex-usuarios.service=kealex-usuarios"
       - "traefik.http.services.kealex-usuarios.loadbalancer.server.port=8000"
+      - "traefik.http.routers.kealex-usuarios.middlewares=kealex-strip,kealex-cors"
     networks:
       - easypanel
     restart: unless-stopped
+    ports:
+      - "8006:8000"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s
@@ -162,11 +180,14 @@ services:
       - "traefik.http.routers.kealex-configuracoes.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/kealex/configuracoes`)"
       - "traefik.http.routers.kealex-configuracoes.entrypoints=websecure"
       - "traefik.http.routers.kealex-configuracoes.tls=true"
-      - "traefik.http.routers.kealex-configuracoes.middlewares=kealex-strip,kealex-cors"
+      - "traefik.http.routers.kealex-configuracoes.service=kealex-configuracoes"
       - "traefik.http.services.kealex-configuracoes.loadbalancer.server.port=8000"
+      - "traefik.http.routers.kealex-configuracoes.middlewares=kealex-strip,kealex-cors"
     networks:
       - easypanel
     restart: unless-stopped
+    ports:
+      - "8007:8000"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s
@@ -186,11 +207,14 @@ services:
       - "traefik.http.routers.kealex-escritorios.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/kealex/escritorios`)"
       - "traefik.http.routers.kealex-escritorios.entrypoints=websecure"
       - "traefik.http.routers.kealex-escritorios.tls=true"
-      - "traefik.http.routers.kealex-escritorios.middlewares=kealex-strip,kealex-cors"
+      - "traefik.http.routers.kealex-escritorios.service=kealex-escritorios"
       - "traefik.http.services.kealex-escritorios.loadbalancer.server.port=8000"
+      - "traefik.http.routers.kealex-escritorios.middlewares=kealex-strip,kealex-cors"
     networks:
       - easypanel
     restart: unless-stopped
+    ports:
+      - "8008:8000"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s
@@ -210,11 +234,14 @@ services:
       - "traefik.http.routers.kealex-clientes.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/kealex/clientes`)"
       - "traefik.http.routers.kealex-clientes.entrypoints=websecure"
       - "traefik.http.routers.kealex-clientes.tls=true"
-      - "traefik.http.routers.kealex-clientes.middlewares=kealex-strip,kealex-cors"
+      - "traefik.http.routers.kealex-clientes.service=kealex-clientes"
       - "traefik.http.services.kealex-clientes.loadbalancer.server.port=8000"
+      - "traefik.http.routers.kealex-clientes.middlewares=kealex-strip,kealex-cors"
     networks:
       - easypanel
     restart: unless-stopped
+    ports:
+      - "8009:8000"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s
