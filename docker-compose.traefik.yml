@@ -23,12 +23,6 @@ services:
     networks:
       - easypanel
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
   svc-processos:
     build: ./svc-processos
@@ -47,12 +41,6 @@ services:
     networks:
       - easypanel
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
   svc-documentos:
     build: ./svc-documentos
@@ -71,12 +59,6 @@ services:
     networks:
       - easypanel
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
   svc-financeiro:
     build: ./svc-financeiro
@@ -95,12 +77,6 @@ services:
     networks:
       - easypanel
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
   svc-prazos:
     build: ./svc-prazos
@@ -119,12 +95,6 @@ services:
     networks:
       - easypanel
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
   svc-usuarios:
     build: ./svc-usuarios
@@ -143,12 +113,6 @@ services:
     networks:
       - easypanel
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
   svc-configuracoes:
     build: ./svc-configuracoes
@@ -167,12 +131,6 @@ services:
     networks:
       - easypanel
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
   svc-escritorios:
     build: ./svc-escritorios
@@ -191,12 +149,6 @@ services:
     networks:
       - easypanel
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
   svc-clientes:
     build: ./svc-clientes
@@ -215,12 +167,6 @@ services:
     networks:
       - easypanel
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
 networks:
   easypanel:
