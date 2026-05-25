@@ -159,7 +159,7 @@ services:
     image: kealex/api-gateway:latest
     container_name: kealex-api-gateway
     ports:
-      - "8000:80"
+      - "18000:80"
     depends_on:
       - kealex-svc-auth
       - kealex-svc-processos

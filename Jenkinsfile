@@ -64,8 +64,8 @@ pipeline {
                         echo "Usando comando: \$COMPOSE_CMD"
                         \$COMPOSE_CMD --version
                         
-                        \$COMPOSE_CMD down --remove-orphans || true
-                        \$COMPOSE_CMD -f docker-compose.local.yml up -d --build --remove-orphans
+                        \$COMPOSE_CMD -f docker-compose.local.yml --project-name kealex down --remove-orphans || true
+                        \$COMPOSE_CMD -f docker-compose.local.yml up -d --build --remove-orphans --project-name kealex
                     """
 
                     echo "Aguardando inicialização dos microserviços..."
@@ -86,7 +86,7 @@ pipeline {
                         echo ""
                         echo "Testando nginx health endpoint..."
                         for i in 1 2 3 4 5 6 7 8 9 10; do
-                            if curl -f http://localhost:8000/health 2>/dev/null; then
+                            if curl -f http://localhost:18000/health 2>/dev/null; then
                                 echo "[OK] Nginx respondendo"
                                 break
                             fi
@@ -118,14 +118,28 @@ pipeline {
             }
         }
         success {
-            echo "[SUCESSO] API disponível em: http://localhost:8000/v1/lex/"
+            echo "[SUCESSO] API disponível em: http://localhost:18000/v1/lex/"
         }
         failure {
             script {
                 sh """
                     echo "=== LOGS DE ERRO ==="
                     echo "--- API Gateway ---"
-                    docker logs --tail=30 kealex-api-gateway 2>/dev/null || true
+                    echo "Verificando logs detalhados do nginx..."
+                    docker logs kealex-api-gateway 2>&1 | tail -50
+                    
+                    echo ""
+                    echo "Testando configuração do nginx..."
+                    docker exec kealex-api-gateway nginx -t 2>&1 || echo "Erro na configuração do nginx"
+                    
+                    echo ""
+                    echo "Verificando processos dentro do container..."
+                    docker exec kealex-api-gateway ps aux 2>&1 || echo "Container não está rodando"
+                    
+                    echo ""
+                    echo "Verificando se a porta 8000 está ocupada no host..."
+                    netstat -tlnp | grep :8000 || echo "Porta 8000 livre"
+                    
                     echo ""
                     echo "--- SVC Auth ---"
                     docker logs --tail=20 kealex-svc-auth 2>/dev/null || true
