@@ -1,5 +1,12 @@
 version: '3.8'
 
+networks:
+  easypanel:
+    external: true
+  kealex-internal:
+    driver: bridge
+    internal: false
+
 services:
   kealex-svc-auth:
     build: ./svc-auth
@@ -10,12 +17,12 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-auth.rule=(Host(`srv1023256.hstgr.cloud`) || Host(`kealex.com.br`) || Host(`www.kealex.com.br`)) && PathPrefix(`/k1/lex/auth`)"
+      - "traefik.http.routers.kealex-auth.rule=(Host(`srv1023256.hstgr.cloud`) || Host(`kealex.com.br`) || Host(`www.kealex.com.br`)) && PathPrefix(`/v1/lex/auth`)"
       - "traefik.http.routers.kealex-auth.entrypoints=https"
       - "traefik.http.routers.kealex-auth.tls=true"
       - "traefik.http.routers.kealex-auth.service=kealex-auth"
       - "traefik.http.services.kealex-auth.loadbalancer.server.port=8000"
-      - "traefik.http.middlewares.kealex-auth-strip.stripprefix.prefixes=/k1/lex"
+      - "traefik.http.middlewares.kealex-auth-strip.stripprefix.prefixes=/v1/lex"
       - "traefik.http.middlewares.kealex-cors.headers.accesscontrolalloworiginlist=*"
       - "traefik.http.middlewares.kealex-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
       - "traefik.http.middlewares.kealex-cors.headers.accesscontrolallowheaders=*"
@@ -24,6 +31,7 @@ services:
       - "traefik.http.routers.kealex-auth.priority=100"
     networks:
       - easypanel
+      - kealex-internal
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
@@ -41,16 +49,17 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-processos.rule=(Host(`srv1023256.hstgr.cloud`) || Host(`kealex.com.br`) || Host(`www.kealex.com.br`)) && PathPrefix(`/k1/lex/processos`)"
+      - "traefik.http.routers.kealex-processos.rule=(Host(`srv1023256.hstgr.cloud`) || Host(`kealex.com.br`) || Host(`www.kealex.com.br`)) && PathPrefix(`/v1/lex/processos`)"
       - "traefik.http.routers.kealex-processos.entrypoints=https"
       - "traefik.http.routers.kealex-processos.tls=true"
       - "traefik.http.routers.kealex-processos.service=kealex-processos"
       - "traefik.http.services.kealex-processos.loadbalancer.server.port=8000"
-      - "traefik.http.middlewares.kealex-proc-strip.stripprefix.prefixes=/k1/lex"
+      - "traefik.http.middlewares.kealex-proc-strip.stripprefix.prefixes=/v1/lex"
       - "traefik.http.routers.kealex-processos.middlewares=kealex-proc-strip,kealex-cors"
       - "traefik.http.routers.kealex-processos.priority=100"
     networks:
       - easypanel
+      - kealex-internal
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]

@@ -65,7 +65,7 @@ pipeline {
                         \$COMPOSE_CMD --version
                         
                         \$COMPOSE_CMD -f docker-compose.local.yml --project-name kealex down --remove-orphans || true
-                        \$COMPOSE_CMD -f docker-compose.local.yml up -d --build --remove-orphans --project-name kealex
+                        \$COMPOSE_CMD -f docker-compose.local.yml --project-name kealex up -d --build --remove-orphans
                     """
 
                     echo "Aguardando inicialização dos microserviços..."
