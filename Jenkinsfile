@@ -43,19 +43,29 @@ pipeline {
                         export SECRET_KEY='${SECRET_KEY}'
                         export DATABASE_URL='${DATABASE_URL}'
                         
-                        # Tentar docker compose (V2) primeiro, depois docker-compose (V1)
-                        if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
-                            echo "Usando docker compose (V2)"
-                            docker compose down --remove-orphans || true
-                            docker compose up -d --build --remove-orphans
-                        elif command -v docker-compose >/dev/null 2>&1; then
-                            echo "Usando docker-compose (V1)"
-                            docker-compose down --remove-orphans || true
-                            docker-compose up -d --build --remove-orphans
+                        # Verificar se docker-compose existe, se não, baixar
+                        if ! command -v docker-compose >/dev/null 2>&1; then
+                            echo "Baixando docker-compose..."
+                            curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-linux-x86_64" -o /tmp/docker-compose
+                            chmod +x /tmp/docker-compose
+                            # Usar diretamente do /tmp se não conseguir mover para /usr/local/bin
+                            if sudo mv /tmp/docker-compose /usr/local/bin/docker-compose 2>/dev/null; then
+                                echo "docker-compose instalado em /usr/local/bin"
+                                COMPOSE_CMD="docker-compose"
+                            else
+                                echo "Usando docker-compose do /tmp"
+                                COMPOSE_CMD="/tmp/docker-compose"
+                            fi
                         else
-                            echo "ERRO: Nem docker compose nem docker-compose encontrados"
-                            exit 1
+                            echo "docker-compose já disponível"
+                            COMPOSE_CMD="docker-compose"
                         fi
+                        
+                        echo "Usando comando: \$COMPOSE_CMD"
+                        \$COMPOSE_CMD --version
+                        
+                        \$COMPOSE_CMD down --remove-orphans || true
+                        \$COMPOSE_CMD -f docker-compose.local.yml up -d --build --remove-orphans
                     """
 
                     echo "Aguardando inicialização dos microserviços..."
