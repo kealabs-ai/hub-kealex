@@ -28,7 +28,7 @@ pipeline {
                     ]
                     
                     services.each { svc ->
-                        sh "docker build -t ${IMAGE_PREFIX}/${svc}:${TAG} ./${svc} || exit 1"
+                        sh "docker build -t kealex/${svc}:${TAG} ./${svc} || exit 1"
                     }
                 }
             }
@@ -81,8 +81,8 @@ pipeline {
                         
                         echo ""
                         echo "Testando conectividade com microserviços..."
-                        docker exec kealex-api-gateway wget -q -O- http://svc-auth:8000/health 2>/dev/null && echo "[OK] svc-auth" || echo "[ERRO] svc-auth"
-                        docker exec kealex-api-gateway wget -q -O- http://svc-processos:8000/health 2>/dev/null && echo "[OK] svc-processos" || echo "[ERRO] svc-processos"
+                        docker exec kealex-api-gateway wget -q -O- http://kealex-svc-auth:8000/health 2>/dev/null && echo "[OK] svc-auth" || echo "[ERRO] svc-auth"
+                        docker exec kealex-api-gateway wget -q -O- http://kealex-svc-processos:8000/health 2>/dev/null && echo "[OK] svc-processos" || echo "[ERRO] svc-processos"
                     """
                 }
             }
