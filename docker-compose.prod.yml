@@ -1,83 +1,288 @@
 version: '3.8'
 
+networks:
+  easypanel:
+    external: true
+  kealex-internal:
+    driver: bridge
+    internal: false
+
 services:
-  # API Gateway
-  api-gateway:
-    image: ${REGISTRY:-registry.kealex.io}/kealex/api-gateway:${TAG:-latest}
-    ports:
-      - "8000:80"
+  kealex-svc-auth:
+    build: ./svc-auth
+    image: kealex/svc-auth:latest
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=easypanel"
+      - "traefik.http.routers.kealex-auth.rule=(Host(`srv1023256.hstgr.cloud`) || Host(`kealex.com.br`) || Host(`www.kealex.com.br`)) && PathPrefix(`/v1/lex/auth`)"
+      - "traefik.http.routers.kealex-auth.entrypoints=https"
+      - "traefik.http.routers.kealex-auth.tls=true"
+      - "traefik.http.routers.kealex-auth.service=kealex-auth"
+      - "traefik.http.services.kealex-auth.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.kealex-auth-strip.stripprefix.prefixes=/v1/lex"
+      - "traefik.http.middlewares.kealex-cors.headers.accesscontrolalloworiginlist=*"
+      - "traefik.http.middlewares.kealex-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
+      - "traefik.http.middlewares.kealex-cors.headers.accesscontrolallowheaders=*"
+      - "traefik.http.middlewares.kealex-cors.headers.accesscontrolallowcredentials=true"
+      - "traefik.http.routers.kealex-auth.middlewares=kealex-auth-strip,kealex-cors"
+      - "traefik.http.routers.kealex-auth.priority=100"
+    networks:
+      - easypanel
+      - kealex-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  kealex-svc-processos:
+    build: ./svc-processos
+    image: kealex/svc-processos:latest
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=easypanel"
+      - "traefik.http.routers.kealex-processos.rule=(Host(`srv1023256.hstgr.cloud`) || Host(`kealex.com.br`) || Host(`www.kealex.com.br`)) && PathPrefix(`/v1/lex/processos`)"
+      - "traefik.http.routers.kealex-processos.entrypoints=https"
+      - "traefik.http.routers.kealex-processos.tls=true"
+      - "traefik.http.routers.kealex-processos.service=kealex-processos"
+      - "traefik.http.services.kealex-processos.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.kealex-proc-strip.stripprefix.prefixes=/v1/lex"
+      - "traefik.http.routers.kealex-processos.middlewares=kealex-proc-strip,kealex-cors"
+      - "traefik.http.routers.kealex-processos.priority=100"
+    networks:
+      - easypanel
+      - kealex-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  kealex-svc-documentos:
+    build: ./svc-documentos
+    image: kealex/svc-documentos:latest
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=easypanel"
+      - "traefik.http.routers.kealex-documentos.rule=(Host(`srv1023256.hstgr.cloud`) || Host(`kealex.com.br`) || Host(`www.kealex.com.br`)) && PathPrefix(`/v1/lex/documentos`)"
+      - "traefik.http.routers.kealex-documentos.entrypoints=https"
+      - "traefik.http.routers.kealex-documentos.tls=true"
+      - "traefik.http.routers.kealex-documentos.service=kealex-documentos"
+      - "traefik.http.services.kealex-documentos.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.kealex-doc-strip.stripprefix.prefixes=/v1/lex"
+      - "traefik.http.routers.kealex-documentos.middlewares=kealex-doc-strip,kealex-cors"
+      - "traefik.http.routers.kealex-documentos.priority=100"
+    networks:
+      - easypanel
+      - kealex-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  kealex-svc-financeiro:
+    build: ./svc-financeiro
+    image: kealex/svc-financeiro:latest
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=easypanel"
+      - "traefik.http.routers.kealex-financeiro.rule=(Host(`srv1023256.hstgr.cloud`) || Host(`kealex.com.br`) || Host(`www.kealex.com.br`)) && PathPrefix(`/v1/lex/financeiro`)"
+      - "traefik.http.routers.kealex-financeiro.entrypoints=https"
+      - "traefik.http.routers.kealex-financeiro.tls=true"
+      - "traefik.http.routers.kealex-financeiro.service=kealex-financeiro"
+      - "traefik.http.services.kealex-financeiro.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.kealex-fin-strip.stripprefix.prefixes=/v1/lex"
+      - "traefik.http.routers.kealex-financeiro.middlewares=kealex-fin-strip,kealex-cors"
+      - "traefik.http.routers.kealex-financeiro.priority=100"
+    networks:
+      - easypanel
+      - kealex-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  kealex-svc-prazos:
+    build: ./svc-prazos
+    image: kealex/svc-prazos:latest
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=easypanel"
+      - "traefik.http.routers.kealex-prazos.rule=(Host(`srv1023256.hstgr.cloud`) || Host(`kealex.com.br`) || Host(`www.kealex.com.br`)) && PathPrefix(`/v1/lex/prazos`)"
+      - "traefik.http.routers.kealex-prazos.entrypoints=https"
+      - "traefik.http.routers.kealex-prazos.tls=true"
+      - "traefik.http.routers.kealex-prazos.service=kealex-prazos"
+      - "traefik.http.services.kealex-prazos.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.kealex-praz-strip.stripprefix.prefixes=/v1/lex"
+      - "traefik.http.routers.kealex-prazos.middlewares=kealex-praz-strip,kealex-cors"
+      - "traefik.http.routers.kealex-prazos.priority=100"
+    networks:
+      - easypanel
+      - kealex-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  kealex-svc-usuarios:
+    build: ./svc-usuarios
+    image: kealex/svc-usuarios:latest
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=easypanel"
+      - "traefik.http.routers.kealex-usuarios.rule=(Host(`srv1023256.hstgr.cloud`) || Host(`kealex.com.br`) || Host(`www.kealex.com.br`)) && PathPrefix(`/v1/lex/usuarios`)"
+      - "traefik.http.routers.kealex-usuarios.entrypoints=https"
+      - "traefik.http.routers.kealex-usuarios.tls=true"
+      - "traefik.http.routers.kealex-usuarios.service=kealex-usuarios"
+      - "traefik.http.services.kealex-usuarios.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.kealex-user-strip.stripprefix.prefixes=/v1/lex"
+      - "traefik.http.routers.kealex-usuarios.middlewares=kealex-user-strip,kealex-cors"
+      - "traefik.http.routers.kealex-usuarios.priority=100"
+    networks:
+      - easypanel
+      - kealex-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  kealex-svc-configuracoes:
+    build: ./svc-configuracoes
+    image: kealex/svc-configuracoes:latest
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=easypanel"
+      - "traefik.http.routers.kealex-configuracoes.rule=(Host(`srv1023256.hstgr.cloud`) || Host(`kealex.com.br`) || Host(`www.kealex.com.br`)) && PathPrefix(`/v1/lex/configuracoes`)"
+      - "traefik.http.routers.kealex-configuracoes.entrypoints=https"
+      - "traefik.http.routers.kealex-configuracoes.tls=true"
+      - "traefik.http.routers.kealex-configuracoes.service=kealex-configuracoes"
+      - "traefik.http.services.kealex-configuracoes.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.kealex-conf-strip.stripprefix.prefixes=/v1/lex"
+      - "traefik.http.routers.kealex-configuracoes.middlewares=kealex-conf-strip,kealex-cors"
+      - "traefik.http.routers.kealex-configuracoes.priority=100"
+    networks:
+      - easypanel
+      - kealex-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  kealex-svc-escritorios:
+    build: ./svc-escritorios
+    image: kealex/svc-escritorios:latest
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=easypanel"
+      - "traefik.http.routers.kealex-escritorios.rule=(Host(`srv1023256.hstgr.cloud`) || Host(`kealex.com.br`) || Host(`www.kealex.com.br`)) && PathPrefix(`/v1/lex/escritorios`)"
+      - "traefik.http.routers.kealex-escritorios.entrypoints=https"
+      - "traefik.http.routers.kealex-escritorios.tls=true"
+      - "traefik.http.routers.kealex-escritorios.service=kealex-escritorios"
+      - "traefik.http.services.kealex-escritorios.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.kealex-esc-strip.stripprefix.prefixes=/v1/lex"
+      - "traefik.http.routers.kealex-escritorios.middlewares=kealex-esc-strip,kealex-cors"
+      - "traefik.http.routers.kealex-escritorios.priority=100"
+    networks:
+      - easypanel
+      - kealex-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  kealex-svc-clientes:
+    build: ./svc-clientes
+    image: kealex/svc-clientes:latest
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=easypanel"
+      - "traefik.http.routers.kealex-clientes.rule=(Host(`srv1023256.hstgr.cloud`) || Host(`kealex.com.br`) || Host(`www.kealex.com.br`)) && PathPrefix(`/v1/lex/clientes`)"
+      - "traefik.http.routers.kealex-clientes.entrypoints=https"
+      - "traefik.http.routers.kealex-clientes.tls=true"
+      - "traefik.http.routers.kealex-clientes.service=kealex-clientes"
+      - "traefik.http.services.kealex-clientes.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.kealex-cli-strip.stripprefix.prefixes=/v1/lex"
+      - "traefik.http.routers.kealex-clientes.middlewares=kealex-cli-strip,kealex-cors"
+      - "traefik.http.routers.kealex-clientes.priority=100"
+    networks:
+      - easypanel
+      - kealex-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  kealex-api-gateway:
+    build: ./api-gateway
+    image: kealex/api-gateway:latest
     depends_on:
-      - svc-auth
-      - svc-processos
-      - svc-documentos
-      - svc-financeiro
-      - svc-prazos
-      - svc-usuarios
-      - svc-configuracoes
-      - svc-escritorios
-      - svc-clientes
+      - kealex-svc-auth
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=easypanel"
+      - "traefik.http.routers.kealex-gw.rule=(Host(`srv1023256.hstgr.cloud`) || Host(`kealex.com.br`) || Host(`www.kealex.com.br`)) && (PathPrefix(`/v1/lex`) || PathPrefix(`/docs`))"
+      - "traefik.http.routers.kealex-gw.entrypoints=https"
+      - "traefik.http.routers.kealex-gw.tls=true"
+      - "traefik.http.routers.kealex-gw.priority=200"
+    networks:
+      - easypanel
+      - kealex-internal
     restart: unless-stopped
-
-  # Microservices
-  svc-auth:
-    image: ${REGISTRY:-registry.kealex.io}/kealex/svc-auth:${TAG:-latest}
-    environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
-    restart: unless-stopped
-
-  svc-processos:
-    image: ${REGISTRY:-registry.kealex.io}/kealex/svc-processos:${TAG:-latest}
-    environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
-    restart: unless-stopped
-
-  svc-documentos:
-    image: ${REGISTRY:-registry.kealex.io}/kealex/svc-documentos:${TAG:-latest}
-    environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
-    restart: unless-stopped
-
-  svc-financeiro:
-    image: ${REGISTRY:-registry.kealex.io}/kealex/svc-financeiro:${TAG:-latest}
-    environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
-    restart: unless-stopped
-
-  svc-prazos:
-    image: ${REGISTRY:-registry.kealex.io}/kealex/svc-prazos:${TAG:-latest}
-    environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
-    restart: unless-stopped
-
-  svc-usuarios:
-    image: ${REGISTRY:-registry.kealex.io}/kealex/svc-usuarios:${TAG:-latest}
-    environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
-    restart: unless-stopped
-
-  svc-configuracoes:
-    image: ${REGISTRY:-registry.kealex.io}/kealex/svc-configuracoes:${TAG:-latest}
-    environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
-    restart: unless-stopped
-
-  svc-escritorios:
-    image: ${REGISTRY:-registry.kealex.io}/kealex/svc-escritorios:${TAG:-latest}
-    environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
-    restart: unless-stopped
-
-  svc-clientes:
-    image: ${REGISTRY:-registry.kealex.io}/kealex/svc-clientes:${TAG:-latest}
-    environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
