@@ -12,5 +12,8 @@ RUN chmod +x /usr/local/bin/switch-nginx
 RUN echo '#!/bin/sh\ncurl -f http://localhost/health || exit 1' > /healthcheck.sh && \
     chmod +x /healthcheck.sh
 
+# Ensure nginx runs in foreground
+RUN echo 'daemon off;' >> /etc/nginx/nginx.conf
+
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD /healthcheck.sh

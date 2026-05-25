@@ -39,14 +39,23 @@ pipeline {
                 script {
                     echo "=== DEPLOY COM DOCKER COMPOSE ==="
                     
-                    def composeCmd = sh(script: "docker compose version 2>/dev/null && echo 'docker compose' || echo 'docker-compose'", returnStdout: true).trim()
-                    echo "Usando: ${composeCmd}"
-                    
                     sh """
                         export SECRET_KEY='${SECRET_KEY}'
                         export DATABASE_URL='${DATABASE_URL}'
-                        ${composeCmd} down --remove-orphans || true
-                        ${composeCmd} up -d --build --remove-orphans
+                        
+                        # Tentar docker compose (V2) primeiro, depois docker-compose (V1)
+                        if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+                            echo "Usando docker compose (V2)"
+                            docker compose down --remove-orphans || true
+                            docker compose up -d --build --remove-orphans
+                        elif command -v docker-compose >/dev/null 2>&1; then
+                            echo "Usando docker-compose (V1)"
+                            docker-compose down --remove-orphans || true
+                            docker-compose up -d --build --remove-orphans
+                        else
+                            echo "ERRO: Nem docker compose nem docker-compose encontrados"
+                            exit 1
+                        fi
                     """
 
                     echo "Aguardando inicialização dos microserviços..."
@@ -99,7 +108,7 @@ pipeline {
             }
         }
         success {
-            echo "[SUCESSO] API disponível em: http://localhost:8000/k1/lex/"
+            echo "[SUCESSO] API disponível em: http://localhost:8000/v1/lex/"
         }
         failure {
             script {
