@@ -133,7 +133,8 @@ pipeline {
                     
                     sh """
                         echo "=== STATUS DOS CONTAINERS ==="
-                        docker ps --filter "name=kealex-" --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}"
+                        docker ps --filter "name=svc-" --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}"
+                        docker ps --filter "name=api-gateway" --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}"
                         
                         echo ""
                         echo "=== VERIFICAÇÃO DO TRAEFIK ==="
@@ -142,7 +143,7 @@ pipeline {
                         echo ""
                         echo "Testando health check interno do nginx..."
                         for i in 1 2 3 4 5 6 7 8 9 10; do
-                            if docker exec kealex-api-gateway curl -f http://localhost/health 2>/dev/null; then
+                            if docker exec api-gateway curl -f http://localhost/health 2>/dev/null; then
                                 echo "[OK] Nginx health check interno funcionando"
                                 break
                             fi
@@ -174,12 +175,12 @@ pipeline {
                         
                         echo ""
                         echo "Verificando logs do nginx..."
-                        docker logs --tail=10 kealex-api-gateway 2>&1 | grep -i error || echo "Sem erros no nginx"
+                        docker logs --tail=10 api-gateway 2>&1 | grep -i error || echo "Sem erros no nginx"
                         
                         echo ""
                         echo "Testando conectividade interna entre microserviços..."
-                        docker exec kealex-api-gateway wget -q -O- http://kealex-svc-auth:8000/health 2>/dev/null && echo "[OK] svc-auth" || echo "[ERRO] svc-auth"
-                        docker exec kealex-api-gateway wget -q -O- http://kealex-svc-processos:8000/health 2>/dev/null && echo "[OK] svc-processos" || echo "[ERRO] svc-processos"
+                        docker exec api-gateway wget -q -O- http://svc-auth:8000/health 2>/dev/null && echo "[OK] svc-auth" || echo "[ERRO] svc-auth"
+                        docker exec api-gateway wget -q -O- http://svc-processos:8000/health 2>/dev/null && echo "[OK] svc-processos" || echo "[ERRO] svc-processos"
                     """
                 }
             }
@@ -191,7 +192,8 @@ pipeline {
             script {
                 sh """
                     echo "=== STATUS FINAL ==="
-                    docker ps --filter "name=kealex-" --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}" || true
+                    docker ps --filter "name=svc-" --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}" || true
+                    docker ps --filter "name=api-gateway" --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}" || true
                 """
             }
         }
@@ -204,15 +206,15 @@ pipeline {
                     echo "=== LOGS DE ERRO ==="
                     echo "--- API Gateway ---"
                     echo "Verificando logs detalhados do nginx..."
-                    docker logs kealex-api-gateway 2>&1 | tail -50
+                    docker logs api-gateway 2>&1 | tail -50
                     
                     echo ""
                     echo "Testando configuração do nginx..."
-                    docker exec kealex-api-gateway nginx -t 2>&1 || echo "Erro na configuração do nginx"
+                    docker exec api-gateway nginx -t 2>&1 || echo "Erro na configuração do nginx"
                     
                     echo ""
                     echo "Verificando processos dentro do container..."
-                    docker exec kealex-api-gateway ps aux 2>&1 || echo "Container não está rodando"
+                    docker exec api-gateway ps aux 2>&1 || echo "Container não está rodando"
                     
                     echo ""
                     echo "Verificando se a porta 8000 está ocupada no host..."
@@ -220,10 +222,10 @@ pipeline {
                     
                     echo ""
                     echo "--- SVC Auth ---"
-                    docker logs --tail=20 kealex-svc-auth 2>/dev/null || true
+                    docker logs --tail=20 svc-auth 2>/dev/null || true
                     echo ""
                     echo "--- SVC Processos ---"
-                    docker logs --tail=20 kealex-svc-processos 2>/dev/null || true
+                    docker logs --tail=20 svc-processos 2>/dev/null || true
                 """
             }
         }

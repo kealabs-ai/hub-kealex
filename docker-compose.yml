@@ -8,10 +8,10 @@ networks:
     name: kealex-internal
 
 services:
-  kealex-svc-auth:
+  svc-auth:
     build: ./svc-auth
     image: kealex/svc-auth:latest
-    container_name: kealex-svc-auth
+    container_name: svc-auth
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
@@ -25,10 +25,10 @@ services:
       retries: 3
       start_period: 40s
 
-  kealex-svc-processos:
+  svc-processos:
     build: ./svc-processos
     image: kealex/svc-processos:latest
-    container_name: kealex-svc-processos
+    container_name: svc-processos
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
@@ -42,10 +42,10 @@ services:
       retries: 3
       start_period: 40s
 
-  kealex-svc-documentos:
+  svc-documentos:
     build: ./svc-documentos
     image: kealex/svc-documentos:latest
-    container_name: kealex-svc-documentos
+    container_name: svc-documentos
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
@@ -59,10 +59,10 @@ services:
       retries: 3
       start_period: 40s
 
-  kealex-svc-financeiro:
+  svc-financeiro:
     build: ./svc-financeiro
     image: kealex/svc-financeiro:latest
-    container_name: kealex-svc-financeiro
+    container_name: svc-financeiro
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
@@ -76,10 +76,10 @@ services:
       retries: 3
       start_period: 40s
 
-  kealex-svc-prazos:
+  svc-prazos:
     build: ./svc-prazos
     image: kealex/svc-prazos:latest
-    container_name: kealex-svc-prazos
+    container_name: svc-prazos
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
@@ -93,10 +93,10 @@ services:
       retries: 3
       start_period: 40s
 
-  kealex-svc-usuarios:
+  svc-usuarios:
     build: ./svc-usuarios
     image: kealex/svc-usuarios:latest
-    container_name: kealex-svc-usuarios
+    container_name: svc-usuarios
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
@@ -110,10 +110,10 @@ services:
       retries: 3
       start_period: 40s
 
-  kealex-svc-configuracoes:
+  svc-configuracoes:
     build: ./svc-configuracoes
     image: kealex/svc-configuracoes:latest
-    container_name: kealex-svc-configuracoes
+    container_name: svc-configuracoes
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
@@ -127,10 +127,10 @@ services:
       retries: 3
       start_period: 40s
 
-  kealex-svc-escritorios:
+  svc-escritorios:
     build: ./svc-escritorios
     image: kealex/svc-escritorios:latest
-    container_name: kealex-svc-escritorios
+    container_name: svc-escritorios
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
@@ -144,10 +144,10 @@ services:
       retries: 3
       start_period: 40s
 
-  kealex-svc-clientes:
+  svc-clientes:
     build: ./svc-clientes
     image: kealex/svc-clientes:latest
-    container_name: kealex-svc-clientes
+    container_name: svc-clientes
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}
@@ -161,22 +161,22 @@ services:
       retries: 3
       start_period: 40s
 
-  kealex-api-gateway:
+  api-gateway:
     build: ./api-gateway
     image: kealex/api-gateway:latest
-    container_name: kealex-api-gateway
+    container_name: api-gateway
     ports:
       - "8000:80"
     depends_on:
-      - kealex-svc-auth
-      - kealex-svc-processos
-      - kealex-svc-documentos
-      - kealex-svc-financeiro
-      - kealex-svc-prazos
-      - kealex-svc-usuarios
-      - kealex-svc-configuracoes
-      - kealex-svc-escritorios
-      - kealex-svc-clientes
+      - svc-auth
+      - svc-processos
+      - svc-documentos
+      - svc-financeiro
+      - svc-prazos
+      - svc-usuarios
+      - svc-configuracoes
+      - svc-escritorios
+      - svc-clientes
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
