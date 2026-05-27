@@ -165,6 +165,8 @@ services:
     build: ./api-gateway
     image: kealex/api-gateway:latest
     container_name: kealex-api-gateway
+    ports:
+      - "8000:80"
     depends_on:
       - kealex-svc-auth
       - kealex-svc-processos
@@ -179,8 +181,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
       - "traefik.http.routers.kealex-api.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/kealex`)"
-      - "traefik.http.routers.kealex-api.entrypoints=https"
-      - "traefik.http.routers.kealex-api.tls=true"
+      - "traefik.http.routers.kealex-api.entrypoints=web"
       - "traefik.http.routers.kealex-api.service=kealex-api"
       - "traefik.http.services.kealex-api.loadbalancer.server.port=80"
       - "traefik.http.middlewares.kealex-strip.stripprefix.prefixes=/kealex"

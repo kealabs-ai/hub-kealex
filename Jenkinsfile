@@ -151,12 +151,20 @@ pipeline {
                         done
                         
                         echo ""
+                        echo "Testando endpoint direto na porta 8000..."
+                        for i in 1 2 3 4 5 6 7 8 9 10; do
+                            if curl -f http://localhost:8000/health 2>/dev/null; then
+                                echo "[OK] Endpoint direto porta 8000 funcionando"
+                                break
+                            fi
+                            echo "Tentativa \$i/10 falhou, aguardando..."
+                            sleep 3
+                        done
+                        
+                        echo ""
                         echo "Testando endpoint via Traefik..."
                         for i in 1 2 3 4 5; do
-                            if curl -f https://srv1023256.hstgr.cloud/kealex/health 2>/dev/null; then
-                                echo "[OK] Endpoint HTTPS via Traefik funcionando"
-                                break
-                            elif curl -f http://srv1023256.hstgr.cloud/kealex/health 2>/dev/null; then
+                            if curl -f http://srv1023256.hstgr.cloud/kealex/health 2>/dev/null; then
                                 echo "[OK] Endpoint HTTP via Traefik funcionando"
                                 break
                             fi
@@ -188,7 +196,7 @@ pipeline {
             }
         }
         success {
-            echo "[SUCESSO] API disponível em: https://srv1023256.hstgr.cloud/kealex/v1/lex/"
+            echo "[SUCESSO] API disponível em: http://localhost:8000/v1/lex/ e http://srv1023256.hstgr.cloud/kealex/v1/lex/"
         }
         failure {
             script {

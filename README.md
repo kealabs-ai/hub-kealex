@@ -46,18 +46,23 @@ Frontend (ViewKealex) aponta para `http://localhost:8000` via proxy Vite.
 - Padrão GET/POST (não REST tradicional)
 - POST para creates, updates e deletes
 - Sufixos: `/get`, `/update`, `/delete`
-- **Base URL Produção**: `https://srv1023256.hstgr.cloud/kealex/v1/lex/`
-- **Base URL Local**: `http://localhost:18000/v1/lex/`
+- **Base URL Direta**: `http://localhost:8000/v1/lex/`
+- **Base URL via Traefik**: `http://srv1023256.hstgr.cloud/kealex/v1/lex/`
 
 ```
-POST   https://srv1023256.hstgr.cloud/kealex/v1/lex/auth/login
-GET    https://srv1023256.hstgr.cloud/kealex/v1/lex/auth/me
+# Acesso direto (porta 8000)
+POST   http://localhost:8000/v1/lex/auth/login
+GET    http://localhost:8000/v1/lex/auth/me
 
-GET    https://srv1023256.hstgr.cloud/kealex/v1/lex/processos
-POST   https://srv1023256.hstgr.cloud/kealex/v1/lex/processos
-POST   https://srv1023256.hstgr.cloud/kealex/v1/lex/processos/get
-POST   https://srv1023256.hstgr.cloud/kealex/v1/lex/processos/update
-POST   https://srv1023256.hstgr.cloud/kealex/v1/lex/processos/delete
+# Acesso via Traefik
+POST   http://srv1023256.hstgr.cloud/kealex/v1/lex/auth/login
+GET    http://srv1023256.hstgr.cloud/kealex/v1/lex/auth/me
+
+GET    http://localhost:8000/v1/lex/processos
+POST   http://localhost:8000/v1/lex/processos
+POST   http://localhost:8000/v1/lex/processos/get
+POST   http://localhost:8000/v1/lex/processos/update
+POST   http://localhost:8000/v1/lex/processos/delete
 
 GET    /v1/lex/documentos
 GET    /v1/lex/documentos/processo/:processoId
