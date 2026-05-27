@@ -43,20 +43,23 @@ docker-compose logs -f kealex-api-gateway
 # 1. Health check direto (porta 8000)
 curl http://localhost:8000/health
 
-# 2. Health check via Traefik
-curl http://srv1023256.hstgr.cloud/kealex/health
+# 2. Health check via Traefik HTTPS
+curl -k https://srv1023256.hstgr.cloud/kealex/health
 
-# 3. API Gateway direto
+# 3. Debug endpoint (verificar se requisições chegam)
+curl -k https://srv1023256.hstgr.cloud/kealex/debug
+
+# 4. API Gateway direto
 curl http://localhost:8000/
 
-# 4. API Gateway via Traefik
-curl http://srv1023256.hstgr.cloud/kealex/
+# 5. API Gateway via Traefik HTTPS
+curl -k https://srv1023256.hstgr.cloud/kealex/
 
-# 5. Endpoint de auth direto
+# 6. Endpoint de auth direto
 curl http://localhost:8000/v1/lex/auth/me
 
-# 6. Endpoint de auth via Traefik
-curl http://srv1023256.hstgr.cloud/kealex/v1/lex/auth/me
+# 7. Endpoint de auth via Traefik HTTPS
+curl -k https://srv1023256.hstgr.cloud/kealex/v1/lex/auth/me
 ```
 
 ## URLs Finais
@@ -64,14 +67,16 @@ curl http://srv1023256.hstgr.cloud/kealex/v1/lex/auth/me
 ### Acesso Direto (Porta 8000)
 - **API Base**: `http://localhost:8000/v1/lex/`
 - **Health Check**: `http://localhost:8000/health`
+- **Debug**: `http://localhost:8000/debug`
 - **Auth**: `http://localhost:8000/v1/lex/auth/`
 - **Processos**: `http://localhost:8000/v1/lex/processos/`
 
-### Acesso via Traefik
-- **API Base**: `http://srv1023256.hstgr.cloud/kealex/v1/lex/`
-- **Health Check**: `http://srv1023256.hstgr.cloud/kealex/health`
-- **Auth**: `http://srv1023256.hstgr.cloud/kealex/v1/lex/auth/`
-- **Processos**: `http://srv1023256.hstgr.cloud/kealex/v1/lex/processos/`
+### Acesso via Traefik HTTPS
+- **API Base**: `https://srv1023256.hstgr.cloud/kealex/v1/lex/`
+- **Health Check**: `https://srv1023256.hstgr.cloud/kealex/health`
+- **Debug**: `https://srv1023256.hstgr.cloud/kealex/debug`
+- **Auth**: `https://srv1023256.hstgr.cloud/kealex/v1/lex/auth/`
+- **Processos**: `https://srv1023256.hstgr.cloud/kealex/v1/lex/processos/`
 
 ## Troubleshooting
 
