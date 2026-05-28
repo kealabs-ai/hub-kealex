@@ -28,21 +28,25 @@ echo "6. Verificando logs do nginx..."
 docker logs --tail=20 api-gateway 2>&1 | grep -E "(error|404|upstream)"
 
 echo ""
-echo "7. Testando conectividade interna..."
+echo "7. Testando conectividade com MySQL externo..."
+docker exec svc-auth python -c "import pymysql; pymysql.connect(host='srv1078.hstgr.io', port=3306, user='u549746795_kealex', password='Sally2026@!@', database='u549746795_kealex'); print(' [OK] MySQL externo')" 2>/dev/null || echo " [ERRO] MySQL externo"
+
+echo ""
+echo "8. Testando conectividade interna..."
 docker exec api-gateway curl -s http://svc-auth:8000/health && echo " [OK] svc-auth" || echo " [ERRO] svc-auth"
 docker exec api-gateway curl -s http://svc-processos:8000/health && echo " [OK] svc-processos" || echo " [ERRO] svc-processos"
 
 echo ""
-echo "8. Verificando configuração do nginx..."
+echo "9. Verificando configuração do nginx..."
 docker exec api-gateway nginx -t
 
 echo ""
-echo "9. Verificando redes Docker..."
+echo "10. Verificando redes Docker..."
 docker network ls | grep kealex
 docker network inspect kealex-internal --format '{{.Name}}: {{len .Containers}} containers'
 
 echo ""
-echo "10. Verificando Traefik..."
+echo "11. Verificando Traefik..."
 docker ps --filter "name=traefik" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
 echo ""

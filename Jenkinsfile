@@ -5,7 +5,12 @@ pipeline {
         IMAGE_PREFIX = "kealex"
         TAG = "latest"
         SECRET_KEY = "${env.SECRET_KEY ?: 'fallback-chave-segura'}"
-        DATABASE_URL = "${env.DATABASE_URL ?: 'mysql+pymysql://user:pass@host/db'}"
+        DATABASE_URL = "${env.DATABASE_URL ?: 'mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex'}"
+        MYSQL_HOST = "${env.MYSQL_HOST ?: 'srv1078.hstgr.io'}"
+        MYSQL_PORT = "${env.MYSQL_PORT ?: '3306'}"
+        MYSQL_DATABASE = "${env.MYSQL_DATABASE ?: 'u549746795_kealex'}"
+        MYSQL_USER = "${env.MYSQL_USER ?: 'u549746795_kealex'}"
+        MYSQL_PASSWORD = "${env.MYSQL_PASSWORD ?: 'Sally2026@!@'}"
     }
 
     stages {
@@ -86,6 +91,11 @@ pipeline {
                     sh """
                         export SECRET_KEY='${SECRET_KEY}'
                         export DATABASE_URL='${DATABASE_URL}'
+                        export MYSQL_HOST='${MYSQL_HOST}'
+                        export MYSQL_PORT='${MYSQL_PORT}'
+                        export MYSQL_DATABASE='${MYSQL_DATABASE}'
+                        export MYSQL_USER='${MYSQL_USER}'
+                        export MYSQL_PASSWORD='${MYSQL_PASSWORD}'
                         
                         # Verificar se docker-compose existe, se não, baixar
                         if ! command -v docker-compose >/dev/null 2>&1; then
@@ -179,6 +189,11 @@ pipeline {
                         echo ""
                         echo "Verificando logs do nginx..."
                         docker logs --tail=10 api-gateway 2>&1 | grep -i error || echo "Sem erros no nginx"
+                        
+                        echo ""
+                        echo "Testando conectividade com MySQL externo..."
+                        # Teste de conectividade via um dos microserviços
+                        docker exec svc-auth python -c "import pymysql; pymysql.connect(host='srv1078.hstgr.io', port=3306, user='u549746795_kealex', password='Sally2026@!@', database='u549746795_kealex'); print('[OK] MySQL externo')" 2>/dev/null || echo "[ERRO] MySQL externo"
                         
                         echo ""
                         echo "Testando conectividade interna entre microserviços..."

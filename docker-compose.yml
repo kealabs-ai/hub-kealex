@@ -14,7 +14,12 @@ services:
     container_name: svc-auth
     environment:
       - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=${DATABASE_URL:-mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex}
+      - MYSQL_HOST=${MYSQL_HOST:-srv1078.hstgr.io}
+      - MYSQL_PORT=${MYSQL_PORT:-3306}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-u549746795_kealex}
+      - MYSQL_USER=${MYSQL_USER:-u549746795_kealex}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-Sally2026@!@}
     networks:
       - kealex-internal
     restart: unless-stopped
@@ -23,7 +28,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
 
   svc-processos:
     build: ./svc-processos
@@ -31,7 +36,12 @@ services:
     container_name: svc-processos
     environment:
       - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=${DATABASE_URL:-mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex}
+      - MYSQL_HOST=${MYSQL_HOST:-srv1078.hstgr.io}
+      - MYSQL_PORT=${MYSQL_PORT:-3306}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-u549746795_kealex}
+      - MYSQL_USER=${MYSQL_USER:-u549746795_kealex}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-Sally2026@!@}
     networks:
       - kealex-internal
     restart: unless-stopped
@@ -40,7 +50,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
 
   svc-documentos:
     build: ./svc-documentos
@@ -48,7 +58,12 @@ services:
     container_name: svc-documentos
     environment:
       - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=${DATABASE_URL:-mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex}
+      - MYSQL_HOST=${MYSQL_HOST:-srv1078.hstgr.io}
+      - MYSQL_PORT=${MYSQL_PORT:-3306}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-u549746795_kealex}
+      - MYSQL_USER=${MYSQL_USER:-u549746795_kealex}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-Sally2026@!@}
     networks:
       - kealex-internal
     restart: unless-stopped
@@ -57,7 +72,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
 
   svc-financeiro:
     build: ./svc-financeiro
@@ -65,7 +80,12 @@ services:
     container_name: svc-financeiro
     environment:
       - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=${DATABASE_URL:-mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex}
+      - MYSQL_HOST=${MYSQL_HOST:-srv1078.hstgr.io}
+      - MYSQL_PORT=${MYSQL_PORT:-3306}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-u549746795_kealex}
+      - MYSQL_USER=${MYSQL_USER:-u549746795_kealex}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-Sally2026@!@}
     networks:
       - kealex-internal
     restart: unless-stopped
@@ -74,7 +94,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
 
   svc-prazos:
     build: ./svc-prazos
@@ -82,7 +102,12 @@ services:
     container_name: svc-prazos
     environment:
       - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=${DATABASE_URL:-mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex}
+      - MYSQL_HOST=${MYSQL_HOST:-srv1078.hstgr.io}
+      - MYSQL_PORT=${MYSQL_PORT:-3306}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-u549746795_kealex}
+      - MYSQL_USER=${MYSQL_USER:-u549746795_kealex}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-Sally2026@!@}
     networks:
       - kealex-internal
     restart: unless-stopped
@@ -91,7 +116,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
 
   svc-usuarios:
     build: ./svc-usuarios
@@ -99,7 +124,12 @@ services:
     container_name: svc-usuarios
     environment:
       - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=${DATABASE_URL:-mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex}
+      - MYSQL_HOST=${MYSQL_HOST:-srv1078.hstgr.io}
+      - MYSQL_PORT=${MYSQL_PORT:-3306}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-u549746795_kealex}
+      - MYSQL_USER=${MYSQL_USER:-u549746795_kealex}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-Sally2026@!@}
     networks:
       - kealex-internal
     restart: unless-stopped
@@ -108,7 +138,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
 
   svc-configuracoes:
     build: ./svc-configuracoes
@@ -116,7 +146,12 @@ services:
     container_name: svc-configuracoes
     environment:
       - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=${DATABASE_URL:-mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex}
+      - MYSQL_HOST=${MYSQL_HOST:-srv1078.hstgr.io}
+      - MYSQL_PORT=${MYSQL_PORT:-3306}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-u549746795_kealex}
+      - MYSQL_USER=${MYSQL_USER:-u549746795_kealex}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-Sally2026@!@}
     networks:
       - kealex-internal
     restart: unless-stopped
@@ -125,7 +160,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
 
   svc-escritorios:
     build: ./svc-escritorios
@@ -133,7 +168,12 @@ services:
     container_name: svc-escritorios
     environment:
       - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=${DATABASE_URL:-mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex}
+      - MYSQL_HOST=${MYSQL_HOST:-srv1078.hstgr.io}
+      - MYSQL_PORT=${MYSQL_PORT:-3306}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-u549746795_kealex}
+      - MYSQL_USER=${MYSQL_USER:-u549746795_kealex}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-Sally2026@!@}
     networks:
       - kealex-internal
     restart: unless-stopped
@@ -142,7 +182,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
 
   svc-clientes:
     build: ./svc-clientes
@@ -150,7 +190,12 @@ services:
     container_name: svc-clientes
     environment:
       - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=${DATABASE_URL:-mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex}
+      - MYSQL_HOST=${MYSQL_HOST:-srv1078.hstgr.io}
+      - MYSQL_PORT=${MYSQL_PORT:-3306}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-u549746795_kealex}
+      - MYSQL_USER=${MYSQL_USER:-u549746795_kealex}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-Sally2026@!@}
     networks:
       - kealex-internal
     restart: unless-stopped
@@ -159,7 +204,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
 
   api-gateway:
     build: ./api-gateway
