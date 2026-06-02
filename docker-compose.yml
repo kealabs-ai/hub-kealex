@@ -6,6 +6,8 @@ services:
   hubkealex:
     build: .
     container_name: hubkealex
+    ports:
+      - "8000:8000"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.hubkealex.rule=(Host(`srv1023256.hstgr.cloud`) || Host(`kealabs.cloud`) || Host(`www.kealabs.cloud`)) && PathPrefix(`/k1/lex`)"
