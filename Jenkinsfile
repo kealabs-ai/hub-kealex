@@ -80,9 +80,17 @@ pipeline {
                             echo "  ✔ /health → OK (local)"
                             break
                         fi
-                        echo "  Tentativa $i/5 falhou, aguardando..."
+                        echo "  Tentativa $i/5 falhou (HTTP $STATUS), aguardando..."
                         sleep 3
                     done
+
+                    if [ "$STATUS" != "200" ]; then
+                        echo "▶ Logs do container hubkealex:"
+                        $DOCKER logs hubkealex | tail -50
+                        echo "▶ Status dos containers:"
+                        $DOCKER ps -a --filter "name=hubkealex"
+                        exit 1
+                    fi
 
                     echo "▶ Testando health check via Traefik..."
                     STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
