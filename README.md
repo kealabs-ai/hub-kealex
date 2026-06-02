@@ -1,29 +1,25 @@
-# hubKealex — Backend Microserviços
+# hubKealex — Backend Unificado
 
-Backend do sistema Kealex em arquitetura de microserviços Python/FastAPI.
+Backend do sistema Kealex em arquitetura unificada com FastAPI (Monolítico melhorado).
 
-## Serviços
+## Visão Geral
 
-| Serviço | Responsabilidade | Porta interna |
-|---|---|---|
-| `api-gateway` | Nginx — roteamento único na porta 8000 | 8000 |
-| `svc-auth` | Login JWT | 8000 |
-| `svc-processos` | CRUD processos | 8000 |
-| `svc-documentos` | CRUD documentos | 8000 |
-| `svc-financeiro` | CRUD honorários + dashboard | 8000 |
-| `svc-prazos` | CRUD prazos + vencendo | 8000 |
-| `svc-usuarios` | CRUD usuários (admin only) | 8000 |
-| `svc-configuracoes` | CRUD configurações sistema | 8000 |
-| `svc-escritorios` | CRUD escritórios/firmas | 8000 |
+Aplicação FastAPI única que consolida todos os serviços anteriores (auth, processos, documentos, financeiro, prazos, usuários, configurações, escritórios, clientes) em uma única aplicação escalável.
 
 ## Subir localmente
 
 ```bash
-cp .env.example .env   # ajuste SECRET_KEY
+# Copiar arquivo de ambiente
+cp .env.example .env
+
+# Configurar SECRET_KEY no .env (opcional, possui padrão de desenvolvimento)
+# SECRET_KEY=sua_chave_segura_aqui
+
+# Build e iniciar containers
 docker compose up --build
 ```
 
-Frontend (ViewKealex) aponta para `http://localhost:8000` via proxy Vite.
+A aplicação estará disponível em `http://localhost:8000`.
 
 ## Usuário padrão
 
@@ -46,154 +42,202 @@ Frontend (ViewKealex) aponta para `http://localhost:8000` via proxy Vite.
 - Padrão GET/POST (não REST tradicional)
 - POST para creates, updates e deletes
 - Sufixos: `/get`, `/update`, `/delete`
-- **Base URL Direta**: `http://localhost:8000/v1/lex/`
-- **Base URL via Traefik**: `https://srv1023256.hstgr.cloud/kealex/v1/lex/`
 
+## Endpoints Disponíveis
+
+### Autenticação
 ```
-# Acesso direto (porta 8000)
-POST   http://localhost:8000/v1/lex/auth/login
-GET    http://localhost:8000/v1/lex/auth/me
+POST   /v1/lex/auth/login
+GET    /v1/lex/auth/me
+GET    /health
+```
 
-# Acesso via Traefik HTTPS
-POST   https://srv1023256.hstgr.cloud/kealex/v1/lex/auth/login
-GET    https://srv1023256.hstgr.cloud/kealex/v1/lex/auth/me
+### Processos
+```
+GET    /v1/lex/processos
+POST   /v1/lex/processos
+POST   /v1/lex/processos/get
+POST   /v1/lex/processos/update
+POST   /v1/lex/processos/delete
+```
 
-GET    https://srv1023256.hstgr.cloud/kealex/v1/lex/processos
-POST   https://srv1023256.hstgr.cloud/kealex/v1/lex/processos
-POST   https://srv1023256.hstgr.cloud/kealex/v1/lex/processos/get
-POST   https://srv1023256.hstgr.cloud/kealex/v1/lex/processos/update
-POST   https://srv1023256.hstgr.cloud/kealex/v1/lex/processos/delete
-
-GET    /v1/lex/documentos
-GET    /v1/lex/documentos/processo/:processoId
-POST   /v1/lex/documentos
-POST   /v1/lex/documentos/get
-POST   /v1/lex/documentos/update
-POST   /v1/lex/documentos/delete
-
-GET    /v1/lex/financeiro
-GET    /v1/lex/financeiro/dashboard
-POST   /v1/lex/financeiro
-POST   /v1/lex/financeiro/get
-POST   /v1/lex/financeiro/update
-POST   /v1/lex/financeiro/delete
-
-GET    /v1/lex/prazos
-GET    /v1/lex/prazos/vencendo?dias=7
-GET    /v1/lex/prazos/processo/:processoId
-POST   /v1/lex/prazos
-POST   /v1/lex/prazos/get
-POST   /v1/lex/prazos/update
-POST   /v1/lex/prazos/delete
-
-GET    /v1/lex/usuarios?role=
-POST   /v1/lex/usuarios
-POST   /v1/lex/usuarios/get
-POST   /v1/lex/usuarios/update
-POST   /v1/lex/usuarios/delete
-
-GET    /v1/lex/escritorios
-POST   /v1/lex/escritorios
-POST   /v1/lex/escritorios/get
-POST   /v1/lex/escritorios/update
-POST   /v1/lex/escritorios/delete
-
+### Clientes
+```
 GET    /v1/lex/clientes
 POST   /v1/lex/clientes
 POST   /v1/lex/clientes/get
 POST   /v1/lex/clientes/update
 POST   /v1/lex/clientes/delete
+```
 
+### Documentos (Em desenvolvimento)
+```
+GET    /v1/lex/documentos
+POST   /v1/lex/documentos
+POST   /v1/lex/documentos/get
+POST   /v1/lex/documentos/update
+POST   /v1/lex/documentos/delete
+```
+
+### Financeiro (Em desenvolvimento)
+```
+GET    /v1/lex/financeiro
+POST   /v1/lex/financeiro
+POST   /v1/lex/financeiro/get
+POST   /v1/lex/financeiro/update
+POST   /v1/lex/financeiro/delete
+```
+
+### Prazos (Em desenvolvimento)
+```
+GET    /v1/lex/prazos
+POST   /v1/lex/prazos
+POST   /v1/lex/prazos/get
+POST   /v1/lex/prazos/update
+POST   /v1/lex/prazos/delete
+```
+
+### Usuários (Em desenvolvimento)
+```
+GET    /v1/lex/usuarios
+POST   /v1/lex/usuarios
+POST   /v1/lex/usuarios/get
+POST   /v1/lex/usuarios/update
+POST   /v1/lex/usuarios/delete
+```
+
+### Escritórios (Em desenvolvimento)
+```
+GET    /v1/lex/escritorios
+POST   /v1/lex/escritorios
+POST   /v1/lex/escritorios/get
+POST   /v1/lex/escritorios/update
+POST   /v1/lex/escritorios/delete
+```
+
+### Configurações (Em desenvolvimento)
+```
 GET    /v1/lex/configuracoes/geral
 POST   /v1/lex/configuracoes/geral
-GET    /v1/lex/configuracoes/cdn
-POST   /v1/lex/configuracoes/cdn
-GET    /v1/lex/configuracoes/database
-POST   /v1/lex/configuracoes/database
-GET    /v1/lex/configuracoes/ia
-GET    /v1/lex/configuracoes/ia/modelos
-GET    /v1/lex/configuracoes/ia/ativa
-POST   /v1/lex/configuracoes/ia
-GET    /v1/lex/configuracoes/usuarios
-POST   /v1/lex/configuracoes/usuarios
-GET    /v1/lex/configuracoes/seguranca
-POST   /v1/lex/configuracoes/seguranca
-GET    /v1/lex/configuracoes/notificacoes
-POST   /v1/lex/configuracoes/notificacoes
 ```
 
 ## CI/CD (Jenkins)
 
 O `Jenkinsfile` executa:
-1. Build paralelo de todas as imagens
-2. Teste de sintaxe e configuração do nginx
-3. Smoke test de importação
-4. Validação do nginx após deploy
-5. Health checks completos (nginx + microserviços)
-6. Push para registry (branch `main`)
-7. Deploy via `docker compose` (branch `main`)
+1. Checkout automático pelo Jenkins (Git Public)
+2. Garantir Docker Buildx instalado
+3. Build da imagem Docker
+4. Criar rede Traefik (easypanel)
+5. Deploy via `docker compose`
+6. Health checks locais e via Traefik
+7. Relatório de status final
 
 Configure as credentials no Jenkins:
-- `kealex-secret-key` — Secret text com o valor de SECRET_KEY
-- `registry-creds` — Username/Password do registry Docker
+- `SECRET_KEY` — Secret text com o valor da chave secreta
 
-**Documentação detalhada:** [JENKINS_NGINX.md](JENKINS_NGINX.md)
+**Fluxo:**
+```
+Checkout SCM → Prepare → Ensure Buildx → Deploy → Health Check
+```
 
 ## Testes API (Postman)
 
-Coleções completas para testar todas as APIs:
+Coleções disponíveis em `/postman`:
 
 ```bash
-cd postman
 # Importar no Postman:
 # - Kealex-Processos-API.postman_collection.json
 # - Kealex-Environment.postman_environment.json
 
 # Ou executar via Newman (CLI):
 npm install -g newman
+cd postman
 ./run-tests.bat  # Windows
 ```
 
-**Coleções disponíveis:**
-- `Kealex-Processos-API` — CRUD completo de processos
-- `Kealex-Testes-Avancados` — Testes de performance e segurança
+## Estrutura do Projeto
 
-## Configuração de IA
-
-### Providers Suportados
-- **Cerebras**: Modelos Llama otimizados
-- **Groq**: Modelos Llama e Gemma com alta velocidade
-
-### Modelos Disponíveis
-
-**Cerebras:**
-- `llama-3.3-70b` (padrão)
-- `llama-3.1-70b`
-- `llama-3.1-8b`
-
-**Groq:**
-- `llama-3.3-70b-versatile`
-- `llama-3.1-70b-versatile`
-- `llama-3.1-8b-instant`
-- `llama-3.2-90b-text-preview`
-- `llama-3.2-11b-text-preview`
-- `llama-3.2-3b-preview`
-- `llama-3.2-1b-preview`
-- `gemma2-9b-it`
-- `gemma-7b-it`
-
-### Migração de Modelos Descontinuados
-
-Se você estiver usando modelos Groq descontinuados, execute:
-
-```bash
-cd migrations
-./update_groq_models.bat  # Windows
-# ou
-mysql -h host -u user -p database < update_groq_models.sql  # Linux/Mac
+```
+hubKealex/
+├── app/
+│   └── main.py              # Aplicação FastAPI unificada
+├── migrations/              # Scripts SQL de migração
+├── postman/                 # Coleções de testes da API
+├── .env.example             # Template de variáveis de ambiente
+├── .dockerignore            # Arquivos ignorados no build Docker
+├── docker-compose.yml       # Configuração Docker Compose
+├── Dockerfile               # Build da aplicação
+├── Jenkinsfile              # Pipeline CI/CD
+├── requirements.txt         # Dependências Python
+└── README.md                # Este arquivo
 ```
 
-**Modelos migrados automaticamente:**
-- `mixtral-8x7b-32768` → `llama-3.1-70b-versatile`
-- `llama2-70b-4096` → `llama-3.1-70b-versatile`
-- `gemma-7b-it` → `gemma2-9b-it`
+## Variáveis de Ambiente
+
+```bash
+SECRET_KEY=sua_chave_segura
+DATABASE_URL=mysql+pymysql://usuario:senha@host:3306/banco
+MYSQL_HOST=srv1078.hstgr.io
+MYSQL_PORT=3306
+MYSQL_DATABASE=u549746795_kealex
+MYSQL_USER=u549746795_kealex
+MYSQL_PASSWORD=senha_aqui
+```
+
+## Deploy em Produção
+
+A aplicação está configurada com Traefik para:
+- Routing via `srv1023256.hstgr.cloud/v1/lex`
+- HTTPS automático
+- CORS configurado
+- Health checks automáticos
+
+## Stack Tecnológico
+
+- **Python 3.11**
+- **FastAPI** - Framework web assíncrono
+- **SQLAlchemy** - ORM para banco de dados
+- **PyMySQL** - Driver MySQL
+- **Pydantic** - Validação de dados
+- **python-jose** - JWT handling
+- **bcrypt** - Hash de senhas
+- **Docker & Docker Compose** - Containerização
+- **Traefik** - Reverse proxy
+- **Jenkins** - CI/CD
+
+## Troubleshooting
+
+### Erro de conexão com MySQL
+```bash
+# Verificar variáveis de ambiente
+docker compose exec hubkealex env | grep MYSQL
+
+# Testar conectividade
+docker compose exec hubkealex python -c "import pymysql; pymysql.connect(...)"
+```
+
+### Container não inicia
+```bash
+# Ver logs da aplicação
+docker compose logs -f hubkealex
+
+# Verificar health check
+docker compose exec hubkealex curl http://localhost:8000/health
+```
+
+### Problema no Jenkins
+```bash
+# Verificar workspace do Jenkins
+ls -la /var/jenkins_home/workspace/hub_kealex
+
+# Forçar rebuild
+# (Delete o workspace e retrigger a pipeline)
+```
+
+## Próximos Passos
+
+- Implementar endpoints de Documentos, Financeiro, Prazos
+- Adicionar testes unitários e de integração
+- Implementar cache (Redis)
+- Adicionar monitoramento (Prometheus/Grafana)
+- Otimizar queries do banco de dados

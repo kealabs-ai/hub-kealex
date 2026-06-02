@@ -2,11 +2,8 @@ pipeline {
     agent any
 
     environment {
-        PROJETO        = 'hubkealex'
-        DEPLOY_PATH    = '/var/jenkins_home/apps/hubkealex'
-        GIT_REPO       = 'https://github.com/kealabs-ai/hubkealex.git'
-        GIT_BRANCH     = 'main'
-        DOCKER         = '/var/jenkins_home/docker'
+        PROJETO = 'hubkealex'
+        DOCKER  = '/var/jenkins_home/docker'
     }
 
     stages {
@@ -14,20 +11,14 @@ pipeline {
         // ── 1. PREPARAR AMBIENTE ────────────────────────────────────────────────────────────────
         stage('Prepare') {
             steps {
-                sh '''
-                    set -e
-                    mkdir -p $DEPLOY_PATH
-                    cd $DEPLOY_PATH
-
-                    if [ -d ".git" ]; then
-                        git fetch origin
-                        git reset --hard origin/$GIT_BRANCH
-                    else
-                        git clone -b $GIT_BRANCH $GIT_REPO .
-                    fi
-
-                    echo "  ✔ Repositório atualizado em $DEPLOY_PATH"
-                '''
+                script {
+                    echo "▶ Usando código do workspace Jenkins: ${env.WORKSPACE}"
+                    sh '''
+                        echo "✔ Repositório já clonado pelo Jenkins"
+                        pwd
+                        ls -la ${WORKSPACE} | head -20
+                    '''
+                }
             }
         }
 
@@ -55,7 +46,7 @@ pipeline {
             steps {
                 sh '''
                     set -e
-                    cd $DEPLOY_PATH
+                    cd ${WORKSPACE}
 
                     echo "▶ Garantindo rede easypanel..."
                     $DOCKER network inspect easypanel >/dev/null 2>&1 || \
@@ -76,15 +67,29 @@ pipeline {
         stage('Health Check') {
             steps {
                 sh '''
-                    echo "▶ Aguardando containers subirem (10s)..."
-                    sleep 10
+                    echo "▶ Aguardando containers subirem (15s)..."
+                    sleep 15
 
+                    echo "▶ Testando health check local..."
+                    for i in 1 2 3 4 5; do
+                        STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+                            --max-time 5 \
+                            http://localhost:8000/health || echo "000")
+                        if [ "$STATUS" = "200" ]; then
+                            echo "  ✔ /health → OK (local)"
+                            break
+                        fi
+                        echo "  Tentativa $i/5 falhou, aguardando..."
+                        sleep 3
+                    done
+
+                    echo "▶ Testando health check via Traefik..."
                     STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
                         --max-time 5 \
                         https://srv1023256.hstgr.cloud/v1/lex/health || echo "000")
 
                     if [ "$STATUS" = "200" ]; then
-                        echo "  ✔ /v1/lex/health → OK"
+                        echo "  ✔ /v1/lex/health → OK (Traefik)"
                     else
                         echo "  ✘ /v1/lex/health → HTTP $STATUS"
                         exit 1
