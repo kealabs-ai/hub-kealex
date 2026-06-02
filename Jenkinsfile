@@ -13,12 +13,12 @@ pipeline {
             steps {
                 dir("${env.WORKSPACE}") {
                     deleteDir()
-                    checkout([
-                        $class: 'GitSCM',
-                        branches: [[name: '*/master']],
-                        userRemoteConfigs: [[url: 'https://github.com/kealabs-ai/hubkealex.git']]
-                    ])
-                    sh 'echo "✔ Repositório clonado com sucesso" && pwd && ls -la | head -10'
+                    sh '''
+                        git clone -b master https://github.com/kealabs-ai/hubkealex.git .
+                        echo "✔ Repositório clonado com sucesso"
+                        pwd
+                        ls -la | head -10
+                    '''
                 }
             }
         }
