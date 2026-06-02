@@ -108,7 +108,38 @@ class Processo(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-Base.metadata.create_all(engine)
+def _init_db():
+    try:
+        Base.metadata.create_all(engine)
+        try:
+            with SessionLocal() as db:
+                tenant = db.query(Tenant).filter_by(slug="kealex").first()
+                if not tenant:
+                    tenant = Tenant(nome="Kealex", slug="kealex")
+                    db.add(tenant)
+                    db.flush()
+                
+                admin = db.query(Usuario).filter_by(email="admin@kealex.com").first()
+                if not admin:
+                    admin = Usuario(tenant_id=tenant.id, nome="Admin Kealex",
+                                   email="admin@kealex.com", senha_hash=_hash("admin123"),
+                                   role=RoleEnum.admin)
+                    db.add(admin)
+                    db.commit()
+                else:
+                    updated = False
+                    if not admin.tenant_id or admin.tenant_id == "":
+                        admin.tenant_id = tenant.id
+                        updated = True
+                    if not admin.senha_hash.startswith("$2b$"):
+                        admin.senha_hash = _hash("admin123")
+                        updated = True
+                    if updated:
+                        db.commit()
+        except Exception as e:
+            print(f"Seed error (ignorando): {e}")
+    except Exception as e:
+        print(f"Database init error (ignorando): {e}")
 
 def get_db():
     db = SessionLocal()
@@ -120,39 +151,35 @@ def get_db():
     finally:
         db.close()
 
-def _seed():
+def _make_token(user: Usuario) -> str:
+    exp = datetime.utcnow() + timedelta(minutes=TOKEN_EXPIRE_MINUTES)
+    return jwt.encode(
+        {"sub": user.id, "role": user.role, "tenant_id": user.tenant_id, "exp": exp},
+        SECRET_KEY, ALGORITHM
+    )
+
+def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
     try:
-        with SessionLocal() as db:
-            tenant = db.query(Tenant).filter_by(slug="kealex").first()
-            if not tenant:
-                tenant = Tenant(nome="Kealex", slug="kealex")
-                db.add(tenant)
-                db.flush()
-            
-            admin = db.query(Usuario).filter_by(email="admin@kealex.com").first()
-            if not admin:
-                admin = Usuario(tenant_id=tenant.id, nome="Admin Kealex",
-                               email="admin@kealex.com", senha_hash=_hash("admin123"),
-                               role=RoleEnum.admin)
-                db.add(admin)
-                db.commit()
-            else:
-                updated = False
-                if not admin.tenant_id or admin.tenant_id == "":
-                    admin.tenant_id = tenant.id
-                    updated = True
-                if not admin.senha_hash.startswith("$2b$"):
-                    admin.senha_hash = _hash("admin123")
-                    updated = True
-                if updated:
-                    db.commit()
-    except Exception as e:
-        print(f"Seed error (ignorando): {e}")
+        return jwt.decode(creds.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        raise HTTPException(401, "Token inválido")
 
-_seed()
+# Helper functions
+def _processo_to_dict(p: Processo, cliente: Cliente = None):
+    return {
+        "id": p.id, "tenantId": p.tenant_id, "userId": p.user_id, "escritorioId": p.escritorio_id,
+        "numero": p.numero, "titulo": p.titulo, "descricao": p.descricao, "status": p.status,
+        "advogadoId": p.advogado_id, "clienteId": p.cliente_id,
+        "clienteNome": cliente.nome if cliente else None,
+        "clienteEmail": cliente.email if cliente else None,
+        "vara": p.vara, "tribunal": p.tribunal,
+        "createdAt": p.created_at.isoformat(), "updatedAt": p.updated_at.isoformat()
+    }
 
-app = FastAPI(title="HubKealex API")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+def _enrich_processos(db: Session, processos: list[Processo]):
+    ids = list({p.cliente_id for p in processos})
+    clientes = {c.id: c for c in db.query(Cliente).filter(Cliente.id.in_(ids)).all()}
+    return [_processo_to_dict(p, clientes.get(p.cliente_id)) for p in processos]
 
 # Pydantic models
 class LoginIn(BaseModel):
@@ -189,36 +216,12 @@ class ProcessoUpdate(BaseModel):
 class ProcessoDeleteIn(BaseModel):
     id: str
 
-# Auth helpers
-def _make_token(user: Usuario) -> str:
-    exp = datetime.utcnow() + timedelta(minutes=TOKEN_EXPIRE_MINUTES)
-    return jwt.encode(
-        {"sub": user.id, "role": user.role, "tenant_id": user.tenant_id, "exp": exp},
-        SECRET_KEY, ALGORITHM
-    )
+app = FastAPI(title="HubKealex API")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
-    try:
-        return jwt.decode(creds.credentials, SECRET_KEY, algorithms=[ALGORITHM])
-    except JWTError:
-        raise HTTPException(401, "Token inválido")
-
-# Helper functions
-def _processo_to_dict(p: Processo, cliente: Cliente = None):
-    return {
-        "id": p.id, "tenantId": p.tenant_id, "userId": p.user_id, "escritorioId": p.escritorio_id,
-        "numero": p.numero, "titulo": p.titulo, "descricao": p.descricao, "status": p.status,
-        "advogadoId": p.advogado_id, "clienteId": p.cliente_id,
-        "clienteNome": cliente.nome if cliente else None,
-        "clienteEmail": cliente.email if cliente else None,
-        "vara": p.vara, "tribunal": p.tribunal,
-        "createdAt": p.created_at.isoformat(), "updatedAt": p.updated_at.isoformat()
-    }
-
-def _enrich_processos(db: Session, processos: list[Processo]):
-    ids = list({p.cliente_id for p in processos})
-    clientes = {c.id: c for c in db.query(Cliente).filter(Cliente.id.in_(ids)).all()}
-    return [_processo_to_dict(p, clientes.get(p.cliente_id)) for p in processos]
+@app.on_event("startup")
+def startup_event():
+    _init_db()
 
 # Health endpoints
 @app.get("/health")
