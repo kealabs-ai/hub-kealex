@@ -6,16 +6,6 @@ services:
   hubkealex:
     build: .
     container_name: hubkealex
-    ports:
-      - "8000:8000"
-    environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL:-mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex}
-      - MYSQL_HOST=${MYSQL_HOST:-srv1078.hstgr.io}
-      - MYSQL_PORT=${MYSQL_PORT:-3306}
-      - MYSQL_DATABASE=${MYSQL_DATABASE:-u549746795_kealex}
-      - MYSQL_USER=${MYSQL_USER:-u549746795_kealex}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-Sally2026@!@}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.hubkealex.rule=(Host(`srv1023256.hstgr.cloud`) || Host(`kealabs.cloud`) || Host(`www.kealabs.cloud`)) && PathPrefix(`/v1/lex`)"
@@ -29,20 +19,13 @@ services:
       - "traefik.http.middlewares.hubkealex-cors.headers.addvaryheader=true"
       - "traefik.http.routers.hubkealex.middlewares=hubkealex-cors"
       - "traefik.http.services.hubkealex.loadbalancer.server.port=8000"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
     deploy:
       replicas: 1
       restart_policy:
         condition: on-failure
     networks:
-      - easypanel
-    restart: unless-stopped
+      - kealabs-net
 
 networks:
-  easypanel:
+  kealabs-net:
     external: true
