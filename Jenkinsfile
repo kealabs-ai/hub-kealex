@@ -83,7 +83,7 @@ pipeline {
                     for i in 1 2 3 4 5; do
                         STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
                             --max-time 5 \
-                            http://localhost:8000/v1/lex/health 2>&1 || echo "000")
+                            http://localhost:8000/k1/lex/health 2>&1 || echo "000")
                         
                         echo "  Tentativa $i/5: HTTP $STATUS"
                         

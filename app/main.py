@@ -228,12 +228,12 @@ def startup_event():
 def health_simple():
     return {"status": "healthy", "service": "hubkealex"}
 
-@app.get("/v1/lex/health")
+@app.get("/k1/lex/health")
 def health():
     return {"status": "ok", "service": "hubkealex"}
 
 # Auth endpoints
-@app.post("/v1/lex/auth/login", response_model=AuthUser)
+@app.post("/k1/lex/auth/login", response_model=AuthUser)
 def login(body: LoginIn, db: Session = Depends(get_db)):
     user = db.query(Usuario).filter_by(email=body.email, ativo=True).first()
     if not user or not _verify(body.senha, user.senha_hash):
@@ -241,12 +241,12 @@ def login(body: LoginIn, db: Session = Depends(get_db)):
     return AuthUser(nome=user.nome, role=user.role,
                     tenantId=user.tenant_id, accessToken=_make_token(user))
 
-@app.get("/v1/lex/auth/me")
+@app.get("/k1/lex/auth/me")
 def me(payload=Depends(verify_token)):
     return payload
 
 # Processos endpoints
-@app.get("/v1/lex/processos")
+@app.get("/k1/lex/processos")
 def list_processos(db: Session = Depends(get_db), payload=Depends(verify_token)):
     role, uid, tid = payload.get("role"), payload.get("sub"), payload.get("tenant_id")
     q = db.query(Processo).filter_by(tenant_id=tid)
@@ -258,7 +258,7 @@ def list_processos(db: Session = Depends(get_db), payload=Depends(verify_token))
     
     return _enrich_processos(db, q.all())
 
-@app.post("/v1/lex/processos/get")
+@app.post("/k1/lex/processos/get")
 def get_processo(body: ProcessoGetIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id")
     p = db.query(Processo).filter_by(id=body.id, tenant_id=tenant_id).first()
@@ -267,7 +267,7 @@ def get_processo(body: ProcessoGetIn, db: Session = Depends(get_db), payload=Dep
     cliente = db.query(Cliente).filter_by(id=p.cliente_id).first()
     return _processo_to_dict(p, cliente)
 
-@app.post("/v1/lex/processos", status_code=201)
+@app.post("/k1/lex/processos", status_code=201)
 def create_processo(body: ProcessoIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id")
     cliente = db.query(Cliente).filter_by(id=body.clienteId, tenant_id=tenant_id).first()
@@ -279,7 +279,7 @@ def create_processo(body: ProcessoIn, db: Session = Depends(get_db), payload=Dep
     db.add(p); db.commit(); db.refresh(p)
     return _processo_to_dict(p, cliente)
 
-@app.post("/v1/lex/processos/update")
+@app.post("/k1/lex/processos/update")
 def update_processo(body: ProcessoUpdate, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id")
     p = db.query(Processo).filter_by(id=body.id, tenant_id=tenant_id).first()
@@ -292,7 +292,7 @@ def update_processo(body: ProcessoUpdate, db: Session = Depends(get_db), payload
     cliente = db.query(Cliente).filter_by(id=p.cliente_id).first()
     return _processo_to_dict(p, cliente)
 
-@app.post("/v1/lex/processos/delete")
+@app.post("/k1/lex/processos/delete")
 def delete_processo(body: ProcessoDeleteIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id")
     p = db.query(Processo).filter_by(id=body.id, tenant_id=tenant_id).first()
@@ -302,30 +302,30 @@ def delete_processo(body: ProcessoDeleteIn, db: Session = Depends(get_db), paylo
     return {"ok": True}
 
 # Basic endpoints for other services (placeholder endpoints)
-@app.get("/v1/lex/clientes")
+@app.get("/k1/lex/clientes")
 def list_clientes(payload=Depends(verify_token)):
     return {"message": "Clientes endpoint - implementar conforme necessário"}
 
-@app.get("/v1/lex/documentos")
+@app.get("/k1/lex/documentos")
 def list_documentos(payload=Depends(verify_token)):
     return {"message": "Documentos endpoint - implementar conforme necessário"}
 
-@app.get("/v1/lex/financeiro")
+@app.get("/k1/lex/financeiro")
 def list_financeiro(payload=Depends(verify_token)):
     return {"message": "Financeiro endpoint - implementar conforme necessário"}
 
-@app.get("/v1/lex/prazos")
+@app.get("/k1/lex/prazos")
 def list_prazos(payload=Depends(verify_token)):
     return {"message": "Prazos endpoint - implementar conforme necessário"}
 
-@app.get("/v1/lex/usuarios")
+@app.get("/k1/lex/usuarios")
 def list_usuarios(payload=Depends(verify_token)):
     return {"message": "Usuários endpoint - implementar conforme necessário"}
 
-@app.get("/v1/lex/escritorios")
+@app.get("/k1/lex/escritorios")
 def list_escritorios(payload=Depends(verify_token)):
     return {"message": "Escritórios endpoint - implementar conforme necessário"}
 
-@app.get("/v1/lex/configuracoes/geral")
+@app.get("/k1/lex/configuracoes/geral")
 def get_configuracoes_geral(payload=Depends(verify_token)):
     return {"message": "Configurações gerais - implementar conforme necessário"}
