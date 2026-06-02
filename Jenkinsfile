@@ -14,7 +14,7 @@ pipeline {
                 dir("${env.WORKSPACE}") {
                     deleteDir()
                     sh '''
-                        git clone -b master https://github.com/kealabs-ai/hubkealex.git .
+                        git clone -b master https://github.com/kealabs-ai/hub-kealex.git .
                         echo "✔ Repositório clonado com sucesso"
                         pwd
                         ls -la | head -10
