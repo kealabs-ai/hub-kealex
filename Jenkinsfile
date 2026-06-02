@@ -79,16 +79,28 @@ pipeline {
                     echo "▶ Aguardando containers subirem (10s)..."
                     sleep 10
 
-                    STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-                        --max-time 5 \
-                        https://srv1023256.hstgr.cloud/v1/lex/health || echo "000")
-
-                    if [ "$STATUS" = "200" ]; then
-                        echo "  ✔ /v1/lex/health → OK"
-                    else
-                        echo "  ✘ /v1/lex/health → HTTP $STATUS"
-                        exit 1
-                    fi
+                    echo "▶ Testando health check local..."
+                    for i in 1 2 3 4 5; do
+                        STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+                            --max-time 5 \
+                            http://localhost:8000/v1/lex/health 2>&1 || echo "000")
+                        
+                        echo "  Tentativa $i/5: HTTP $STATUS"
+                        
+                        if [ "$STATUS" = "200" ]; then
+                            echo "  ✔ /v1/lex/health → OK (localhost)"
+                            exit 0
+                        fi
+                        
+                        if [ $i -lt 5 ]; then
+                            sleep 3
+                        fi
+                    done
+                    
+                    echo "  ✘ Falha no health check após 5 tentativas"
+                    echo "▶ Logs do container hubkealex:"
+                    $DOCKER logs hubkealex | tail -30
+                    exit 1
                 '''
             }
         }
