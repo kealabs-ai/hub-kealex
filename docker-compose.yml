@@ -1,249 +1,37 @@
-version: '3.8'
+services:
+
+  # ── HUBKEALEX ──────────────────────────────────────────────────────────
+  hubkealex:
+    build: .
+    container_name: hubkealex
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL:-mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex}
+      - MYSQL_HOST=${MYSQL_HOST:-srv1078.hstgr.io}
+      - MYSQL_PORT=${MYSQL_PORT:-3306}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-u549746795_kealex}
+      - MYSQL_USER=${MYSQL_USER:-u549746795_kealex}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-Sally2026@!@}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.hubkealex.rule=(Host(`srv1023256.hstgr.cloud`) || Host(`kealabs.cloud`) || Host(`www.kealabs.cloud`)) && PathPrefix(`/v1/lex`)"
+      - "traefik.http.routers.hubkealex.entrypoints=https"
+      - "traefik.http.routers.hubkealex.tls=true"
+      - "traefik.http.middlewares.hubkealex-cors.headers.accesscontrolalloworiginlist=https://kealabs.cloud,https://www.kealabs.cloud,https://srv1023256.hstgr.cloud,https://kealabs.com.br,https://www.kealabs.com.br,http://localhost:3000"
+      - "traefik.http.middlewares.hubkealex-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
+      - "traefik.http.middlewares.hubkealex-cors.headers.accesscontrolallowheaders=Content-Type,Authorization,Accept"
+      - "traefik.http.middlewares.hubkealex-cors.headers.accesscontrolallowcredentials=true"
+      - "traefik.http.middlewares.hubkealex-cors.headers.accesscontrolmaxage=86400"
+      - "traefik.http.middlewares.hubkealex-cors.headers.addvaryheader=true"
+      - "traefik.http.routers.hubkealex.middlewares=hubkealex-cors"
+      - "traefik.http.services.hubkealex.loadbalancer.server.port=8000"
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    networks:
+      - easypanel
 
 networks:
   easypanel:
     external: true
-  kealex-internal:
-    driver: bridge
-    name: kealex-internal
-
-services:
-  svc-auth:
-    build: ./svc-auth
-    image: kealex/svc-auth:latest
-    container_name: svc-auth
-    environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL:-mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex}
-      - MYSQL_HOST=${MYSQL_HOST:-srv1078.hstgr.io}
-      - MYSQL_PORT=${MYSQL_PORT:-3306}
-      - MYSQL_DATABASE=${MYSQL_DATABASE:-u549746795_kealex}
-      - MYSQL_USER=${MYSQL_USER:-u549746795_kealex}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-Sally2026@!@}
-    networks:
-      - kealex-internal
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-  svc-processos:
-    build: ./svc-processos
-    image: kealex/svc-processos:latest
-    container_name: svc-processos
-    environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL:-mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex}
-      - MYSQL_HOST=${MYSQL_HOST:-srv1078.hstgr.io}
-      - MYSQL_PORT=${MYSQL_PORT:-3306}
-      - MYSQL_DATABASE=${MYSQL_DATABASE:-u549746795_kealex}
-      - MYSQL_USER=${MYSQL_USER:-u549746795_kealex}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-Sally2026@!@}
-    networks:
-      - kealex-internal
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-  svc-documentos:
-    build: ./svc-documentos
-    image: kealex/svc-documentos:latest
-    container_name: svc-documentos
-    environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL:-mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex}
-      - MYSQL_HOST=${MYSQL_HOST:-srv1078.hstgr.io}
-      - MYSQL_PORT=${MYSQL_PORT:-3306}
-      - MYSQL_DATABASE=${MYSQL_DATABASE:-u549746795_kealex}
-      - MYSQL_USER=${MYSQL_USER:-u549746795_kealex}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-Sally2026@!@}
-    networks:
-      - kealex-internal
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-  svc-financeiro:
-    build: ./svc-financeiro
-    image: kealex/svc-financeiro:latest
-    container_name: svc-financeiro
-    environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL:-mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex}
-      - MYSQL_HOST=${MYSQL_HOST:-srv1078.hstgr.io}
-      - MYSQL_PORT=${MYSQL_PORT:-3306}
-      - MYSQL_DATABASE=${MYSQL_DATABASE:-u549746795_kealex}
-      - MYSQL_USER=${MYSQL_USER:-u549746795_kealex}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-Sally2026@!@}
-    networks:
-      - kealex-internal
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-  svc-prazos:
-    build: ./svc-prazos
-    image: kealex/svc-prazos:latest
-    container_name: svc-prazos
-    environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL:-mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex}
-      - MYSQL_HOST=${MYSQL_HOST:-srv1078.hstgr.io}
-      - MYSQL_PORT=${MYSQL_PORT:-3306}
-      - MYSQL_DATABASE=${MYSQL_DATABASE:-u549746795_kealex}
-      - MYSQL_USER=${MYSQL_USER:-u549746795_kealex}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-Sally2026@!@}
-    networks:
-      - kealex-internal
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-  svc-usuarios:
-    build: ./svc-usuarios
-    image: kealex/svc-usuarios:latest
-    container_name: svc-usuarios
-    environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL:-mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex}
-      - MYSQL_HOST=${MYSQL_HOST:-srv1078.hstgr.io}
-      - MYSQL_PORT=${MYSQL_PORT:-3306}
-      - MYSQL_DATABASE=${MYSQL_DATABASE:-u549746795_kealex}
-      - MYSQL_USER=${MYSQL_USER:-u549746795_kealex}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-Sally2026@!@}
-    networks:
-      - kealex-internal
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-  svc-configuracoes:
-    build: ./svc-configuracoes
-    image: kealex/svc-configuracoes:latest
-    container_name: svc-configuracoes
-    environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL:-mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex}
-      - MYSQL_HOST=${MYSQL_HOST:-srv1078.hstgr.io}
-      - MYSQL_PORT=${MYSQL_PORT:-3306}
-      - MYSQL_DATABASE=${MYSQL_DATABASE:-u549746795_kealex}
-      - MYSQL_USER=${MYSQL_USER:-u549746795_kealex}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-Sally2026@!@}
-    networks:
-      - kealex-internal
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-  svc-escritorios:
-    build: ./svc-escritorios
-    image: kealex/svc-escritorios:latest
-    container_name: svc-escritorios
-    environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL:-mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex}
-      - MYSQL_HOST=${MYSQL_HOST:-srv1078.hstgr.io}
-      - MYSQL_PORT=${MYSQL_PORT:-3306}
-      - MYSQL_DATABASE=${MYSQL_DATABASE:-u549746795_kealex}
-      - MYSQL_USER=${MYSQL_USER:-u549746795_kealex}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-Sally2026@!@}
-    networks:
-      - kealex-internal
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-  svc-clientes:
-    build: ./svc-clientes
-    image: kealex/svc-clientes:latest
-    container_name: svc-clientes
-    environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL:-mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex}
-      - MYSQL_HOST=${MYSQL_HOST:-srv1078.hstgr.io}
-      - MYSQL_PORT=${MYSQL_PORT:-3306}
-      - MYSQL_DATABASE=${MYSQL_DATABASE:-u549746795_kealex}
-      - MYSQL_USER=${MYSQL_USER:-u549746795_kealex}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-Sally2026@!@}
-    networks:
-      - kealex-internal
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-  api-gateway:
-    build: ./api-gateway
-    image: kealex/api-gateway:latest
-    container_name: api-gateway
-    ports:
-      - "8000:80"
-    depends_on:
-      - svc-auth
-      - svc-processos
-      - svc-documentos
-      - svc-financeiro
-      - svc-prazos
-      - svc-usuarios
-      - svc-configuracoes
-      - svc-escritorios
-      - svc-clientes
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-api.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/kealex`)"
-      - "traefik.http.routers.kealex-api.entrypoints=websecure"
-      - "traefik.http.routers.kealex-api.tls=true"
-      - "traefik.http.routers.kealex-api.service=kealex-api"
-      - "traefik.http.services.kealex-api.loadbalancer.server.port=80"
-      - "traefik.http.middlewares.kealex-strip.stripprefix.prefixes=/kealex"
-      - "traefik.http.middlewares.kealex-cors.headers.accesscontrolalloworiginlist=*"
-      - "traefik.http.middlewares.kealex-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
-      - "traefik.http.middlewares.kealex-cors.headers.accesscontrolallowheaders=*"
-      - "traefik.http.middlewares.kealex-cors.headers.accesscontrolallowcredentials=true"
-      - "traefik.http.routers.kealex-api.middlewares=kealex-strip,kealex-cors"
-      - "traefik.http.routers.kealex-api.priority=200"
-    networks:
-      - easypanel
-      - kealex-internal
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
