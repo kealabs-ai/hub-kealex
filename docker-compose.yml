@@ -21,6 +21,12 @@ services:
       - "traefik.http.middlewares.hubkealex-cors.headers.addvaryheader=true"
       - "traefik.http.routers.hubkealex.middlewares=hubkealex-cors"
       - "traefik.http.services.hubkealex.loadbalancer.server.port=8000"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/k1/lex/health', timeout=5)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     deploy:
       replicas: 1
       restart_policy:

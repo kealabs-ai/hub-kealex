@@ -76,28 +76,24 @@ pipeline {
         stage('Health Check') {
             steps {
                 sh '''
-                    echo "▶ Aguardando containers subirem (10s)..."
-                    sleep 10
-
-                    echo "▶ Testando health check via rede Docker (hubkealex:8000)..."
-                    for i in 1 2 3 4 5; do
-                        STATUS=$($DOCKER exec hubkealex curl -s -o /dev/null -w "%{http_code}" \
-                            --max-time 5 \
-                            http://hubkealex:8000/k1/lex/health 2>&1 || echo "000")
+                    echo "▶ Aguardando container ficar healthy..."
+                    
+                    for i in 1 2 3 4 5 6 7 8 9 10; do
+                        HEALTH_STATUS=$($DOCKER inspect --format='{{.State.Health.Status}}' hubkealex 2>/dev/null || echo "none")
                         
-                        echo "  Tentativa $i/5: HTTP $STATUS"
+                        echo "  Tentativa $i/10: Status = $HEALTH_STATUS"
                         
-                        if [ "$STATUS" = "200" ]; then
-                            echo "  ✔ /k1/lex/health → OK (via container DNS)"
+                        if [ "$HEALTH_STATUS" = "healthy" ]; then
+                            echo "  ✔ Container → HEALTHY"
                             exit 0
                         fi
                         
-                        if [ $i -lt 5 ]; then
-                            sleep 3
+                        if [ $i -lt 10 ]; then
+                            sleep 2
                         fi
                     done
                     
-                    echo "  ✘ Falha no health check após 5 tentativas"
+                    echo "  ✘ Container não ficou healthy após 10 tentativas"
                     echo "▶ Logs do container hubkealex:"
                     $DOCKER logs hubkealex | tail -30
                     echo "▶ Status dos containers:"
