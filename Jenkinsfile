@@ -79,16 +79,16 @@ pipeline {
                     echo "▶ Aguardando containers subirem (10s)..."
                     sleep 10
 
-                    echo "▶ Testando health check local (localhost:8000)..."
+                    echo "▶ Testando health check via rede Docker (hubkealex:8000)..."
                     for i in 1 2 3 4 5; do
-                        STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+                        STATUS=$($DOCKER exec hubkealex curl -s -o /dev/null -w "%{http_code}" \
                             --max-time 5 \
-                            http://localhost:8000/k1/lex/health 2>&1 || echo "000")
+                            http://hubkealex:8000/k1/lex/health 2>&1 || echo "000")
                         
                         echo "  Tentativa $i/5: HTTP $STATUS"
                         
                         if [ "$STATUS" = "200" ]; then
-                            echo "  ✔ /k1/lex/health → OK (localhost:8000)"
+                            echo "  ✔ /k1/lex/health → OK (via container DNS)"
                             exit 0
                         fi
                         
