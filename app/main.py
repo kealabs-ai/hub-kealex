@@ -183,7 +183,7 @@ def _enrich_processos(db: Session, processos: list[Processo]):
 
 # Pydantic models
 class LoginIn(BaseModel):
-    email: str
+    email: EmailStr
     senha: str
 
 class AuthUser(BaseModel):
