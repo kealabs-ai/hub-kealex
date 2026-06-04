@@ -33,7 +33,10 @@ services:
         condition: on-failure
     networks:
       - kealabs-net
+      - easypanel
 
 networks:
   kealabs-net:
+    external: true
+  easypanel:
     external: true

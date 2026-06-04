@@ -61,6 +61,10 @@ pipeline {
                     $DOCKER network inspect kealabs-net >/dev/null 2>&1 || \
                         $DOCKER network create kealabs-net
 
+                    echo "▶ Garantindo rede easypanel..."
+                    $DOCKER network inspect easypanel >/dev/null 2>&1 || \
+                        $DOCKER network create easypanel
+
                     echo "▶ Derrubando stack anterior..."
                     $DOCKER compose -f docker-compose.yml -p $PROJETO down --remove-orphans 2>/dev/null || true
 
