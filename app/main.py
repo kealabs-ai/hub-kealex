@@ -217,7 +217,16 @@ class ProcessoDeleteIn(BaseModel):
     id: str
 
 app = FastAPI(title="HubKealex API")
-app.add_middleware(CORSMiddleware, allow_origins=["*", "https://darkorange-raven-554257.hostingersite.com"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, 
+    allow_origins=[
+        "https://darkorange-raven-554257.hostingersite.com",
+        "http://localhost:3000",
+        "http://localhost:8000",
+    ], 
+    allow_methods=["*"], 
+    allow_headers=["*"],
+    allow_credentials=True
+)
 
 @app.on_event("startup")
 def startup_event():
