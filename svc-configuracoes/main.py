@@ -340,11 +340,12 @@ def save_ia(body: IaIn, db: Session = Depends(get_db), payload=Depends(require_a
     if "provider" in data and data["provider"] not in ["cerebras", "groq"]:
         raise HTTPException(400, "Provider inválido. Use 'cerebras' ou 'groq'")
     
-    # Validar modelo
+    # Validar modelo - permitir qualquer modelo para Groq (validação dinâmica)
     if "modelo" in data and "provider" in data:
         provider = data["provider"]
         modelo = data["modelo"]
-        if modelo not in MODELOS_DISPONIVEIS.get(provider, []):
+        # Apenas validar Cerebras estritamente, Groq permite modelos dinâmicos
+        if provider == "cerebras" and modelo not in MODELOS_DISPONIVEIS.get(provider, []):
             modelos_validos = ", ".join(MODELOS_DISPONIVEIS.get(provider, []))
             raise HTTPException(400, f"Modelo '{modelo}' inválido para provider '{provider}'. Modelos válidos: {modelos_validos}")
     
