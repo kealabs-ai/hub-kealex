@@ -108,6 +108,19 @@ class Processo(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class CfgIa(Base):
+    __tablename__ = "cfg_ia"
+    tenant_id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), nullable=False)
+    escritorio_id = Column(String(36), nullable=True)
+    provider = Column(String(50), default="cerebras")
+    api_key = Column(String(255), nullable=True)
+    modelo = Column(String(100), default="llama-3.3-70b")
+    max_tokens = Column(Integer, default=8192)
+    system_prompt = Column(Text, nullable=True)
+    ativo = Column(Boolean, default=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 def _init_db():
     try:
         Base.metadata.create_all(engine)
@@ -215,6 +228,46 @@ class ProcessoUpdate(BaseModel):
 
 class ProcessoDeleteIn(BaseModel):
     id: str
+
+class IaIn(BaseModel):
+    provider: Optional[str] = None
+    api_key: Optional[str] = None
+    modelo: Optional[str] = None
+    max_tokens: Optional[int] = None
+    system_prompt: Optional[str] = None
+    ativo: Optional[bool] = None
+
+def _require_admin(payload=Depends(verify_token)):
+    if payload.get("role") != "admin":
+        raise HTTPException(403, "Acesso negado")
+    return payload
+
+def _row(obj) -> dict:
+    d = {c.name: getattr(obj, c.name) for c in obj.__table__.columns}
+    if "updated_at" in d and d["updated_at"]:
+        d["updated_at"] = d["updated_at"].isoformat()
+    return d
+
+def _get_or_create_cfg_ia(db: Session, tenant_id: str, user_id: str):
+    row = db.get(CfgIa, tenant_id)
+    if not row:
+        row = CfgIa(tenant_id=tenant_id, user_id=user_id)
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+    return row
+
+def _upsert_cfg_ia(db: Session, tenant_id: str, user_id: str, data: dict):
+    row = db.get(CfgIa, tenant_id)
+    if not row:
+        row = CfgIa(tenant_id=tenant_id, user_id=user_id)
+        db.add(row)
+    for k, v in data.items():
+        setattr(row, k, v)
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    return row
 
 app = FastAPI(title="HubKealex API")
 app.add_middleware(CORSMiddleware, 
@@ -338,3 +391,43 @@ def list_escritorios(payload=Depends(verify_token)):
 @app.get("/k1/lex/configuracoes/geral")
 def get_configuracoes_geral(payload=Depends(verify_token)):
     return {"message": "Configurações gerais - implementar conforme necessário"}
+
+
+# IA Configuration
+MODELOS_DISPONIVEIS = {
+    "cerebras": ["llama-3.3-70b", "llama-3.1-70b", "llama-3.1-8b"],
+    "groq": ["llama-3.3-70b-versatile", "llama-3.1-70b-versatile", "llama-3.1-8b-instant", "llama-3.2-90b-text-preview", "llama-3.2-11b-text-preview", "gemma2-9b-it"]
+}
+
+@app.get("/v1/lex/configuracoes/ia")
+def get_ia(db: Session = Depends(get_db), payload=Depends(_require_admin)):
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_id = payload.get("sub")
+    return _row(_get_or_create_cfg_ia(db, tenant_id, user_id))
+
+@app.get("/v1/lex/configuracoes/ia/modelos")
+def get_modelos_disponiveis():
+    return MODELOS_DISPONIVEIS
+
+@app.get("/v1/lex/configuracoes/ia/ativa")
+def get_ia_ativa(db: Session = Depends(get_db), payload=Depends(verify_token)):
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_id = payload.get("sub")
+    return _row(_get_or_create_cfg_ia(db, tenant_id, user_id))
+
+@app.post("/v1/lex/configuracoes/ia")
+def save_ia(body: IaIn, db: Session = Depends(get_db), payload=Depends(_require_admin)):
+    data = body.model_dump(exclude_none=True)
+    if "provider" in data and data["provider"] not in ["cerebras", "groq"]:
+        raise HTTPException(400, "Provider invalido. Use 'cerebras' ou 'groq'")
+    if "api_key" in data and data["api_key"]:
+        tenant_id = payload.get("tenant_id") or payload.get("sub")
+        existing = db.get(CfgIa, tenant_id)
+        provider = data.get("provider") or (existing.provider if existing else "cerebras")
+        if provider == "cerebras" and not data["api_key"].startswith("csk-"):
+            raise HTTPException(400, "API key Cerebras deve comecar com 'csk-'")
+        if provider == "groq" and not (data["api_key"].startswith("gsk-") or data["api_key"].startswith("gsk_")):
+            raise HTTPException(400, "API key Groq deve comecar com 'gsk-' ou 'gsk_'")
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_id = payload.get("sub")
+    return _row(_upsert_cfg_ia(db, tenant_id, user_id, data))
