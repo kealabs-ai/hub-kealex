@@ -286,7 +286,8 @@ def save_database(body: DatabaseIn, db: Session = Depends(get_db), payload=Depen
 
 # ── IA ────────────────────────────────────────────────────────────────────────
 
-# Modelos disponíveis por provider
+# Modelos disponíveis por provider (lista de referência)
+# Nota: O endpoint aceita modelos dinâmicos não listados aqui
 MODELOS_DISPONIVEIS = {
     "cerebras": [
         "llama-3.3-70b",
@@ -322,7 +323,9 @@ def get_ia(db: Session = Depends(get_db), payload=Depends(require_admin)):
 
 @app.get("/v1/lex/configuracoes/ia/modelos")
 def get_modelos_disponiveis():
-    """Retorna a lista de modelos disponíveis por provider"""
+    """Retorna a lista de modelos disponíveis por provider (referência apenas)
+    Nota: O endpoint POST /v1/lex/configuracoes/ia aceita qualquer modelo, não apenas os listados aqui
+    """
     return MODELOS_DISPONIVEIS
 
 @app.get("/v1/lex/configuracoes/ia/ativa")
@@ -340,14 +343,8 @@ def save_ia(body: IaIn, db: Session = Depends(get_db), payload=Depends(require_a
     if "provider" in data and data["provider"] not in ["cerebras", "groq"]:
         raise HTTPException(400, "Provider inválido. Use 'cerebras' ou 'groq'")
     
-    # Validar modelo - permitir qualquer modelo para Groq (validação dinâmica)
-    if "modelo" in data and "provider" in data:
-        provider = data["provider"]
-        modelo = data["modelo"]
-        # Apenas validar Cerebras estritamente, Groq permite modelos dinâmicos
-        if provider == "cerebras" and modelo not in MODELOS_DISPONIVEIS.get(provider, []):
-            modelos_validos = ", ".join(MODELOS_DISPONIVEIS.get(provider, []))
-            raise HTTPException(400, f"Modelo '{modelo}' inválido para provider '{provider}'. Modelos válidos: {modelos_validos}")
+    # Permitir qualquer modelo (sem validação restrita à lista)
+    # O frontend pode enviar modelos dinâmicos não listados em MODELOS_DISPONIVEIS
     
     # Validar prefixo da API key
     if "api_key" in data and data["api_key"]:
