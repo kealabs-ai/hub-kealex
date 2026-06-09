@@ -147,6 +147,23 @@ class CfgNotificacoes(Base):
     notif_sms        = Column(String(20),  default="desabilitadas")
     updated_at       = Column(DateTime,    default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class AgenteIA(Base):
+    __tablename__ = "agentes_ia"
+    id            = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id     = Column(String(36), nullable=False)
+    escritorio_id = Column(String(36), nullable=True)
+    nome          = Column(String(255), nullable=False)
+    descricao     = Column(Text, nullable=True)
+    provider      = Column(String(50), nullable=False)
+    api_key       = Column(Text, nullable=False)
+    modelo        = Column(String(255), nullable=False)
+    max_tokens    = Column(Integer, nullable=False, default=8192)
+    system_prompt = Column(Text, nullable=True)
+    ativo         = Column(Boolean, nullable=False, default=True)
+    publico       = Column(Boolean, nullable=False, default=True)
+    created_at    = Column(DateTime, default=datetime.utcnow)
+    updated_at    = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 Base.metadata.create_all(engine)
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -438,3 +455,143 @@ def save_notificacoes(body: NotificacoesIn, db: Session = Depends(get_db), paylo
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
     return _row(_upsert(db, CfgNotificacoes, tenant_id, user_id, body.model_dump(exclude_none=True)))
+
+# ── Agentes IA ────────────────────────────────────────────────────────────────
+
+class AgenteIACreate(BaseModel):
+    nome: str
+    descricao: Optional[str] = None
+    provider: str
+    api_key: str
+    modelo: str
+    max_tokens: int = 8192
+    system_prompt: Optional[str] = None
+    ativo: bool = True
+    publico: bool = True
+
+class AgenteIAUpdate(BaseModel):
+    nome: Optional[str] = None
+    descricao: Optional[str] = None
+    provider: Optional[str] = None
+    api_key: Optional[str] = None
+    modelo: Optional[str] = None
+    max_tokens: Optional[int] = None
+    system_prompt: Optional[str] = None
+    ativo: Optional[bool] = None
+    publico: Optional[bool] = None
+
+@app.get("/v1/lex/agentes")
+def listar_agentes(db: Session = Depends(get_db), payload=Depends(require_admin)):
+    """Lista todos os agentes do tenant (apenas admin)"""
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    agentes = db.query(AgenteIA).filter(AgenteIA.tenant_id == tenant_id).order_by(AgenteIA.created_at.desc()).all()
+    return [{**_row(a)} for a in agentes]
+
+@app.get("/v1/lex/agentes/publicos")
+def listar_agentes_publicos(db: Session = Depends(get_db), payload=Depends(verify_token)):
+    """Lista agentes públicos e ativos (disponíveis para todos)"""
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    agentes = db.query(AgenteIA).filter(
+        AgenteIA.tenant_id == tenant_id,
+        AgenteIA.ativo == True,
+        AgenteIA.publico == True
+    ).order_by(AgenteIA.created_at.desc()).all()
+    return [{**_row(a)} for a in agentes]
+
+@app.get("/v1/lex/agentes/{agente_id}")
+def buscar_agente(agente_id: str, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    """Busca um agente específico"""
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    agente = db.query(AgenteIA).filter(
+        AgenteIA.id == agente_id,
+        AgenteIA.tenant_id == tenant_id
+    ).first()
+    
+    if not agente:
+        raise HTTPException(404, "Agente não encontrado")
+    
+    # Se não for admin, só pode ver agentes públicos
+    if payload.get("role") != "admin" and not agente.publico:
+        raise HTTPException(403, "Acesso negado a este agente")
+    
+    return _row(agente)
+
+@app.post("/v1/lex/agentes", status_code=201)
+def criar_agente(body: AgenteIACreate, db: Session = Depends(get_db), payload=Depends(require_admin)):
+    """Cria um novo agente (apenas admin)"""
+    # Validar provider
+    if body.provider not in ["cerebras", "groq"]:
+        raise HTTPException(400, "Provider inválido. Use 'cerebras' ou 'groq'")
+    
+    # Validar prefixo da API key
+    if body.provider == "cerebras" and not body.api_key.startswith("csk-"):
+        raise HTTPException(400, "API key Cerebras deve começar com 'csk-'")
+    if body.provider == "groq" and not (body.api_key.startswith("gsk-") or body.api_key.startswith("gsk_")):
+        raise HTTPException(400, "API key Groq deve começar com 'gsk-' ou 'gsk_'")
+    
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    escritorio_id = payload.get("escritorio_id")
+    
+    novo_agente = AgenteIA(
+        tenant_id=tenant_id,
+        escritorio_id=escritorio_id,
+        **body.model_dump()
+    )
+    
+    db.add(novo_agente)
+    db.commit()
+    db.refresh(novo_agente)
+    
+    return _row(novo_agente)
+
+@app.put("/v1/lex/agentes/{agente_id}")
+def atualizar_agente(agente_id: str, body: AgenteIAUpdate, db: Session = Depends(get_db), payload=Depends(require_admin)):
+    """Atualiza um agente existente (apenas admin)"""
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    agente = db.query(AgenteIA).filter(
+        AgenteIA.id == agente_id,
+        AgenteIA.tenant_id == tenant_id
+    ).first()
+    
+    if not agente:
+        raise HTTPException(404, "Agente não encontrado")
+    
+    # Validar provider se fornecido
+    update_data = body.model_dump(exclude_none=True)
+    if "provider" in update_data and update_data["provider"] not in ["cerebras", "groq"]:
+        raise HTTPException(400, "Provider inválido. Use 'cerebras' ou 'groq'")
+    
+    # Validar prefixo da API key se fornecida
+    if "api_key" in update_data:
+        provider = update_data.get("provider", agente.provider)
+        if provider == "cerebras" and not update_data["api_key"].startswith("csk-"):
+            raise HTTPException(400, "API key Cerebras deve começar com 'csk-'")
+        if provider == "groq" and not (update_data["api_key"].startswith("gsk-") or update_data["api_key"].startswith("gsk_")):
+            raise HTTPException(400, "API key Groq deve começar com 'gsk-' ou 'gsk_'")
+    
+    # Atualizar campos
+    for field, value in update_data.items():
+        setattr(agente, field, value)
+    
+    agente.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(agente)
+    
+    return _row(agente)
+
+@app.delete("/v1/lex/agentes/{agente_id}", status_code=204)
+def deletar_agente(agente_id: str, db: Session = Depends(get_db), payload=Depends(require_admin)):
+    """Deleta um agente (apenas admin)"""
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    agente = db.query(AgenteIA).filter(
+        AgenteIA.id == agente_id,
+        AgenteIA.tenant_id == tenant_id
+    ).first()
+    
+    if not agente:
+        raise HTTPException(404, "Agente não encontrado")
+    
+    db.delete(agente)
+    db.commit()
+    
+    return None
