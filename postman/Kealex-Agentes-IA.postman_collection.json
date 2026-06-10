@@ -1,0 +1,196 @@
+{
+  "info": {
+    "name": "Kealex - Agentes IA",
+    "description": "Collection para testar endpoints de agentes IA",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Listar Todos os Agentes (Admin)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/v1/lex/agentes",
+          "host": ["{{base_url}}"],
+          "path": ["v1", "lex", "agentes"]
+        }
+      }
+    },
+    {
+      "name": "2. Listar Agentes Públicos",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/v1/lex/agentes/publicos",
+          "host": ["{{base_url}}"],
+          "path": ["v1", "lex", "agentes", "publicos"]
+        }
+      }
+    },
+    {
+      "name": "3. Buscar Agente Específico",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"{{agente_id}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/v1/lex/agentes/get",
+          "host": ["{{base_url}}"],
+          "path": ["v1", "lex", "agentes", "get"]
+        }
+      }
+    },
+    {
+      "name": "4. Criar Agente Cerebras",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 201) {",
+              "    const response = pm.response.json();",
+              "    pm.environment.set('agente_id', response.id);",
+              "    pm.test('Agente criado com sucesso', () => {",
+              "        pm.expect(response.nome).to.eql('Assistente Civil');",
+              "    });",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nome\": \"Assistente Civil\",\n  \"descricao\": \"Especializado em direito civil brasileiro\",\n  \"provider\": \"cerebras\",\n  \"api_key\": \"csk-test-key-123\",\n  \"modelo\": \"llama-3.3-70b\",\n  \"max_tokens\": 8192,\n  \"system_prompt\": \"Você é um especialista em direito civil brasileiro.\",\n  \"ativo\": true,\n  \"publico\": true\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/v1/lex/agentes",
+          "host": ["{{base_url}}"],
+          "path": ["v1", "lex", "agentes"]
+        }
+      }
+    },
+    {
+      "name": "5. Criar Agente Groq",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nome\": \"Assistente Trabalhista\",\n  \"descricao\": \"Especializado em direito do trabalho\",\n  \"provider\": \"groq\",\n  \"api_key\": \"gsk-test-key-456\",\n  \"modelo\": \"llama-3.3-70b-versatile\",\n  \"max_tokens\": 8192,\n  \"system_prompt\": \"Você é um especialista em direito trabalhista brasileiro.\",\n  \"ativo\": true,\n  \"publico\": false\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/v1/lex/agentes",
+          "host": ["{{base_url}}"],
+          "path": ["v1", "lex", "agentes"]
+        }
+      }
+    },
+    {
+      "name": "6. Atualizar Agente",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"{{agente_id}}\",\n  \"nome\": \"Assistente Civil Atualizado\",\n  \"descricao\": \"Nova descrição do agente\",\n  \"ativo\": true,\n  \"publico\": false\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/v1/lex/agentes/update",
+          "host": ["{{base_url}}"],
+          "path": ["v1", "lex", "agentes", "update"]
+        }
+      }
+    },
+    {
+      "name": "7. Deletar Agente",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"{{agente_id}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/v1/lex/agentes/delete",
+          "host": ["{{base_url}}"],
+          "path": ["v1", "lex", "agentes", "delete"]
+        }
+      }
+    }
+  ]
+}
