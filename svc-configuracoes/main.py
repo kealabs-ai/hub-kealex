@@ -238,13 +238,13 @@ class GeralIn(BaseModel):
     idioma:           Optional[str]  = None
     modo_manutencao:  Optional[bool] = None
 
-@app.get("/v1/lex/configuracoes/geral")
+@app.get("/k1/lex/configuracoes/geral")
 def get_geral(db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
     return _row(_get_or_create(db, CfgGeral, tenant_id, user_id))
 
-@app.post("/v1/lex/configuracoes/geral")
+@app.post("/k1/lex/configuracoes/geral")
 def save_geral(body: GeralIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
@@ -264,13 +264,13 @@ class CdnIn(BaseModel):
     retencao_arquivo:  Optional[bool] = None
     retencao_delete:   Optional[bool] = None
 
-@app.get("/v1/lex/configuracoes/cdn")
+@app.get("/k1/lex/configuracoes/cdn")
 def get_cdn(db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
     return _row(_get_or_create(db, CfgCdn, tenant_id, user_id))
 
-@app.post("/v1/lex/configuracoes/cdn")
+@app.post("/k1/lex/configuracoes/cdn")
 def save_cdn(body: CdnIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
@@ -289,7 +289,7 @@ class DatabaseIn(BaseModel):
     backup_frequencia: Optional[str]  = None
     backup_retencao:   Optional[int]  = None
 
-@app.get("/v1/lex/configuracoes/database/env")
+@app.get("/k1/lex/configuracoes/database/env")
 def get_database_env(payload=Depends(require_admin)):
     """Retorna valores das variáveis de ambiente do banco de dados"""
     return {
@@ -301,13 +301,13 @@ def get_database_env(payload=Depends(require_admin)):
         "connection_string": os.getenv("DATABASE_URL", "")
     }
 
-@app.get("/v1/lex/configuracoes/database")
+@app.get("/k1/lex/configuracoes/database")
 def get_database(db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
     return _row(_get_or_create(db, CfgDatabase, tenant_id, user_id))
 
-@app.post("/v1/lex/configuracoes/database")
+@app.post("/k1/lex/configuracoes/database")
 def save_database(body: DatabaseIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
@@ -344,27 +344,27 @@ class IaIn(BaseModel):
     system_prompt: Optional[str]  = None
     ativo:         Optional[bool] = None
 
-@app.get("/v1/lex/configuracoes/ia")
+@app.get("/k1/lex/configuracoes/ia")
 def get_ia(db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
     return _row(_get_or_create(db, CfgIa, tenant_id, user_id))
 
-@app.get("/v1/lex/configuracoes/ia/modelos")
+@app.get("/k1/lex/configuracoes/ia/modelos")
 def get_modelos_disponiveis():
     """Retorna a lista de modelos disponíveis por provider (referência apenas)
-    Nota: O endpoint POST /v1/lex/configuracoes/ia aceita qualquer modelo, não apenas os listados aqui
+    Nota: O endpoint POST /k1/lex/configuracoes/ia aceita qualquer modelo, não apenas os listados aqui
     """
     return MODELOS_DISPONIVEIS
 
-@app.get("/v1/lex/configuracoes/ia/ativa")
+@app.get("/k1/lex/configuracoes/ia/ativa")
 def get_ia_ativa(db: Session = Depends(get_db), payload=Depends(verify_token)):
     """Retorna a configuração de IA ativa para o tenant (não requer admin)"""
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
     return _row(_get_or_create(db, CfgIa, tenant_id, user_id))
 
-@app.post("/v1/lex/configuracoes/ia")
+@app.post("/k1/lex/configuracoes/ia")
 def save_ia(body: IaIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
     data = body.model_dump(exclude_none=True)
     
@@ -402,13 +402,13 @@ class UsuariosIn(BaseModel):
     sessao_inativa_min:   Optional[int]  = None
     registro_modo:        Optional[str]  = None
 
-@app.get("/v1/lex/configuracoes/usuarios")
+@app.get("/k1/lex/configuracoes/usuarios")
 def get_usuarios(db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
     return _row(_get_or_create(db, CfgUsuarios, tenant_id, user_id))
 
-@app.post("/v1/lex/configuracoes/usuarios")
+@app.post("/k1/lex/configuracoes/usuarios")
 def save_usuarios(body: UsuariosIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
@@ -429,13 +429,13 @@ class SegurancaIn(BaseModel):
     lgpd_esquecimento:   Optional[bool] = None
     lgpd_exportacao:     Optional[bool] = None
 
-@app.get("/v1/lex/configuracoes/seguranca")
+@app.get("/k1/lex/configuracoes/seguranca")
 def get_seguranca(db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
     return _row(_get_or_create(db, CfgSeguranca, tenant_id, user_id))
 
-@app.post("/v1/lex/configuracoes/seguranca")
+@app.post("/k1/lex/configuracoes/seguranca")
 def save_seguranca(body: SegurancaIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
@@ -456,13 +456,13 @@ class NotificacoesIn(BaseModel):
     notif_push:       Optional[str]  = None
     notif_sms:        Optional[str]  = None
 
-@app.get("/v1/lex/configuracoes/notificacoes")
+@app.get("/k1/lex/configuracoes/notificacoes")
 def get_notificacoes(db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
     return _row(_get_or_create(db, CfgNotificacoes, tenant_id, user_id))
 
-@app.post("/v1/lex/configuracoes/notificacoes")
+@app.post("/k1/lex/configuracoes/notificacoes")
 def save_notificacoes(body: NotificacoesIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
@@ -492,14 +492,14 @@ class AgenteIAUpdate(BaseModel):
     ativo: Optional[bool] = None
     publico: Optional[bool] = None
 
-@app.get("/v1/lex/agentes")
+@app.get("/k1/lex/agentes")
 def listar_agentes(db: Session = Depends(get_db), payload=Depends(require_admin)):
     """Lista todos os agentes do tenant (apenas admin)"""
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     agentes = db.query(AgenteIA).filter(AgenteIA.tenant_id == tenant_id).order_by(AgenteIA.created_at.desc()).all()
     return [{**_row(a)} for a in agentes]
 
-@app.get("/v1/lex/agentes/publicos")
+@app.get("/k1/lex/agentes/publicos")
 def listar_agentes_publicos(db: Session = Depends(get_db), payload=Depends(verify_token)):
     """Lista agentes públicos e ativos (disponíveis para todos)"""
     tenant_id = payload.get("tenant_id") or payload.get("sub")
@@ -510,7 +510,7 @@ def listar_agentes_publicos(db: Session = Depends(get_db), payload=Depends(verif
     ).order_by(AgenteIA.created_at.desc()).all()
     return [{**_row(a)} for a in agentes]
 
-@app.get("/v1/lex/agentes/{agente_id}")
+@app.get("/k1/lex/agentes/{agente_id}")
 def buscar_agente(agente_id: str, db: Session = Depends(get_db), payload=Depends(verify_token)):
     """Busca um agente específico"""
     tenant_id = payload.get("tenant_id") or payload.get("sub")
@@ -528,7 +528,7 @@ def buscar_agente(agente_id: str, db: Session = Depends(get_db), payload=Depends
     
     return _row(agente)
 
-@app.post("/v1/lex/agentes", status_code=201)
+@app.post("/k1/lex/agentes", status_code=201)
 def criar_agente(body: AgenteIACreate, db: Session = Depends(get_db), payload=Depends(require_admin)):
     """Cria um novo agente (apenas admin)"""
     # Validar provider
@@ -556,7 +556,7 @@ def criar_agente(body: AgenteIACreate, db: Session = Depends(get_db), payload=De
     
     return _row(novo_agente)
 
-@app.put("/v1/lex/agentes/{agente_id}")
+@app.put("/k1/lex/agentes/{agente_id}")
 def atualizar_agente(agente_id: str, body: AgenteIAUpdate, db: Session = Depends(get_db), payload=Depends(require_admin)):
     """Atualiza um agente existente (apenas admin)"""
     tenant_id = payload.get("tenant_id") or payload.get("sub")
@@ -591,7 +591,7 @@ def atualizar_agente(agente_id: str, body: AgenteIAUpdate, db: Session = Depends
     
     return _row(agente)
 
-@app.delete("/v1/lex/agentes/{agente_id}", status_code=204)
+@app.delete("/k1/lex/agentes/{agente_id}", status_code=204)
 def deletar_agente(agente_id: str, db: Session = Depends(get_db), payload=Depends(require_admin)):
     """Deleta um agente (apenas admin)"""
     tenant_id = payload.get("tenant_id") or payload.get("sub")
