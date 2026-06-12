@@ -289,6 +289,18 @@ class DatabaseIn(BaseModel):
     backup_frequencia: Optional[str]  = None
     backup_retencao:   Optional[int]  = None
 
+@app.get("/v1/lex/configuracoes/database/env")
+def get_database_env(payload=Depends(require_admin)):
+    """Retorna valores das variáveis de ambiente do banco de dados"""
+    return {
+        "host": os.getenv("DB_HOST", ""),
+        "port": os.getenv("DB_PORT", ""),
+        "name": os.getenv("DB_NAME", ""),
+        "user": os.getenv("DB_USER", ""),
+        "password": os.getenv("DB_PASSWORD", ""),
+        "connection_string": os.getenv("DATABASE_URL", "")
+    }
+
 @app.get("/v1/lex/configuracoes/database")
 def get_database(db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
