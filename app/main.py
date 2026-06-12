@@ -438,23 +438,23 @@ MODELOS_DISPONIVEIS = {
     "groq": ["llama-3.3-70b-versatile", "llama-3.1-70b-versatile", "llama-3.1-8b-instant", "llama-3.2-90b-text-preview", "llama-3.2-11b-text-preview", "gemma2-9b-it"]
 }
 
-@app.get("/v1/lex/configuracoes/ia")
+@app.get("/k1/lex/configuracoes/ia")
 def get_ia(db: Session = Depends(get_db), payload=Depends(_require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
     return _row(_get_or_create_cfg_ia(db, tenant_id, user_id))
 
-@app.get("/v1/lex/configuracoes/ia/modelos")
+@app.get("/k1/lex/configuracoes/ia/modelos")
 def get_modelos_disponiveis():
     return MODELOS_DISPONIVEIS
 
-@app.get("/v1/lex/configuracoes/ia/ativa")
+@app.get("/k1/lex/configuracoes/ia/ativa")
 def get_ia_ativa(db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
     return _row(_get_or_create_cfg_ia(db, tenant_id, user_id))
 
-@app.post("/v1/lex/configuracoes/ia")
+@app.post("/k1/lex/configuracoes/ia")
 def save_ia(body: IaIn, db: Session = Depends(get_db), payload=Depends(_require_admin)):
     data = body.model_dump(exclude_none=True)
     if "provider" in data and data["provider"] not in ["cerebras", "groq"]:
@@ -489,6 +489,74 @@ def listar_agentes_publicos(db: Session = Depends(get_db), payload=Depends(verif
         AgenteIA.publico == True
     ).order_by(AgenteIA.created_at.desc()).all()
     return [{**_row(a)} for a in agentes]
+
+@app.get("/k1/lex/agentes/{agente_id}")
+def buscar_agente_by_id(agente_id: str, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    """Busca um agente especifico por ID via GET"""
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    agente = db.query(AgenteIA).filter(
+        AgenteIA.id == agente_id,
+        AgenteIA.tenant_id == tenant_id
+    ).first()
+    
+    if not agente:
+        raise HTTPException(404, "Agente nao encontrado")
+    
+    if payload.get("role") != "admin" and not agente.publico:
+        raise HTTPException(403, "Acesso negado a este agente")
+    
+    return _row(agente)
+
+@app.put("/k1/lex/agentes/{agente_id}")
+def atualizar_agente_by_id(agente_id: str, body: AgenteIAUpdate, db: Session = Depends(get_db), payload=Depends(_require_admin)):
+    """Atualiza um agente via PUT"""
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    agente = db.query(AgenteIA).filter(
+        AgenteIA.id == agente_id,
+        AgenteIA.tenant_id == tenant_id
+    ).first()
+    
+    if not agente:
+        raise HTTPException(404, "Agente nao encontrado")
+    
+    update_data = body.model_dump(exclude_none=True)
+    
+    if "provider" in update_data and update_data["provider"] not in ["cerebras", "groq"]:
+        raise HTTPException(400, "Provider invalido. Use 'cerebras' ou 'groq'")
+    
+    if "api_key" in update_data:
+        provider = update_data.get("provider", agente.provider)
+        if provider == "cerebras" and not update_data["api_key"].startswith("csk-"):
+            raise HTTPException(400, "API key Cerebras deve comecar com 'csk-'")
+        if provider == "groq" and not (update_data["api_key"].startswith("gsk-") or update_data["api_key"].startswith("gsk_")):
+            raise HTTPException(400, "API key Groq deve comecar com 'gsk-' ou 'gsk_'")
+    
+    for field, value in update_data.items():
+        if hasattr(agente, field):
+            setattr(agente, field, value)
+    
+    agente.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(agente)
+    
+    return _row(agente)
+
+@app.delete("/k1/lex/agentes/{agente_id}")
+def deletar_agente_by_id(agente_id: str, db: Session = Depends(get_db), payload=Depends(_require_admin)):
+    """Deleta um agente via DELETE"""
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    agente = db.query(AgenteIA).filter(
+        AgenteIA.id == agente_id,
+        AgenteIA.tenant_id == tenant_id
+    ).first()
+    
+    if not agente:
+        raise HTTPException(404, "Agente nao encontrado")
+    
+    db.delete(agente)
+    db.commit()
+    
+    return {"ok": True}
 
 @app.post("/k1/lex/agentes/get")
 def buscar_agente(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
@@ -655,7 +723,7 @@ class CfgNotificacoes(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 # Configuration Endpoints
-@app.get("/v1/lex/configuracoes/database")
+@app.get("/k1/lex/configuracoes/database")
 def get_database(db: Session = Depends(get_db), payload=Depends(_require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
@@ -667,7 +735,19 @@ def get_database(db: Session = Depends(get_db), payload=Depends(_require_admin))
         db.refresh(row)
     return _row(row)
 
-@app.post("/v1/lex/configuracoes/database")
+@app.get("/k1/lex/configuracoes/database/env")
+def get_database_env(payload=Depends(_require_admin)):
+    """Retorna valores das variáveis de ambiente do banco de dados"""
+    return {
+        "host": os.getenv("DB_HOST", ""),
+        "port": os.getenv("DB_PORT", ""),
+        "name": os.getenv("DB_NAME", ""),
+        "user": os.getenv("DB_USER", ""),
+        "password": os.getenv("DB_PASSWORD", ""),
+        "connection_string": os.getenv("DATABASE_URL", "")
+    }
+
+@app.post("/k1/lex/configuracoes/database")
 def save_database(body: dict, db: Session = Depends(get_db), payload=Depends(_require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
@@ -683,7 +763,7 @@ def save_database(body: dict, db: Session = Depends(get_db), payload=Depends(_re
     db.refresh(row)
     return _row(row)
 
-@app.get("/v1/lex/configuracoes/cdn")
+@app.get("/k1/lex/configuracoes/cdn")
 def get_cdn(db: Session = Depends(get_db), payload=Depends(_require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
@@ -695,7 +775,7 @@ def get_cdn(db: Session = Depends(get_db), payload=Depends(_require_admin)):
         db.refresh(row)
     return _row(row)
 
-@app.post("/v1/lex/configuracoes/cdn")
+@app.post("/k1/lex/configuracoes/cdn")
 def save_cdn(body: dict, db: Session = Depends(get_db), payload=Depends(_require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
@@ -711,7 +791,7 @@ def save_cdn(body: dict, db: Session = Depends(get_db), payload=Depends(_require
     db.refresh(row)
     return _row(row)
 
-@app.get("/v1/lex/configuracoes/usuarios")
+@app.get("/k1/lex/configuracoes/usuarios")
 def get_usuarios_cfg(db: Session = Depends(get_db), payload=Depends(_require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
@@ -723,7 +803,7 @@ def get_usuarios_cfg(db: Session = Depends(get_db), payload=Depends(_require_adm
         db.refresh(row)
     return _row(row)
 
-@app.post("/v1/lex/configuracoes/usuarios")
+@app.post("/k1/lex/configuracoes/usuarios")
 def save_usuarios_cfg(body: dict, db: Session = Depends(get_db), payload=Depends(_require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
@@ -739,7 +819,7 @@ def save_usuarios_cfg(body: dict, db: Session = Depends(get_db), payload=Depends
     db.refresh(row)
     return _row(row)
 
-@app.get("/v1/lex/configuracoes/seguranca")
+@app.get("/k1/lex/configuracoes/seguranca")
 def get_seguranca(db: Session = Depends(get_db), payload=Depends(_require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
@@ -751,7 +831,7 @@ def get_seguranca(db: Session = Depends(get_db), payload=Depends(_require_admin)
         db.refresh(row)
     return _row(row)
 
-@app.post("/v1/lex/configuracoes/seguranca")
+@app.post("/k1/lex/configuracoes/seguranca")
 def save_seguranca(body: dict, db: Session = Depends(get_db), payload=Depends(_require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
@@ -767,7 +847,7 @@ def save_seguranca(body: dict, db: Session = Depends(get_db), payload=Depends(_r
     db.refresh(row)
     return _row(row)
 
-@app.get("/v1/lex/configuracoes/notificacoes")
+@app.get("/k1/lex/configuracoes/notificacoes")
 def get_notificacoes(db: Session = Depends(get_db), payload=Depends(_require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
@@ -779,7 +859,7 @@ def get_notificacoes(db: Session = Depends(get_db), payload=Depends(_require_adm
         db.refresh(row)
     return _row(row)
 
-@app.post("/v1/lex/configuracoes/notificacoes")
+@app.post("/k1/lex/configuracoes/notificacoes")
 def save_notificacoes(body: dict, db: Session = Depends(get_db), payload=Depends(_require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
@@ -794,3 +874,79 @@ def save_notificacoes(body: dict, db: Session = Depends(get_db), payload=Depends
     db.commit()
     db.refresh(row)
     return _row(row)
+
+
+# Agentes IA endpoints RESTful
+@app.get("/k1/lex/agentes/{agente_id}")
+@app.post("/k1/lex/agentes/{agente_id}")
+def get_agente(agente_id: str, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    """Busca um agente especifico"""
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    agente = db.query(AgenteIA).filter(
+        AgenteIA.id == agente_id,
+        AgenteIA.tenant_id == tenant_id
+    ).first()
+    
+    if not agente:
+        raise HTTPException(404, "Agente nao encontrado")
+    
+    if payload.get("role") != "admin" and not agente.publico:
+        raise HTTPException(403, "Acesso negado a este agente")
+    
+    return _row(agente)
+
+@app.post("/k1/lex/agentes/{agente_id}/update")
+@app.get("/k1/lex/agentes/{agente_id}/update")
+async def update_agente_rest(agente_id: str, body: dict = None, db: Session = Depends(get_db), payload=Depends(_require_admin)):
+    """Atualiza um agente existente (apenas admin)"""
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    agente = db.query(AgenteIA).filter(
+        AgenteIA.id == agente_id,
+        AgenteIA.tenant_id == tenant_id
+    ).first()
+    
+    if not agente:
+        raise HTTPException(404, "Agente nao encontrado")
+    
+    if body is None:
+        body = {}
+    
+    update_data = {k: v for k, v in body.items() if k != "id" and v is not None}
+    
+    if "provider" in update_data and update_data["provider"] not in ["cerebras", "groq"]:
+        raise HTTPException(400, "Provider invalido. Use 'cerebras' ou 'groq'")
+    
+    if "api_key" in update_data:
+        provider = update_data.get("provider", agente.provider)
+        if provider == "cerebras" and not update_data["api_key"].startswith("csk-"):
+            raise HTTPException(400, "API key Cerebras deve comecar com 'csk-'")
+        if provider == "groq" and not (update_data["api_key"].startswith("gsk-") or update_data["api_key"].startswith("gsk_")):
+            raise HTTPException(400, "API key Groq deve comecar com 'gsk-' ou 'gsk_'")
+    
+    for field, value in update_data.items():
+        if hasattr(agente, field):
+            setattr(agente, field, value)
+    
+    agente.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(agente)
+    
+    return _row(agente)
+
+@app.post("/k1/lex/agentes/{agente_id}/delete")
+@app.get("/k1/lex/agentes/{agente_id}/delete")
+def delete_agente(agente_id: str, db: Session = Depends(get_db), payload=Depends(_require_admin)):
+    """Deleta um agente (apenas admin)"""
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    agente = db.query(AgenteIA).filter(
+        AgenteIA.id == agente_id,
+        AgenteIA.tenant_id == tenant_id
+    ).first()
+    
+    if not agente:
+        raise HTTPException(404, "Agente nao encontrado")
+    
+    db.delete(agente)
+    db.commit()
+    
+    return {"ok": True}
