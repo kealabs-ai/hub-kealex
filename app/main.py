@@ -472,14 +472,14 @@ def save_ia(body: IaIn, db: Session = Depends(get_db), payload=Depends(_require_
     return _row(_upsert_cfg_ia(db, tenant_id, user_id, data))
 
 # Agentes IA endpoints
-@app.get("/v1/lex/agentes")
+@app.get("/k1/lex/agentes")
 def listar_agentes(db: Session = Depends(get_db), payload=Depends(_require_admin)):
     """Lista todos os agentes do tenant (apenas admin)"""
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     agentes = db.query(AgenteIA).filter(AgenteIA.tenant_id == tenant_id).order_by(AgenteIA.created_at.desc()).all()
     return [{**_row(a)} for a in agentes]
 
-@app.get("/v1/lex/agentes/publicos")
+@app.get("/k1/lex/agentes/publicos")
 def listar_agentes_publicos(db: Session = Depends(get_db), payload=Depends(verify_token)):
     """Lista agentes publicos e ativos (disponiveis para todos)"""
     tenant_id = payload.get("tenant_id") or payload.get("sub")
@@ -490,7 +490,7 @@ def listar_agentes_publicos(db: Session = Depends(get_db), payload=Depends(verif
     ).order_by(AgenteIA.created_at.desc()).all()
     return [{**_row(a)} for a in agentes]
 
-@app.post("/v1/lex/agentes/get")
+@app.post("/k1/lex/agentes/get")
 def buscar_agente(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
     """Busca um agente especifico"""
     agente_id = body.get("id")
@@ -512,7 +512,7 @@ def buscar_agente(body: dict, db: Session = Depends(get_db), payload=Depends(ver
     
     return _row(agente)
 
-@app.post("/v1/lex/agentes", status_code=201)
+@app.post("/k1/lex/agentes", status_code=201)
 def criar_agente(body: AgenteIACreate, db: Session = Depends(get_db), payload=Depends(_require_admin)):
     """Cria um novo agente (apenas admin)"""
     # Validar provider
@@ -540,7 +540,7 @@ def criar_agente(body: AgenteIACreate, db: Session = Depends(get_db), payload=De
     
     return _row(novo_agente)
 
-@app.post("/v1/lex/agentes/update")
+@app.post("/k1/lex/agentes/update")
 def atualizar_agente(body: dict, db: Session = Depends(get_db), payload=Depends(_require_admin)):
     """Atualiza um agente existente (apenas admin)"""
     agente_id = body.get("id")
@@ -582,7 +582,7 @@ def atualizar_agente(body: dict, db: Session = Depends(get_db), payload=Depends(
     
     return _row(agente)
 
-@app.post("/v1/lex/agentes/delete")
+@app.post("/k1/lex/agentes/delete")
 def deletar_agente(body: dict, db: Session = Depends(get_db), payload=Depends(_require_admin)):
     """Deleta um agente (apenas admin)"""
     agente_id = body.get("id")
@@ -602,3 +602,195 @@ def deletar_agente(body: dict, db: Session = Depends(get_db), payload=Depends(_r
     db.commit()
     
     return {"ok": True}
+
+
+# Configuration Models
+class CfgDatabase(Base):
+    __tablename__ = "cfg_database"
+    tenant_id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), nullable=False)
+    tipo = Column(String(50), default="mysql")
+    pool_size = Column(Integer, default=20)
+    timeout_segundos = Column(Integer, default=30)
+    ssl_enabled = Column(Boolean, default=True)
+    backup_frequencia = Column(String(50), default="diario")
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class CfgCdn(Base):
+    __tablename__ = "cfg_cdn"
+    tenant_id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), nullable=False)
+    provider = Column(String(50), default="aws_s3")
+    bucket = Column(String(255), nullable=True)
+    region = Column(String(100), nullable=True)
+    cdn_url = Column(String(255), nullable=True)
+    tamanho_max_mb = Column(Integer, default=50)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class CfgUsuarios(Base):
+    __tablename__ = "cfg_usuarios"
+    tenant_id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), nullable=False)
+    max_tentativas_login = Column(Integer, default=5)
+    bloqueio_minutos = Column(Integer, default=15)
+    senha_min_chars = Column(Integer, default=8)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class CfgSeguranca(Base):
+    __tablename__ = "cfg_seguranca"
+    tenant_id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), nullable=False)
+    twofa_obrigatorio = Column(Boolean, default=False)
+    jwt_expiracao_horas = Column(Integer, default=8)
+    log_acoes = Column(Boolean, default=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class CfgNotificacoes(Base):
+    __tablename__ = "cfg_notificacoes"
+    tenant_id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), nullable=False)
+    email_provider = Column(String(50), default="aws_ses")
+    notif_prazos = Column(Boolean, default=True)
+    notif_documentos = Column(Boolean, default=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+# Configuration Endpoints
+@app.get("/v1/lex/configuracoes/database")
+def get_database(db: Session = Depends(get_db), payload=Depends(_require_admin)):
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_id = payload.get("sub")
+    row = db.get(CfgDatabase, tenant_id)
+    if not row:
+        row = CfgDatabase(tenant_id=tenant_id, user_id=user_id)
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+    return _row(row)
+
+@app.post("/v1/lex/configuracoes/database")
+def save_database(body: dict, db: Session = Depends(get_db), payload=Depends(_require_admin)):
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_id = payload.get("sub")
+    row = db.get(CfgDatabase, tenant_id)
+    if not row:
+        row = CfgDatabase(tenant_id=tenant_id, user_id=user_id)
+        db.add(row)
+    for k, v in body.items():
+        if hasattr(row, k) and k != "tenant_id" and v is not None:
+            setattr(row, k, v)
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    return _row(row)
+
+@app.get("/v1/lex/configuracoes/cdn")
+def get_cdn(db: Session = Depends(get_db), payload=Depends(_require_admin)):
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_id = payload.get("sub")
+    row = db.get(CfgCdn, tenant_id)
+    if not row:
+        row = CfgCdn(tenant_id=tenant_id, user_id=user_id)
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+    return _row(row)
+
+@app.post("/v1/lex/configuracoes/cdn")
+def save_cdn(body: dict, db: Session = Depends(get_db), payload=Depends(_require_admin)):
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_id = payload.get("sub")
+    row = db.get(CfgCdn, tenant_id)
+    if not row:
+        row = CfgCdn(tenant_id=tenant_id, user_id=user_id)
+        db.add(row)
+    for k, v in body.items():
+        if hasattr(row, k) and k != "tenant_id" and v is not None:
+            setattr(row, k, v)
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    return _row(row)
+
+@app.get("/v1/lex/configuracoes/usuarios")
+def get_usuarios_cfg(db: Session = Depends(get_db), payload=Depends(_require_admin)):
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_id = payload.get("sub")
+    row = db.get(CfgUsuarios, tenant_id)
+    if not row:
+        row = CfgUsuarios(tenant_id=tenant_id, user_id=user_id)
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+    return _row(row)
+
+@app.post("/v1/lex/configuracoes/usuarios")
+def save_usuarios_cfg(body: dict, db: Session = Depends(get_db), payload=Depends(_require_admin)):
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_id = payload.get("sub")
+    row = db.get(CfgUsuarios, tenant_id)
+    if not row:
+        row = CfgUsuarios(tenant_id=tenant_id, user_id=user_id)
+        db.add(row)
+    for k, v in body.items():
+        if hasattr(row, k) and k != "tenant_id" and v is not None:
+            setattr(row, k, v)
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    return _row(row)
+
+@app.get("/v1/lex/configuracoes/seguranca")
+def get_seguranca(db: Session = Depends(get_db), payload=Depends(_require_admin)):
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_id = payload.get("sub")
+    row = db.get(CfgSeguranca, tenant_id)
+    if not row:
+        row = CfgSeguranca(tenant_id=tenant_id, user_id=user_id)
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+    return _row(row)
+
+@app.post("/v1/lex/configuracoes/seguranca")
+def save_seguranca(body: dict, db: Session = Depends(get_db), payload=Depends(_require_admin)):
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_id = payload.get("sub")
+    row = db.get(CfgSeguranca, tenant_id)
+    if not row:
+        row = CfgSeguranca(tenant_id=tenant_id, user_id=user_id)
+        db.add(row)
+    for k, v in body.items():
+        if hasattr(row, k) and k != "tenant_id" and v is not None:
+            setattr(row, k, v)
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    return _row(row)
+
+@app.get("/v1/lex/configuracoes/notificacoes")
+def get_notificacoes(db: Session = Depends(get_db), payload=Depends(_require_admin)):
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_id = payload.get("sub")
+    row = db.get(CfgNotificacoes, tenant_id)
+    if not row:
+        row = CfgNotificacoes(tenant_id=tenant_id, user_id=user_id)
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+    return _row(row)
+
+@app.post("/v1/lex/configuracoes/notificacoes")
+def save_notificacoes(body: dict, db: Session = Depends(get_db), payload=Depends(_require_admin)):
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_id = payload.get("sub")
+    row = db.get(CfgNotificacoes, tenant_id)
+    if not row:
+        row = CfgNotificacoes(tenant_id=tenant_id, user_id=user_id)
+        db.add(row)
+    for k, v in body.items():
+        if hasattr(row, k) and k != "tenant_id" and v is not None:
+            setattr(row, k, v)
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    return _row(row)
