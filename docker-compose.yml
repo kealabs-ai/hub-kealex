@@ -8,6 +8,13 @@ services:
     container_name: hubkealex
     ports:
       - "8000:8000"
+    environment:
+      - DB_HOST=srv1078.hstgr.io
+      - DB_PORT=3306
+      - DB_NAME=u549746795_kealex
+      - DB_USER=u549746795_kealex
+      - DB_PASSWORD=Sally2026%40%21%40
+      - JWT_SECRET=your-super-secret-jwt-key
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.hubkealex.rule=(Host(`srv1023256.hstgr.cloud`) || Host(`kealabs.cloud`) || Host(`www.kealabs.cloud`)) && (PathPrefix(`/k1/lex`) || PathPrefix(`/v1/lex`))"
