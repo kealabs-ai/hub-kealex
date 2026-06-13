@@ -19,13 +19,10 @@ DB_HOST = os.getenv("DB_HOST", "srv1078.hstgr.io")
 DB_PORT = os.getenv("DB_PORT", "3306")
 DB_NAME = os.getenv("DB_NAME", "u549746795_kealex")
 DB_USER = os.getenv("DB_USER", "u549746795_kealex")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "Sally2026@!@")
 
-# Construir DATABASE_URL a partir das variáveis de ambiente
-if DB_PASSWORD:
-    DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-else:
-    DATABASE_URL = f"mysql+pymysql://{DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+# Construir DATABASE_URL - usar URL pré-codificada se disponível
+DATABASE_URL = os.getenv("DATABASE_URL", f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
 
 # Configurações de Autenticação
 SECRET_KEY = os.getenv("JWT_SECRET", "changeme-secret-key-development")
