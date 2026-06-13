@@ -73,6 +73,10 @@ def require_admin_or_advogado(payload=Depends(verify_token)):
 app = FastAPI(title="svc-clientes")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
+@app.get("/health")
+def health():
+    return {"status": "ok", "service": "svc-clientes"}
+
 class ClienteIn(BaseModel):
     nome:        str
     email:       EmailStr

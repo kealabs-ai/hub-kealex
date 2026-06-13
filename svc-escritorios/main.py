@@ -72,6 +72,10 @@ def require_admin(payload=Depends(verify_token)):
 app = FastAPI(title="svc-escritorios")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
+@app.get("/health")
+def health():
+    return {"status": "ok", "service": "svc-escritorios"}
+
 class EscritorioIn(BaseModel):
     nome:     str
     cnpj:     Optional[str] = None

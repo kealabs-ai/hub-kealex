@@ -81,6 +81,10 @@ def require_admin(payload=Depends(verify_token)):
 app = FastAPI(title="svc-usuarios")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
+@app.get("/health")
+def health():
+    return {"status": "ok", "service": "svc-usuarios"}
+
 class UsuarioIn(BaseModel):
     nome:         str
     email:        EmailStr

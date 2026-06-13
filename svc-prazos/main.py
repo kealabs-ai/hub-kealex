@@ -74,6 +74,10 @@ def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
 app = FastAPI(title="svc-prazos")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
+@app.get("/health")
+def health():
+    return {"status": "ok", "service": "svc-prazos"}
+
 class PrazoIn(BaseModel):
     processoId:     str
     titulo:         str
