@@ -227,6 +227,10 @@ def _upsert(db, Model, tenant_id: str, user_id: str, data: dict):
 app = FastAPI(title="svc-configuracoes")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
+@app.get("/health")
+def health():
+    return {"status": "ok", "service": "svc-configuracoes"}
+
 # ── Geral ─────────────────────────────────────────────────────────────────────
 
 class GeralIn(BaseModel):
