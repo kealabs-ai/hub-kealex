@@ -158,36 +158,44 @@ class AgenteIA(Base):
 
 def _init_db():
     try:
+        print(f"[INIT] Conectando ao banco: {DB_HOST}:{DB_PORT}/{DB_NAME}")
         Base.metadata.create_all(engine)
-        try:
-            with SessionLocal() as db:
-                tenant = db.query(Tenant).filter_by(slug="kealex").first()
-                if not tenant:
-                    tenant = Tenant(nome="Kealex", slug="kealex")
-                    db.add(tenant)
-                    db.flush()
-                
-                admin = db.query(Usuario).filter_by(email="admin@kealex.com").first()
-                if not admin:
-                    admin = Usuario(tenant_id=tenant.id, nome="Admin Kealex",
-                                   email="admin@kealex.com", senha_hash=_hash("admin123"),
-                                   role=RoleEnum.admin)
-                    db.add(admin)
+        print("[INIT] Tabelas criadas com sucesso")
+        
+        with SessionLocal() as db:
+            tenant = db.query(Tenant).filter_by(slug="kealex").first()
+            if not tenant:
+                tenant = Tenant(nome="Kealex", slug="kealex")
+                db.add(tenant)
+                db.flush()
+                print("[INIT] Tenant criado")
+            
+            admin = db.query(Usuario).filter_by(email="admin@kealex.com").first()
+            if not admin:
+                admin = Usuario(tenant_id=tenant.id, nome="Admin Kealex",
+                               email="admin@kealex.com", senha_hash=_hash("admin123"),
+                               role=RoleEnum.admin)
+                db.add(admin)
+                db.commit()
+                print("[INIT] Admin criado")
+            else:
+                updated = False
+                if not admin.tenant_id or admin.tenant_id == "":
+                    admin.tenant_id = tenant.id
+                    updated = True
+                if not admin.senha_hash.startswith("$2b$"):
+                    admin.senha_hash = _hash("admin123")
+                    updated = True
+                if updated:
                     db.commit()
-                else:
-                    updated = False
-                    if not admin.tenant_id or admin.tenant_id == "":
-                        admin.tenant_id = tenant.id
-                        updated = True
-                    if not admin.senha_hash.startswith("$2b$"):
-                        admin.senha_hash = _hash("admin123")
-                        updated = True
-                    if updated:
-                        db.commit()
-        except Exception as e:
-            print(f"Seed error (ignorando): {e}")
+                    print("[INIT] Admin atualizado")
+        
+        print("[INIT] Banco de dados inicializado com sucesso")
     except Exception as e:
-        print(f"Database init error (ignorando): {e}")
+        print(f"[ERRO] Database init falhou: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 def get_db():
     db = SessionLocal()
@@ -347,6 +355,29 @@ def startup_event():
 def health_simple():
     return {"status": "healthy", "service": "hubkealex"}
 
+@app.get("/debug/db-status")
+def debug_db_status():
+    """Debug endpoint para verificar status de conexão com banco de dados"""
+    try:
+        with SessionLocal() as db:
+            result = db.execute("SELECT 1").fetchone()
+        return {
+            "status": "connected",
+            "database_url": f"mysql+pymysql://{DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}",
+            "host": DB_HOST,
+            "port": DB_PORT,
+            "database": DB_NAME
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "database_url": f"mysql+pymysql://{DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}",
+            "host": DB_HOST,
+            "port": DB_PORT,
+            "database": DB_NAME
+        }
+
 @app.get("/k1/lex/health")
 def health():
     return {"status": "ok", "service": "hubkealex"}
@@ -354,11 +385,19 @@ def health():
 # Auth endpoints
 @app.post("/k1/lex/auth/login", response_model=AuthUser)
 def login(body: LoginIn, db: Session = Depends(get_db)):
-    user = db.query(Usuario).filter_by(email=body.email, ativo=True).first()
-    if not user or not _verify(body.senha, user.senha_hash):
-        raise HTTPException(401, "Credenciais inválidas")
-    return AuthUser(nome=user.nome, role=user.role,
-                    tenantId=user.tenant_id, accessToken=_make_token(user))
+    try:
+        user = db.query(Usuario).filter_by(email=body.email, ativo=True).first()
+        if not user or not _verify(body.senha, user.senha_hash):
+            raise HTTPException(401, "Credenciais inválidas")
+        return AuthUser(nome=user.nome, role=user.role,
+                        tenantId=user.tenant_id, accessToken=_make_token(user))
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[LOGIN_ERROR] {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, f"Erro no login: {str(e)}")
 
 @app.get("/k1/lex/auth/me")
 def me(payload=Depends(verify_token)):
