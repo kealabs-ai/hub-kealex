@@ -156,6 +156,48 @@ class AgenteIA(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class Documento(Base):
+    __tablename__ = "documentos"
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id = Column(String(36), nullable=False)
+    user_id = Column(String(36), nullable=False)
+    escritorio_id = Column(String(36), nullable=True)
+    processo_id = Column(String(36), nullable=False)
+    nome = Column(String(255), nullable=False)
+    tipo = Column(String(50), default="outro")
+    url_arquivo = Column(String(1000), nullable=False)
+    status = Column(String(50), default="pendente")
+    tamanho_bytes = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class Prazo(Base):
+    __tablename__ = "prazos"
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id = Column(String(36), nullable=False)
+    user_id = Column(String(36), nullable=False)
+    escritorio_id = Column(String(36), nullable=True)
+    processo_id = Column(String(36), nullable=False)
+    titulo = Column(String(255), nullable=False)
+    descricao = Column(String(1000), default="")
+    data_vencimento = Column(String(10), nullable=False)
+    status = Column(String(50), default="pendente")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class Honorario(Base):
+    __tablename__ = "honorarios"
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id = Column(String(36), nullable=False)
+    user_id = Column(String(36), nullable=False)
+    processo_id = Column(String(36), nullable=False)
+    cliente_id = Column(String(36), nullable=False)
+    descricao = Column(String(500), default="")
+    valor_centavos = Column(Integer, nullable=False)
+    status = Column(String(50), default="pendente")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 def _init_db():
     try:
         print(f"[INIT] Conectando ao banco: {DB_HOST}:{DB_PORT}/{DB_NAME}")
@@ -486,33 +528,107 @@ def create_cliente(body: dict, db: Session = Depends(get_db), payload=Depends(ve
 @app.get("/documentos")
 @app.get("/k1/lex/documentos")
 def list_documentos(db: Session = Depends(get_db), payload=Depends(verify_token)):
-    return {"data": [], "message": "Documentos - use serviço svc-documentos"}
+    tenant_id = payload.get("tenant_id")
+    docs = db.query(Documento).filter_by(tenant_id=tenant_id).all()
+    return [{"id": d.id, "nome": d.nome, "tipo": d.tipo, "status": d.status, "processoId": d.processo_id} for d in docs]
 
 @app.post("/documentos", status_code=201)
 @app.post("/k1/lex/documentos", status_code=201)
 def create_documento(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id")
-    return {"id": str(uuid.uuid4()), "tenantId": tenant_id, "nome": body.get("nome"), "status": "pendente"}
+    d = Documento(
+        id=str(uuid.uuid4()),
+        tenant_id=tenant_id,
+        user_id=payload["sub"],
+        processo_id=body.get("processoId"),
+        nome=body.get("nome"),
+        tipo=body.get("tipo", "outro"),
+        url_arquivo=body.get("urlArquivo", ""),
+        status="pendente",
+        tamanho_bytes=body.get("tamanhoBytes", 0)
+    )
+    db.add(d)
+    db.commit()
+    db.refresh(d)
+    return {"id": d.id, "tenantId": d.tenant_id, "nome": d.nome, "tipo": d.tipo, "status": d.status}
 
 @app.get("/financeiro")
 @app.get("/k1/lex/financeiro")
 def list_financeiro(db: Session = Depends(get_db), payload=Depends(verify_token)):
-    return {"data": [], "message": "Financeiro - use serviço svc-financeiro"}
+    tenant_id = payload.get("tenant_id")
+    honorarios = db.query(Honorario).filter_by(tenant_id=tenant_id).all()
+    return [{"id": h.id, "descricao": h.descricao, "valorCentavos": h.valor_centavos, "status": h.status, "processoId": h.processo_id} for h in honorarios]
+
+@app.post("/financeiro", status_code=201)
+@app.post("/k1/lex/financeiro", status_code=201)
+def create_honorario(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    tenant_id = payload.get("tenant_id")
+    h = Honorario(
+        id=str(uuid.uuid4()),
+        tenant_id=tenant_id,
+        user_id=payload["sub"],
+        processo_id=body.get("processoId"),
+        cliente_id=body.get("clienteId"),
+        descricao=body.get("descricao", ""),
+        valor_centavos=body.get("valorCentavos", 0),
+        status="pendente"
+    )
+    db.add(h)
+    db.commit()
+    db.refresh(h)
+    return {"id": h.id, "tenantId": h.tenant_id, "descricao": h.descricao, "valorCentavos": h.valor_centavos, "status": h.status}
 
 @app.get("/financeiro/dashboard")
 @app.get("/k1/lex/financeiro/dashboard")
 def financeiro_dashboard(db: Session = Depends(get_db), payload=Depends(verify_token)):
-    return {"totalPago": 0, "totalPendente": 0, "totalVencido": 0}
+    tenant_id = payload.get("tenant_id")
+    honorarios = db.query(Honorario).filter_by(tenant_id=tenant_id).all()
+    total_pago = sum(h.valor_centavos for h in honorarios if h.status == "pago")
+    total_pendente = sum(h.valor_centavos for h in honorarios if h.status == "pendente")
+    total_vencido = sum(h.valor_centavos for h in honorarios if h.status == "vencido")
+    return {"totalPago": total_pago, "totalPendente": total_pendente, "totalVencido": total_vencido, "totalGeral": total_pago + total_pendente + total_vencido}
 
 @app.get("/prazos")
 @app.get("/k1/lex/prazos")
 def list_prazos(db: Session = Depends(get_db), payload=Depends(verify_token)):
-    return {"data": [], "message": "Prazos - use serviço svc-prazos"}
+    tenant_id = payload.get("tenant_id")
+    prazos = db.query(Prazo).filter_by(tenant_id=tenant_id).all()
+    return [{"id": p.id, "titulo": p.titulo, "dataVencimento": p.data_vencimento, "status": p.status, "processoId": p.processo_id} for p in prazos]
+
+@app.post("/prazos", status_code=201)
+@app.post("/k1/lex/prazos", status_code=201)
+def create_prazo(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    tenant_id = payload.get("tenant_id")
+    p = Prazo(
+        id=str(uuid.uuid4()),
+        tenant_id=tenant_id,
+        user_id=payload["sub"],
+        processo_id=body.get("processoId"),
+        titulo=body.get("titulo"),
+        descricao=body.get("descricao", ""),
+        data_vencimento=body.get("dataVencimento"),
+        status="pendente"
+    )
+    db.add(p)
+    db.commit()
+    db.refresh(p)
+    return {"id": p.id, "tenantId": p.tenant_id, "titulo": p.titulo, "dataVencimento": p.data_vencimento, "status": p.status}
 
 @app.post("/prazos/vencendo")
 @app.post("/k1/lex/prazos/vencendo")
 def prazos_vencendo(body: dict = None, db: Session = Depends(get_db), payload=Depends(verify_token)):
-    return {"data": [], "diasRestantes": 7}
+    tenant_id = payload.get("tenant_id")
+    dias = body.get("dias", 7) if body else 7
+    from datetime import date, timedelta
+    hoje = date.today().isoformat()
+    limite = (date.today() + timedelta(days=dias)).isoformat()
+    prazos = db.query(Prazo).filter(
+        Prazo.tenant_id == tenant_id,
+        Prazo.data_vencimento >= hoje,
+        Prazo.data_vencimento <= limite,
+        Prazo.status == "pendente"
+    ).all()
+    return [{"id": p.id, "titulo": p.titulo, "dataVencimento": p.data_vencimento, "diasRestantes": (date.fromisoformat(p.data_vencimento) - date.today()).days} for p in prazos]
 
 @app.get("/usuarios")
 @app.get("/k1/lex/usuarios")
