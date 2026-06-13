@@ -13,13 +13,8 @@ services:
       - "traefik.http.routers.hubkealex.rule=(Host(`srv1023256.hstgr.cloud`) || Host(`kealabs.cloud`) || Host(`www.kealabs.cloud`)) && (PathPrefix(`/k1/lex`) || PathPrefix(`/v1/lex`))"
       - "traefik.http.routers.hubkealex.entrypoints=https"
       - "traefik.http.routers.hubkealex.tls=true"
-      - "traefik.http.middlewares.hubkealex-cors.headers.accesscontrolalloworiginlist=https://kealabs.cloud,https://www.kealabs.cloud,https://srv1023256.hstgr.cloud,https://kealabs.com.br,https://www.kealabs.com.br,https://darkorange-raven-554257.hostingersite.com,http://localhost:3000"
-      - "traefik.http.middlewares.hubkealex-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
-      - "traefik.http.middlewares.hubkealex-cors.headers.accesscontrolallowheaders=Content-Type,Authorization,Accept"
-      - "traefik.http.middlewares.hubkealex-cors.headers.accesscontrolallowcredentials=true"
-      - "traefik.http.middlewares.hubkealex-cors.headers.accesscontrolmaxage=86400"
-      - "traefik.http.middlewares.hubkealex-cors.headers.addvaryheader=true"
-      - "traefik.http.routers.hubkealex.middlewares=hubkealex-cors"
+      - "traefik.http.routers.hubkealex.middlewares=hubkealex-compress"
+      - "traefik.http.middlewares.hubkealex-compress.compress=true"
       - "traefik.http.services.hubkealex.loadbalancer.server.port=8000"
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/k1/lex/health', timeout=5)"]

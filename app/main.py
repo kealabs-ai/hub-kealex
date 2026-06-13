@@ -335,15 +335,20 @@ def _upsert_cfg_ia(db: Session, tenant_id: str, user_id: str, data: dict):
     return row
 
 app = FastAPI(title="HubKealex API")
-app.add_middleware(CORSMiddleware, 
+app.add_middleware(CORSMiddleware,
     allow_origins=[
         "https://darkorange-raven-554257.hostingersite.com",
+        "https://kealabs.cloud",
+        "https://www.kealabs.cloud",
+        "https://kealabs.com.br",
+        "https://www.kealabs.com.br",
+        "https://srv1023256.hstgr.cloud",
         "http://localhost:3000",
-        "http://localhost:8000",
-    ], 
-    allow_methods=["*"], 
+        "http://localhost:5173",
+    ],
+    allow_methods=["*"],
     allow_headers=["*"],
-    allow_credentials=True
+    allow_credentials=True,
 )
 
 @app.on_event("startup")
