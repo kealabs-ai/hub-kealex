@@ -760,12 +760,12 @@ def get_database(db: Session = Depends(get_db), payload=Depends(_require_admin))
 def get_database_env(payload=Depends(_require_admin)):
     """Retorna valores das variáveis de ambiente do banco de dados"""
     return {
-        "host": os.getenv("DB_HOST", ""),
-        "port": os.getenv("DB_PORT", ""),
-        "name": os.getenv("DB_NAME", ""),
-        "user": os.getenv("DB_USER", ""),
-        "password": os.getenv("DB_PASSWORD", ""),
-        "connection_string": os.getenv("DATABASE_URL", "")
+        "host": DB_HOST,
+        "port": DB_PORT,
+        "name": DB_NAME,
+        "user": DB_USER,
+        "password": DB_PASSWORD,
+        "connection_string": DATABASE_URL
     }
 
 @app.post("/k1/lex/configuracoes/database")
@@ -895,147 +895,3 @@ def save_notificacoes(body: dict, db: Session = Depends(get_db), payload=Depends
     db.commit()
     db.refresh(row)
     return _row(row)
-
-
-# Agentes IA endpoints RESTful
-@app.get("/k1/lex/agentes/{agente_id}")
-@app.post("/k1/lex/agentes/{agente_id}")
-def get_agente(agente_id: str, db: Session = Depends(get_db), payload=Depends(verify_token)):
-    """Busca um agente especifico"""
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
-    agente = db.query(AgenteIA).filter(
-        AgenteIA.id == agente_id,
-        AgenteIA.tenant_id == tenant_id
-    ).first()
-    
-    if not agente:
-        raise HTTPException(404, "Agente nao encontrado")
-    
-    if payload.get("role") != "admin" and not agente.publico:
-        raise HTTPException(403, "Acesso negado a este agente")
-    
-    return _row(agente)
-
-@app.post("/k1/lex/agentes/{agente_id}/update")
-@app.get("/k1/lex/agentes/{agente_id}/update")
-async def update_agente_rest(agente_id: str, body: dict = None, db: Session = Depends(get_db), payload=Depends(_require_admin)):
-    """Atualiza um agente existente (apenas admin)"""
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
-    agente = db.query(AgenteIA).filter(
-        AgenteIA.id == agente_id,
-        AgenteIA.tenant_id == tenant_id
-    ).first()
-    
-    if not agente:
-        raise HTTPException(404, "Agente nao encontrado")
-    
-    if body is None:
-        body = {}
-    
-    update_data = {k: v for k, v in body.items() if k != "id" and v is not None}
-    
-    if "provider" in update_data and update_data["provider"] not in ["cerebras", "groq"]:
-        raise HTTPException(400, "Provider invalido. Use 'cerebras' ou 'groq'")
-    
-    if "api_key" in update_data:
-        provider = update_data.get("provider", agente.provider)
-        if provider == "cerebras" and not update_data["api_key"].startswith("csk-"):
-            raise HTTPException(400, "API key Cerebras deve comecar com 'csk-'")
-        if provider == "groq" and not (update_data["api_key"].startswith("gsk-") or update_data["api_key"].startswith("gsk_")):
-            raise HTTPException(400, "API key Groq deve comecar com 'gsk-' ou 'gsk_'")
-    
-    for field, value in update_data.items():
-        if hasattr(agente, field):
-            setattr(agente, field, value)
-    
-    agente.updated_at = datetime.utcnow()
-    db.commit()
-    db.refresh(agente)
-    
-    return _row(agente)
-
-@app.post("/k1/lex/agentes/{agente_id}/delete")
-@app.get("/k1/lex/agentes/{agente_id}/delete")
-def delete_agente(agente_id: str, db: Session = Depends(get_db), payload=Depends(_require_admin)):
-    """Deleta um agente (apenas admin)"""
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
-    agente = db.query(AgenteIA).filter(
-        AgenteIA.id == agente_id,
-        AgenteIA.tenant_id == tenant_id
-    ).first()
-    
-    if not agente:
-        raise HTTPException(404, "Agente nao encontrado")
-    
-    db.delete(agente)
-    db.commit()
-    
-    return {"ok": True}
-
-
-@app.get("/k1/lex/admin/config/env")
-def get_environment_config(payload=Depends(_require_admin)):
-    """Retorna configurações de variáveis de ambiente (apenas admin)"""
-    
-    # Configurações do banco de dados
-    db_config = {
-        "DB_HOST": DB_HOST,
-        "DB_PORT": DB_PORT,
-        "DB_NAME": DB_NAME,
-        "DB_USER": DB_USER,
-        "DB_PASSWORD": "*" * len(DB_PASSWORD) if DB_PASSWORD else "NÃO DEFINIDO",
-        "DATABASE_URL": "mysql+pymysql://***@***" if DATABASE_URL else "NÃO DEFINIDO"
-    }
-    
-    # Configurações de autenticação
-    auth_config = {
-        "JWT_SECRET": "*" * len(SECRET_KEY) if SECRET_KEY else "NÃO DEFINIDO",
-        "JWT_EXPIRY_HOURS": JWT_EXPIRY_HOURS,
-        "ALGORITHM": ALGORITHM
-    }
-    
-    # Configurações de LLM
-    llm_config = {
-        "GEMINI_API_KEY": "configurado" if GEMINI_API_KEY else "não configurado",
-        "OPENAI_API_KEY": "configurado" if OPENAI_API_KEY else "não configurado",
-        "GROQ_API_KEY": "configurado" if GROQ_API_KEY else "não configurado",
-        "ANTHROPIC_API_KEY": "configurado" if ANTHROPIC_API_KEY else "não configurado",
-        "CEREBRAS_API_KEY": "configurado" if CEREBRAS_API_KEY else "não configurado"
-    }
-    
-    # Configurações gerais
-    general_config = {
-        "ENVIRONMENT": ENVIRONMENT,
-        "DEBUG": DEBUG
-    }
-    
-    return {
-        "database": db_config,
-        "authentication": auth_config,
-        "llm_apis": llm_config,
-        "general": general_config,
-        "user": {
-            "tenant_id": payload.get("tenant_id"),
-            "user_id": payload.get("sub"),
-            "role": payload.get("role")
-        }
-    }
-
-@app.get("/k1/lex/admin/config/all-env")
-def get_all_environment(payload=Depends(_require_admin)):
-    """Retorna todas as variáveis de ambiente (apenas admin)"""
-    import os
-    
-    all_vars = {}
-    for key, value in sorted(os.environ.items()):
-        # Mascarar valores sensíveis
-        if any(s in key.upper() for s in ["PASSWORD", "SECRET", "KEY", "TOKEN", "API"]):
-            all_vars[key] = "*" * len(value) if value else "VAZIO"
-        else:
-            all_vars[key] = value
-    
-    return {
-        "environment_variables": all_vars,
-        "total_count": len(all_vars),
-        "sensitive_vars_masked": True
-    }
