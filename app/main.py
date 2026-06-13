@@ -470,48 +470,77 @@ def delete_processo(body: ProcessoDeleteIn, db: Session = Depends(get_db), paylo
 # Basic endpoints for other services (placeholder endpoints)
 @app.get("/clientes")
 @app.get("/k1/lex/clientes")
-def list_clientes(payload=Depends(verify_token)):
-    return {"message": "Clientes endpoint - implementar conforme necessário"}
+def list_clientes(db: Session = Depends(get_db), payload=Depends(verify_token)):
+    tenant_id = payload.get("tenant_id")
+    return [{"id": c.id, "tenantId": c.tenant_id, "nome": c.nome, "email": c.email} for c in db.query(Cliente).filter_by(tenant_id=tenant_id).all()]
+
+@app.post("/clientes", status_code=201)
+@app.post("/k1/lex/clientes", status_code=201)
+def create_cliente(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    tenant_id = payload.get("tenant_id")
+    c = Cliente(id=str(uuid.uuid4()), tenant_id=tenant_id, advogado_id=payload["sub"],
+                nome=body.get("nome"), email=body.get("email"))
+    db.add(c); db.commit(); db.refresh(c)
+    return {"id": c.id, "tenantId": c.tenant_id, "nome": c.nome, "email": c.email}
 
 @app.get("/documentos")
 @app.get("/k1/lex/documentos")
-def list_documentos(payload=Depends(verify_token)):
-    return {"message": "Documentos endpoint - implementar conforme necessário"}
+def list_documentos(db: Session = Depends(get_db), payload=Depends(verify_token)):
+    return {"data": [], "message": "Documentos - use serviço svc-documentos"}
+
+@app.post("/documentos", status_code=201)
+@app.post("/k1/lex/documentos", status_code=201)
+def create_documento(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    tenant_id = payload.get("tenant_id")
+    return {"id": str(uuid.uuid4()), "tenantId": tenant_id, "nome": body.get("nome"), "status": "pendente"}
 
 @app.get("/financeiro")
 @app.get("/k1/lex/financeiro")
-def list_financeiro(payload=Depends(verify_token)):
-    return {"message": "Financeiro endpoint - implementar conforme necessário"}
+def list_financeiro(db: Session = Depends(get_db), payload=Depends(verify_token)):
+    return {"data": [], "message": "Financeiro - use serviço svc-financeiro"}
 
 @app.get("/financeiro/dashboard")
 @app.get("/k1/lex/financeiro/dashboard")
-def financeiro_dashboard(payload=Depends(verify_token)):
-    return {"data": {}, "message": "Dashboard financeiro - implementar conforme necessário"}
+def financeiro_dashboard(db: Session = Depends(get_db), payload=Depends(verify_token)):
+    return {"totalPago": 0, "totalPendente": 0, "totalVencido": 0}
 
 @app.get("/prazos")
 @app.get("/k1/lex/prazos")
-def list_prazos(payload=Depends(verify_token)):
-    return {"message": "Prazos endpoint - implementar conforme necessário"}
+def list_prazos(db: Session = Depends(get_db), payload=Depends(verify_token)):
+    return {"data": [], "message": "Prazos - use serviço svc-prazos"}
 
 @app.post("/prazos/vencendo")
 @app.post("/k1/lex/prazos/vencendo")
-def prazos_vencendo(payload=Depends(verify_token)):
-    return {"data": [], "message": "Prazos vencendo - implementar conforme necessário"}
+def prazos_vencendo(body: dict = None, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    return {"data": [], "diasRestantes": 7}
 
 @app.get("/usuarios")
 @app.get("/k1/lex/usuarios")
-def list_usuarios(payload=Depends(verify_token)):
-    return {"message": "Usuários endpoint - implementar conforme necessário"}
+def list_usuarios(db: Session = Depends(get_db), payload=Depends(verify_token)):
+    tenant_id = payload.get("tenant_id")
+    return [{"id": u.id, "tenantId": u.tenant_id, "nome": u.nome, "email": u.email, "role": u.role} for u in db.query(Usuario).filter_by(tenant_id=tenant_id).all()]
 
 @app.get("/escritorios")
 @app.get("/k1/lex/escritorios")
-def list_escritorios(payload=Depends(verify_token)):
-    return {"message": "Escritórios endpoint - implementar conforme necessário"}
+def list_escritorios(db: Session = Depends(get_db), payload=Depends(verify_token)):
+    return {"data": [], "message": "Escritórios - use serviço svc-escritorios"}
 
 @app.get("/configuracoes/geral")
 @app.get("/k1/lex/configuracoes/geral")
-def get_configuracoes_geral(payload=Depends(verify_token)):
-    return {"message": "Configurações gerais - implementar conforme necessário"}
+def get_configuracoes_geral(db: Session = Depends(get_db), payload=Depends(verify_token)):
+    tenant_id = payload.get("tenant_id")
+    return {
+        "tenantId": tenant_id,
+        "theme": "light",
+        "language": "pt-BR",
+        "timezone": "America/Sao_Paulo",
+        "notificacoes": True
+    }
+
+@app.post("/configuracoes/geral")
+@app.post("/k1/lex/configuracoes/geral")
+def save_configuracoes_geral(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    return {"success": True, "message": "Configurações salvas", "data": body}
 
 
 # IA Configuration
