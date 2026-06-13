@@ -10,18 +10,45 @@ from jose import jwt, JWTError
 from sqlalchemy import create_engine, Column, String, Boolean, DateTime, Enum as SAEnum, Text, Integer, Numeric
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-def _get_database_url(default: str) -> str:
-    raw = os.getenv("DATABASE_URL")
-    if raw is None or raw.strip().lower() in ("", "null", "none"):
-        return default
-    return raw.strip()
+# Carregar variáveis de ambiente
+from dotenv import load_dotenv
+load_dotenv()
 
-DATABASE_URL = _get_database_url(
-    "mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex"
-)
-SECRET_KEY = os.getenv("SECRET_KEY", "changeme-secret-key")
+# Configurações do Banco de Dados
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = os.getenv("DB_PORT", "3306")
+DB_NAME = os.getenv("DB_NAME")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+
+# Construir DATABASE_URL a partir das variáveis de ambiente
+if not DB_HOST or not DB_NAME or not DB_USER:
+    raise ValueError("Variáveis de ambiente obrigatórias não definidas: DB_HOST, DB_NAME, DB_USER")
+
+if DB_PASSWORD:
+    DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+else:
+    DATABASE_URL = f"mysql+pymysql://{DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+
+# Configurações de Autenticação
+SECRET_KEY = os.getenv("JWT_SECRET")
+if not SECRET_KEY:
+    raise ValueError("Variável de ambiente obrigatória não definida: JWT_SECRET")
+
 ALGORITHM = "HS256"
-TOKEN_EXPIRE_MINUTES = 60 * 8
+JWT_EXPIRY_HOURS = int(os.getenv("JWT_EXPIRY_HOURS", "8"))
+TOKEN_EXPIRE_MINUTES = JWT_EXPIRY_HOURS * 60
+
+# Configurações de LLM API Keys
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY", "")
+
+# Configurações de Aplicação
+ENVIRONMENT = os.getenv("ENVIRONMENT", "production")
+DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
 engine = create_engine(
     DATABASE_URL,
@@ -735,7 +762,7 @@ def get_database(db: Session = Depends(get_db), payload=Depends(_require_admin))
         db.refresh(row)
     return _row(row)
 
-@app.get("/k1/lex/configuracoes/database/env")
+@app.get("/k1/lex/admin/config/env")
 def get_database_env(payload=Depends(_require_admin)):
     """Retorna valores das variáveis de ambiente do banco de dados"""
     return {
@@ -950,3 +977,71 @@ def delete_agente(agente_id: str, db: Session = Depends(get_db), payload=Depends
     db.commit()
     
     return {"ok": True}
+
+
+@app.get("/k1/lex/admin/config/env")
+def get_environment_config(payload=Depends(_require_admin)):
+    """Retorna configurações de variáveis de ambiente (apenas admin)"""
+    
+    # Configurações do banco de dados
+    db_config = {
+        "DB_HOST": DB_HOST,
+        "DB_PORT": DB_PORT,
+        "DB_NAME": DB_NAME,
+        "DB_USER": DB_USER,
+        "DB_PASSWORD": "*" * len(DB_PASSWORD) if DB_PASSWORD else "NÃO DEFINIDO",
+        "DATABASE_URL": "mysql+pymysql://***@***" if DATABASE_URL else "NÃO DEFINIDO"
+    }
+    
+    # Configurações de autenticação
+    auth_config = {
+        "JWT_SECRET": "*" * len(SECRET_KEY) if SECRET_KEY else "NÃO DEFINIDO",
+        "JWT_EXPIRY_HOURS": JWT_EXPIRY_HOURS,
+        "ALGORITHM": ALGORITHM
+    }
+    
+    # Configurações de LLM
+    llm_config = {
+        "GEMINI_API_KEY": "configurado" if GEMINI_API_KEY else "não configurado",
+        "OPENAI_API_KEY": "configurado" if OPENAI_API_KEY else "não configurado",
+        "GROQ_API_KEY": "configurado" if GROQ_API_KEY else "não configurado",
+        "ANTHROPIC_API_KEY": "configurado" if ANTHROPIC_API_KEY else "não configurado",
+        "CEREBRAS_API_KEY": "configurado" if CEREBRAS_API_KEY else "não configurado"
+    }
+    
+    # Configurações gerais
+    general_config = {
+        "ENVIRONMENT": ENVIRONMENT,
+        "DEBUG": DEBUG
+    }
+    
+    return {
+        "database": db_config,
+        "authentication": auth_config,
+        "llm_apis": llm_config,
+        "general": general_config,
+        "user": {
+            "tenant_id": payload.get("tenant_id"),
+            "user_id": payload.get("sub"),
+            "role": payload.get("role")
+        }
+    }
+
+@app.get("/k1/lex/admin/config/all-env")
+def get_all_environment(payload=Depends(_require_admin)):
+    """Retorna todas as variáveis de ambiente (apenas admin)"""
+    import os
+    
+    all_vars = {}
+    for key, value in sorted(os.environ.items()):
+        # Mascarar valores sensíveis
+        if any(s in key.upper() for s in ["PASSWORD", "SECRET", "KEY", "TOKEN", "API"]):
+            all_vars[key] = "*" * len(value) if value else "VAZIO"
+        else:
+            all_vars[key] = value
+    
+    return {
+        "environment_variables": all_vars,
+        "total_count": len(all_vars),
+        "sensitive_vars_masked": True
+    }
