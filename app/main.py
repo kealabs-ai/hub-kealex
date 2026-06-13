@@ -388,6 +388,7 @@ def health():
     return {"status": "ok", "service": "hubkealex"}
 
 # Auth endpoints
+@app.post("/auth/login", response_model=AuthUser)
 @app.post("/k1/lex/auth/login", response_model=AuthUser)
 def login(body: LoginIn, db: Session = Depends(get_db)):
     try:
@@ -404,6 +405,7 @@ def login(body: LoginIn, db: Session = Depends(get_db)):
         traceback.print_exc()
         raise HTTPException(500, f"Erro no login: {str(e)}")
 
+@app.get("/auth/me")
 @app.get("/k1/lex/auth/me")
 def me(payload=Depends(verify_token)):
     return payload
@@ -465,30 +467,37 @@ def delete_processo(body: ProcessoDeleteIn, db: Session = Depends(get_db), paylo
     return {"ok": True}
 
 # Basic endpoints for other services (placeholder endpoints)
+@app.get("/clientes")
 @app.get("/k1/lex/clientes")
 def list_clientes(payload=Depends(verify_token)):
     return {"message": "Clientes endpoint - implementar conforme necessário"}
 
+@app.get("/documentos")
 @app.get("/k1/lex/documentos")
 def list_documentos(payload=Depends(verify_token)):
     return {"message": "Documentos endpoint - implementar conforme necessário"}
 
+@app.get("/financeiro")
 @app.get("/k1/lex/financeiro")
 def list_financeiro(payload=Depends(verify_token)):
     return {"message": "Financeiro endpoint - implementar conforme necessário"}
 
+@app.get("/prazos")
 @app.get("/k1/lex/prazos")
 def list_prazos(payload=Depends(verify_token)):
     return {"message": "Prazos endpoint - implementar conforme necessário"}
 
+@app.get("/usuarios")
 @app.get("/k1/lex/usuarios")
 def list_usuarios(payload=Depends(verify_token)):
     return {"message": "Usuários endpoint - implementar conforme necessário"}
 
+@app.get("/escritorios")
 @app.get("/k1/lex/escritorios")
 def list_escritorios(payload=Depends(verify_token)):
     return {"message": "Escritórios endpoint - implementar conforme necessário"}
 
+@app.get("/configuracoes/geral")
 @app.get("/k1/lex/configuracoes/geral")
 def get_configuracoes_geral(payload=Depends(verify_token)):
     return {"message": "Configurações gerais - implementar conforme necessário"}
