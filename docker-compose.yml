@@ -17,10 +17,16 @@ services:
       - JWT_SECRET=your-super-secret-jwt-key
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.hubkealex.rule=(Host(`srv1023256.hstgr.cloud`) || Host(`kealabs.cloud`) || Host(`www.kealabs.cloud`)) && (PathPrefix(`/k1/lex`) || PathPrefix(`/v1/lex`))"
+      - "traefik.http.routers.hubkealex.rule=Host(`srv1023256.hstgr.cloud`) || Host(`kealabs.cloud`) || Host(`www.kealabs.cloud`)"
       - "traefik.http.routers.hubkealex.entrypoints=https"
       - "traefik.http.routers.hubkealex.tls=true"
-      - "traefik.http.routers.hubkealex.middlewares=hubkealex-compress"
+      - "traefik.http.routers.hubkealex.middlewares=hubkealex-cors,hubkealex-compress"
+      - "traefik.http.middlewares.hubkealex-cors.headers.accesscontrolalloworiginlist=https://darkorange-raven-554257.hostingersite.com,https://kealabs.cloud,https://www.kealabs.cloud,https://kealabs.com.br,https://www.kealabs.com.br"
+      - "traefik.http.middlewares.hubkealex-cors.headers.accesscontrolallowmethods=GET,POST,OPTIONS"
+      - "traefik.http.middlewares.hubkealex-cors.headers.accesscontrolallowheaders=*"
+      - "traefik.http.middlewares.hubkealex-cors.headers.accesscontrolmaxage=3600"
+      - "traefik.http.middlewares.hubkealex-cors.headers.accesscontrolallowcredentials=true"
+      - "traefik.http.middlewares.hubkealex-cors.headers.addvaryheader=true"
       - "traefik.http.middlewares.hubkealex-compress.compress=true"
       - "traefik.http.services.hubkealex.loadbalancer.server.port=8000"
     healthcheck:
