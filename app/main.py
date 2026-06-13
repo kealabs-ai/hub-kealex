@@ -488,6 +488,11 @@ def list_financeiro(payload=Depends(verify_token)):
 def list_prazos(payload=Depends(verify_token)):
     return {"message": "Prazos endpoint - implementar conforme necessário"}
 
+@app.post("/prazos/vencendo")
+@app.post("/k1/lex/prazos/vencendo")
+def prazos_vencendo(payload=Depends(verify_token)):
+    return {"data": [], "message": "Prazos vencendo - implementar conforme necessário"}
+
 @app.get("/usuarios")
 @app.get("/k1/lex/usuarios")
 def list_usuarios(payload=Depends(verify_token)):
