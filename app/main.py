@@ -15,26 +15,20 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Configurações do Banco de Dados
-DB_HOST = os.getenv("DB_HOST")
+DB_HOST = os.getenv("DB_HOST", "srv1078.hstgr.io")
 DB_PORT = os.getenv("DB_PORT", "3306")
-DB_NAME = os.getenv("DB_NAME")
-DB_USER = os.getenv("DB_USER")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_NAME = os.getenv("DB_NAME", "u549746795_kealex")
+DB_USER = os.getenv("DB_USER", "u549746795_kealex")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "")
 
 # Construir DATABASE_URL a partir das variáveis de ambiente
-if not DB_HOST or not DB_NAME or not DB_USER:
-    raise ValueError("Variáveis de ambiente obrigatórias não definidas: DB_HOST, DB_NAME, DB_USER")
-
 if DB_PASSWORD:
     DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 else:
     DATABASE_URL = f"mysql+pymysql://{DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 # Configurações de Autenticação
-SECRET_KEY = os.getenv("JWT_SECRET")
-if not SECRET_KEY:
-    raise ValueError("Variável de ambiente obrigatória não definida: JWT_SECRET")
-
+SECRET_KEY = os.getenv("JWT_SECRET", "changeme-secret-key-development")
 ALGORITHM = "HS256"
 JWT_EXPIRY_HOURS = int(os.getenv("JWT_EXPIRY_HOURS", "8"))
 TOKEN_EXPIRE_MINUTES = JWT_EXPIRY_HOURS * 60
@@ -47,8 +41,8 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY", "")
 
 # Configurações de Aplicação
-ENVIRONMENT = os.getenv("ENVIRONMENT", "production")
-DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+DEBUG = os.getenv("DEBUG", "true").lower() == "true"
 
 engine = create_engine(
     DATABASE_URL,
