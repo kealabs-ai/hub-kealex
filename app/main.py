@@ -483,6 +483,11 @@ def list_documentos(payload=Depends(verify_token)):
 def list_financeiro(payload=Depends(verify_token)):
     return {"message": "Financeiro endpoint - implementar conforme necessário"}
 
+@app.get("/financeiro/dashboard")
+@app.get("/k1/lex/financeiro/dashboard")
+def financeiro_dashboard(payload=Depends(verify_token)):
+    return {"data": {}, "message": "Dashboard financeiro - implementar conforme necessário"}
+
 @app.get("/prazos")
 @app.get("/k1/lex/prazos")
 def list_prazos(payload=Depends(verify_token)):
