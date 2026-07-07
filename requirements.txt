@@ -7,3 +7,7 @@ PyMySQL==1.1.1
 cryptography==42.0.8
 python-dotenv==1.0.1
 pydantic[email]==2.7.1
+google-auth==2.31.0
+google-auth-oauthlib==1.2.1
+google-auth-httplib2==0.2.0
+google-api-python-client==2.121.0

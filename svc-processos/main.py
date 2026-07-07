@@ -6,8 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from jose import jwt, JWTError
-from sqlalchemy import create_engine, Column, String, DateTime, Enum as SAEnum, Text
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy import create_engine, Column, String, DateTime, Enum as SAEnum, Text, Integer, ForeignKey
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker, relationship
 
 def _get_database_url(default: str) -> str:
     raw = os.getenv("DATABASE_URL")
@@ -66,8 +66,22 @@ class Processo(Base):
     cliente_id    = Column(String(36),   nullable=False)
     vara          = Column(String(255),  default="")
     tribunal      = Column(String(255),  default="")
+    fase_atual    = Column(Integer,      default=0)
     created_at    = Column(DateTime,     default=datetime.utcnow)
     updated_at    = Column(DateTime,     default=datetime.utcnow, onupdate=datetime.utcnow)
+    fases         = relationship("Fase", back_populates="processo", cascade="all, delete-orphan")
+
+class Fase(Base):
+    __tablename__ = "fases"
+    id            = Column(String(36),   primary_key=True, default=lambda: str(uuid.uuid4()))
+    processo_id   = Column(String(36),   ForeignKey("processos.id"), nullable=False)
+    label         = Column(String(255),  nullable=False)
+    ordem         = Column(Integer,      nullable=False)
+    status        = Column(String(50),   default="futura")  # concluida, ativa, futura
+    data_conclusao = Column(DateTime,    nullable=True)
+    created_at    = Column(DateTime,     default=datetime.utcnow)
+    updated_at    = Column(DateTime,     default=datetime.utcnow, onupdate=datetime.utcnow)
+    processo      = relationship("Processo", back_populates="fases")
 
 Base.metadata.create_all(engine)
 
@@ -118,7 +132,16 @@ class ProcessoUpdate(BaseModel):
 class ProcessoDeleteIn(BaseModel):
     id: str
 
+class FaseIn(BaseModel):
+    label: str
+    ordem: int
+
+class AvancarFaseIn(BaseModel):
+    id: str
+    novaFase: int
+
 def _to_dict(p: Processo, cliente: Cliente = None):
+    fases = sorted(p.fases, key=lambda f: f.ordem) if p.fases else []
     return {
         "id": p.id, "tenantId": p.tenant_id, "userId": p.user_id, "escritorioId": p.escritorio_id,
         "numero": p.numero, "titulo": p.titulo, "descricao": p.descricao, "status": p.status,
@@ -126,6 +149,11 @@ def _to_dict(p: Processo, cliente: Cliente = None):
         "clienteNome": cliente.nome if cliente else None,
         "clienteEmail": cliente.email if cliente else None,
         "vara": p.vara, "tribunal": p.tribunal,
+        "faseAtual": p.fase_atual,
+        "fases": [
+            {"id": f.id, "label": f.label, "status": f.status, "data": f.data_conclusao.isoformat() if f.data_conclusao else None}
+            for f in fases
+        ],
         "createdAt": p.created_at.isoformat(), "updatedAt": p.updated_at.isoformat()
     }
 
@@ -160,7 +188,6 @@ def get_processo(body: ProcessoGetIn, db: Session = Depends(get_db), payload=Dep
 @app.post("/k1/lex/processos", status_code=201)
 def create_processo(body: ProcessoIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id")
-    # valida que o cliente existe e pertence ao tenant
     cliente = db.query(Cliente).filter_by(id=body.clienteId, tenant_id=tenant_id).first()
     if not cliente:
         raise HTTPException(404, "Cliente não encontrado")
@@ -168,6 +195,19 @@ def create_processo(body: ProcessoIn, db: Session = Depends(get_db), payload=Dep
                  numero=body.numero, titulo=body.titulo, descricao=body.descricao,
                  advogado_id=payload["sub"], cliente_id=body.clienteId, vara=body.vara, tribunal=body.tribunal)
     db.add(p); db.commit(); db.refresh(p)
+    
+    # Criar fases padrão
+    fases_padrao = [
+        Fase(processo_id=p.id, label="Protocolo", ordem=0, status="ativa"),
+        Fase(processo_id=p.id, label="Citação", ordem=1, status="futura"),
+        Fase(processo_id=p.id, label="Contestação", ordem=2, status="futura"),
+        Fase(processo_id=p.id, label="Sentença", ordem=3, status="futura"),
+        Fase(processo_id=p.id, label="Recurso", ordem=4, status="futura"),
+        Fase(processo_id=p.id, label="Encerrado", ordem=5, status="futura"),
+    ]
+    db.add_all(fases_padrao)
+    db.commit()
+    db.refresh(p)
     return _to_dict(p, cliente)
 
 @app.post("/k1/lex/processos/update")
@@ -191,3 +231,32 @@ def delete_processo(body: ProcessoDeleteIn, db: Session = Depends(get_db), paylo
         raise HTTPException(404, "Não encontrado")
     db.delete(p); db.commit()
     return {"ok": True}
+
+@app.post("/k1/lex/processos/avancar-fase")
+def avancar_fase(body: AvancarFaseIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    tenant_id = payload.get("tenant_id")
+    p = db.query(Processo).filter_by(id=body.id, tenant_id=tenant_id).first()
+    if not p:
+        raise HTTPException(404, "Processo não encontrado")
+    
+    fases = sorted(p.fases, key=lambda f: f.ordem)
+    if body.novaFase < 0 or body.novaFase >= len(fases):
+        raise HTTPException(400, "Fase inválida")
+    
+    # Atualizar status das fases
+    for i, fase in enumerate(fases):
+        if i < body.novaFase:
+            fase.status = "concluida"
+            if not fase.data_conclusao:
+                fase.data_conclusao = datetime.utcnow()
+        elif i == body.novaFase:
+            fase.status = "ativa"
+        else:
+            fase.status = "futura"
+    
+    p.fase_atual = body.novaFase
+    p.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(p)
+    cliente = db.query(Cliente).filter_by(id=p.cliente_id).first()
+    return _to_dict(p, cliente)
