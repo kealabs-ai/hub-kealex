@@ -560,6 +560,20 @@ def avancar_fase(body: dict, db: Session = Depends(get_db), payload=Depends(veri
         "faseAtual": {"id": proxima_fase.id, "label": proxima_fase.label, "status": "em_andamento"}
     }
 
+@app.post("/k1/lex/processos/listar-fases")
+def listar_fases(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    processo_id = body.get("processoId") or body.get("processo_id")
+    if not processo_id:
+        raise HTTPException(400, "processoId obrigatorio")
+    
+    tenant_id = payload.get("tenant_id")
+    p = db.query(Processo).filter_by(id=processo_id, tenant_id=tenant_id).first()
+    if not p:
+        raise HTTPException(404, "Processo nao encontrado")
+    
+    fases = db.query(Fase).filter_by(processo_id=processo_id).order_by(Fase.ordem).all()
+    return [{"id": f.id, "label": f.label, "ordem": f.ordem, "status": f.status, "dataConclusao": f.data_conclusao.isoformat() if f.data_conclusao else None} for f in fases]
+
 # Basic endpoints for other services (placeholder endpoints)
 @app.get("/clientes")
 @app.get("/k1/lex/clientes")
