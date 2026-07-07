@@ -185,6 +185,17 @@ class Prazo(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class Fase(Base):
+    __tablename__ = "fases"
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    processo_id = Column(String(36), nullable=False)
+    label = Column(String(255), nullable=False)
+    ordem = Column(Integer, nullable=False)
+    status = Column(String(50), default="futura")
+    data_conclusao = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 class Honorario(Base):
     __tablename__ = "honorarios"
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -508,6 +519,46 @@ def delete_processo(body: ProcessoDeleteIn, db: Session = Depends(get_db), paylo
         raise HTTPException(404, "Não encontrado")
     db.delete(p); db.commit()
     return {"ok": True}
+
+@app.post("/k1/lex/processos/avancar-fase")
+def avancar_fase(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    processo_id = body.get("processoId")
+    if not processo_id:
+        raise HTTPException(400, "processoId obrigatório")
+    
+    tenant_id = payload.get("tenant_id")
+    p = db.query(Processo).filter_by(id=processo_id, tenant_id=tenant_id).first()
+    if not p:
+        raise HTTPException(404, "Processo não encontrado")
+    
+    fases = db.query(Fase).filter_by(processo_id=processo_id).order_by(Fase.ordem).all()
+    if not fases:
+        raise HTTPException(400, "Nenhuma fase encontrada para este processo")
+    
+    fase_atual = db.query(Fase).filter_by(processo_id=processo_id, status="em_andamento").first()
+    
+    if not fase_atual:
+        proxima_fase = fases[0]
+    else:
+        idx = next((i for i, f in enumerate(fases) if f.id == fase_atual.id), -1)
+        if idx == -1 or idx >= len(fases) - 1:
+            raise HTTPException(400, "Nenhuma próxima fase disponível")
+        proxima_fase = fases[idx + 1]
+    
+    if fase_atual:
+        fase_atual.status = "concluida"
+        fase_atual.data_conclusao = datetime.utcnow()
+    
+    proxima_fase.status = "em_andamento"
+    proxima_fase.updated_at = datetime.utcnow()
+    
+    db.commit()
+    
+    return {
+        "ok": True,
+        "faseAnterior": {"id": fase_atual.id, "label": fase_atual.label, "status": "concluida"} if fase_atual else None,
+        "faseAtual": {"id": proxima_fase.id, "label": proxima_fase.label, "status": "em_andamento"}
+    }
 
 # Basic endpoints for other services (placeholder endpoints)
 @app.get("/clientes")
