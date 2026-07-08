@@ -1,0 +1,272 @@
+{
+  "info": {
+    "name": "Kealex-Repositorios-API",
+    "description": "Testes para o microserviço de repositórios",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Repositórios",
+      "item": [
+        {
+          "name": "Listar Repositórios",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/k1/lex/repositorios",
+              "host": ["{{base_url}}"],
+              "path": ["k1", "lex", "repositorios"]
+            }
+          }
+        },
+        {
+          "name": "Criar Repositório Local",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Documentos Processos\",\n  \"tipo\": \"local\",\n  \"caminhoLocal\": \"/var/documentos/processos\",\n  \"descricao\": \"Repositório de documentos dos processos\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/k1/lex/repositorios",
+              "host": ["{{base_url}}"],
+              "path": ["k1", "lex", "repositorios"]
+            }
+          }
+        },
+        {
+          "name": "Criar Repositório CDN",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"CDN Modelos\",\n  \"tipo\": \"cdn\",\n  \"url\": \"https://cdn.example.com/api/files\",\n  \"descricao\": \"Modelos de documentos do CDN\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/k1/lex/repositorios",
+              "host": ["{{base_url}}"],
+              "path": ["k1", "lex", "repositorios"]
+            }
+          }
+        },
+        {
+          "name": "Criar Repositório Google Drive",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Drive Compartilhado\",\n  \"tipo\": \"gdrive\",\n  \"gdriveFolder\": \"1a2b3c4d5e6f7g8h9i0j\",\n  \"descricao\": \"Pasta compartilhada do Google Drive\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/k1/lex/repositorios",
+              "host": ["{{base_url}}"],
+              "path": ["k1", "lex", "repositorios"]
+            }
+          }
+        },
+        {
+          "name": "Obter Repositório",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{repo_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/k1/lex/repositorios/get",
+              "host": ["{{base_url}}"],
+              "path": ["k1", "lex", "repositorios", "get"]
+            }
+          }
+        },
+        {
+          "name": "Atualizar Repositório",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{repo_id}}\",\n  \"nome\": \"Novo Nome\",\n  \"descricao\": \"Nova descrição\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/k1/lex/repositorios/update",
+              "host": ["{{base_url}}"],
+              "path": ["k1", "lex", "repositorios", "update"]
+            }
+          }
+        },
+        {
+          "name": "Deletar Repositório",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{repo_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/k1/lex/repositorios/delete",
+              "host": ["{{base_url}}"],
+              "path": ["k1", "lex", "repositorios", "delete"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Arquivos",
+      "item": [
+        {
+          "name": "Listar Arquivos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/k1/lex/repositorios/{{repo_id}}/arquivos",
+              "host": ["{{base_url}}"],
+              "path": ["k1", "lex", "repositorios", "{{repo_id}}", "arquivos"]
+            }
+          }
+        },
+        {
+          "name": "Escanear Repositório",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/k1/lex/repositorios/{{repo_id}}/scan",
+              "host": ["{{base_url}}"],
+              "path": ["k1", "lex", "repositorios", "{{repo_id}}", "scan"]
+            }
+          }
+        },
+        {
+          "name": "Upload de Arquivo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/k1/lex/repositorios/{{repo_id}}/upload",
+              "host": ["{{base_url}}"],
+              "path": ["k1", "lex", "repositorios", "{{repo_id}}", "upload"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": ["{{base_url}}"],
+          "path": ["health"]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8007"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "repo_id",
+      "value": ""
+    }
+  ]
+}

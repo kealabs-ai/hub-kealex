@@ -194,9 +194,9 @@ def create_processo(body: ProcessoIn, db: Session = Depends(get_db), payload=Dep
     p = Processo(tenant_id=tenant_id, user_id=payload["sub"], escritorio_id=body.escritorioId,
                  numero=body.numero, titulo=body.titulo, descricao=body.descricao,
                  advogado_id=payload["sub"], cliente_id=body.clienteId, vara=body.vara, tribunal=body.tribunal)
-    db.add(p); db.commit(); db.refresh(p)
+    db.add(p)
+    db.flush()
     
-    # Criar fases de acompanhamento
     fases_padrao = [
         Fase(processo_id=p.id, label="Protocolo", ordem=0, status="ativa"),
         Fase(processo_id=p.id, label="Citação", ordem=1, status="futura"),
@@ -208,7 +208,7 @@ def create_processo(body: ProcessoIn, db: Session = Depends(get_db), payload=Dep
     ]
     db.add_all(fases_padrao)
     db.commit()
-    db.refresh(p)
+    db.refresh(p, ["fases"])
     return _to_dict(p, cliente)
 
 @app.post("/k1/lex/processos/update")
