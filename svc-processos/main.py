@@ -196,14 +196,15 @@ def create_processo(body: ProcessoIn, db: Session = Depends(get_db), payload=Dep
                  advogado_id=payload["sub"], cliente_id=body.clienteId, vara=body.vara, tribunal=body.tribunal)
     db.add(p); db.commit(); db.refresh(p)
     
-    # Criar fases padrão
+    # Criar fases de acompanhamento
     fases_padrao = [
         Fase(processo_id=p.id, label="Protocolo", ordem=0, status="ativa"),
         Fase(processo_id=p.id, label="Citação", ordem=1, status="futura"),
         Fase(processo_id=p.id, label="Contestação", ordem=2, status="futura"),
-        Fase(processo_id=p.id, label="Sentença", ordem=3, status="futura"),
-        Fase(processo_id=p.id, label="Recurso", ordem=4, status="futura"),
-        Fase(processo_id=p.id, label="Encerrado", ordem=5, status="futura"),
+        Fase(processo_id=p.id, label="Audiência", ordem=3, status="futura"),
+        Fase(processo_id=p.id, label="Sentença", ordem=4, status="futura"),
+        Fase(processo_id=p.id, label="Recurso", ordem=5, status="futura"),
+        Fase(processo_id=p.id, label="Encerrado", ordem=6, status="futura"),
     ]
     db.add_all(fases_padrao)
     db.commit()
