@@ -1,6 +1,7 @@
 import os, uuid, enum
 from datetime import datetime
 from typing import Optional
+import logging
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -8,6 +9,9 @@ from pydantic import BaseModel
 from jose import jwt, JWTError
 from sqlalchemy import create_engine, Column, String, DateTime, Enum as SAEnum, Text, Integer, ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker, relationship
+
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 def _get_database_url(default: str) -> str:
     raw = os.getenv("DATABASE_URL")
@@ -77,7 +81,7 @@ class Fase(Base):
     processo_id   = Column(String(36),   ForeignKey("processos.id"), nullable=False)
     label         = Column(String(255),  nullable=False)
     ordem         = Column(Integer,      nullable=False)
-    status        = Column(String(50),   default="futura")  # concluida, ativa, futura
+    status        = Column(String(50),   default="futura")
     data_conclusao = Column(DateTime,    nullable=True)
     created_at    = Column(DateTime,     default=datetime.utcnow)
     updated_at    = Column(DateTime,     default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -99,7 +103,7 @@ def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
     try:
         return jwt.decode(creds.credentials, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
-        raise HTTPException(401, "Token inválido")
+        raise HTTPException(401, "Token invalido")
 
 app = FastAPI(title="svc-processos")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -167,12 +171,10 @@ def list_processos(db: Session = Depends(get_db), payload=Depends(verify_token))
     role, uid, tid = payload.get("role"), payload.get("sub"), payload.get("tenant_id")
     q = db.query(Processo).filter_by(tenant_id=tid)
     
-    # Aplicar filtros apenas para roles específicos, admin vê tudo do tenant
     if role == "cliente":
         q = q.filter_by(cliente_id=uid)
     elif role == "advogado":
         q = q.filter_by(advogado_id=uid)
-    # admin não tem filtro adicional - vê todos os processos do tenant
     
     return _enrich(db, q.all())
 
@@ -181,57 +183,87 @@ def get_processo(body: ProcessoGetIn, db: Session = Depends(get_db), payload=Dep
     tenant_id = payload.get("tenant_id")
     p = db.query(Processo).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not p:
-        raise HTTPException(404, "Não encontrado")
+        raise HTTPException(404, "Nao encontrado")
     cliente = db.query(Cliente).filter_by(id=p.cliente_id).first()
     return _to_dict(p, cliente)
 
 @app.post("/k1/lex/processos", status_code=201)
 def create_processo(body: ProcessoIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
-    tenant_id = payload.get("tenant_id")
-    cliente = db.query(Cliente).filter_by(id=body.clienteId, tenant_id=tenant_id).first()
-    if not cliente:
-        raise HTTPException(404, "Cliente não encontrado")
-    
-    p = Processo(
-        id=str(uuid.uuid4()),
-        tenant_id=tenant_id,
-        user_id=payload["sub"],
-        escritorio_id=body.escritorioId,
-        numero=body.numero,
-        titulo=body.titulo,
-        descricao=body.descricao,
-        status=StatusEnum.ativo,
-        advogado_id=payload["sub"],
-        cliente_id=body.clienteId,
-        vara=body.vara,
-        tribunal=body.tribunal,
-        fase_atual=0
-    )
-    db.add(p)
-    db.commit()
-    
-    fases_padrao = [
-        Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Protocolo", ordem=0, status="ativa"),
-        Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Citação", ordem=1, status="futura"),
-        Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Contestação", ordem=2, status="futura"),
-        Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Audiência", ordem=3, status="futura"),
-        Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Sentença", ordem=4, status="futura"),
-        Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Recurso", ordem=5, status="futura"),
-        Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Encerrado", ordem=6, status="futura"),
-    ]
-    for fase in fases_padrao:
-        db.add(fase)
-    db.commit()
-    
-    p_atualizado = db.query(Processo).filter_by(id=p.id).first()
-    return _to_dict(p_atualizado, cliente)
+    try:
+        logger.info(f"[CREATE_PROCESSO] Iniciando criacao de processo: {body.numero}")
+        tenant_id = payload.get("tenant_id")
+        logger.info(f"[CREATE_PROCESSO] Tenant ID: {tenant_id}")
+        
+        cliente = db.query(Cliente).filter_by(id=body.clienteId, tenant_id=tenant_id).first()
+        if not cliente:
+            logger.error(f"[CREATE_PROCESSO] Cliente nao encontrado: {body.clienteId}")
+            raise HTTPException(404, "Cliente nao encontrado")
+        logger.info(f"[CREATE_PROCESSO] Cliente encontrado: {cliente.nome}")
+        
+        processo_id = str(uuid.uuid4())
+        logger.info(f"[CREATE_PROCESSO] Novo ID do processo: {processo_id}")
+        
+        p = Processo(
+            id=processo_id,
+            tenant_id=tenant_id,
+            user_id=payload["sub"],
+            escritorio_id=body.escritorioId,
+            numero=body.numero,
+            titulo=body.titulo,
+            descricao=body.descricao,
+            status=StatusEnum.ativo,
+            advogado_id=payload["sub"],
+            cliente_id=body.clienteId,
+            vara=body.vara,
+            tribunal=body.tribunal,
+            fase_atual=0
+        )
+        db.add(p)
+        db.commit()
+        logger.info(f"[CREATE_PROCESSO] Processo criado com sucesso: {processo_id}")
+        
+        fases_padrao = [
+            Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Protocolo", ordem=0, status="ativa"),
+            Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Citacao", ordem=1, status="futura"),
+            Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Contestacao", ordem=2, status="futura"),
+            Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Audiencia", ordem=3, status="futura"),
+            Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Sentenca", ordem=4, status="futura"),
+            Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Recurso", ordem=5, status="futura"),
+            Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Encerrado", ordem=6, status="futura"),
+        ]
+        logger.info(f"[CREATE_PROCESSO] Criando {len(fases_padrao)} fases para o processo {processo_id}")
+        
+        for i, fase in enumerate(fases_padrao):
+            logger.debug(f"[CREATE_PROCESSO] Adicionando fase {i}: {fase.label} (ID: {fase.id}, processo_id: {fase.processo_id})")
+            db.add(fase)
+        
+        logger.info(f"[CREATE_PROCESSO] Fazendo commit das fases...")
+        db.commit()
+        logger.info(f"[CREATE_PROCESSO] Fases criadas com sucesso")
+        
+        p_atualizado = db.query(Processo).filter_by(id=p.id).first()
+        logger.info(f"[CREATE_PROCESSO] Processo atualizado recuperado do banco")
+        
+        fases_verificacao = db.query(Fase).filter_by(processo_id=p.id).all()
+        logger.info(f"[CREATE_PROCESSO] Verificacao: {len(fases_verificacao)} fases encontradas no banco")
+        for fv in fases_verificacao:
+            logger.debug(f"[CREATE_PROCESSO] Fase encontrada: {fv.label} (ID: {fv.id}, status: {fv.status})")
+        
+        resultado = _to_dict(p_atualizado, cliente)
+        logger.info(f"[CREATE_PROCESSO] Processo criado com sucesso com {len(resultado.get('fases', []))} fases")
+        return resultado
+        
+    except Exception as e:
+        logger.error(f"[CREATE_PROCESSO] ERRO: {str(e)}", exc_info=True)
+        db.rollback()
+        raise HTTPException(500, f"Erro ao criar processo: {str(e)}")
 
 @app.post("/k1/lex/processos/update")
 def update_processo(body: ProcessoUpdate, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id")
     p = db.query(Processo).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not p:
-        raise HTTPException(404, "Não encontrado")
+        raise HTTPException(404, "Nao encontrado")
     for k, v in body.model_dump(exclude_none=True, exclude={"id"}).items():
         setattr(p, k, v)
     p.updated_at = datetime.utcnow()
@@ -244,50 +276,70 @@ def delete_processo(body: ProcessoDeleteIn, db: Session = Depends(get_db), paylo
     tenant_id = payload.get("tenant_id")
     p = db.query(Processo).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not p:
-        raise HTTPException(404, "Não encontrado")
+        raise HTTPException(404, "Nao encontrado")
     db.delete(p); db.commit()
     return {"ok": True}
 
 @app.post("/k1/lex/processos/avancar-fase")
 def avancar_fase(body: AvancarFaseIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
-    tenant_id = payload.get("tenant_id")
-    p = db.query(Processo).filter_by(id=body.id, tenant_id=tenant_id).first()
-    if not p:
-        raise HTTPException(404, "Processo não encontrado")
-    
-    fases = db.query(Fase).filter_by(processo_id=p.id).order_by(Fase.ordem).all()
-    if not fases:
-        raise HTTPException(400, "Nenhuma fase encontrada para este processo")
-    
-    if body.novaFase < 0 or body.novaFase >= len(fases):
-        raise HTTPException(400, f"Fase inválida. Máximo: {len(fases) - 1}")
-    
-    for i, fase in enumerate(fases):
-        if i < body.novaFase:
-            fase.status = "concluida"
-            if not fase.data_conclusao:
-                fase.data_conclusao = datetime.utcnow()
-        elif i == body.novaFase:
-            fase.status = "ativa"
-        else:
-            fase.status = "futura"
-        db.add(fase)
-    
-    p.fase_atual = body.novaFase
-    p.updated_at = datetime.utcnow()
-    db.add(p)
-    db.commit()
-    
-    p_atualizado = db.query(Processo).filter_by(id=p.id).first()
-    cliente = db.query(Cliente).filter_by(id=p_atualizado.cliente_id).first()
-    return _to_dict(p_atualizado, cliente)
+    try:
+        logger.info(f"[AVANCAR_FASE] Iniciando avanco de fase para processo: {body.id}, nova fase: {body.novaFase}")
+        tenant_id = payload.get("tenant_id")
+        
+        p = db.query(Processo).filter_by(id=body.id, tenant_id=tenant_id).first()
+        if not p:
+            logger.error(f"[AVANCAR_FASE] Processo nao encontrado: {body.id}")
+            raise HTTPException(404, "Processo nao encontrado")
+        logger.info(f"[AVANCAR_FASE] Processo encontrado: {p.numero}")
+        
+        fases = db.query(Fase).filter_by(processo_id=p.id).order_by(Fase.ordem).all()
+        logger.info(f"[AVANCAR_FASE] Total de fases encontradas: {len(fases)}")
+        
+        if not fases:
+            logger.error(f"[AVANCAR_FASE] Nenhuma fase encontrada para o processo {body.id}")
+            raise HTTPException(400, "Nenhuma fase encontrada para este processo")
+        
+        if body.novaFase < 0 or body.novaFase >= len(fases):
+            logger.error(f"[AVANCAR_FASE] Fase invalida: {body.novaFase}. Maximo: {len(fases) - 1}")
+            raise HTTPException(400, f"Fase invalida. Maximo: {len(fases) - 1}")
+        
+        logger.info(f"[AVANCAR_FASE] Atualizando status das fases...")
+        for i, fase in enumerate(fases):
+            if i < body.novaFase:
+                fase.status = "concluida"
+                if not fase.data_conclusao:
+                    fase.data_conclusao = datetime.utcnow()
+                logger.debug(f"[AVANCAR_FASE] Fase {i} ({fase.label}) marcada como concluida")
+            elif i == body.novaFase:
+                fase.status = "ativa"
+                logger.debug(f"[AVANCAR_FASE] Fase {i} ({fase.label}) marcada como ativa")
+            else:
+                fase.status = "futura"
+                logger.debug(f"[AVANCAR_FASE] Fase {i} ({fase.label}) marcada como futura")
+            db.add(fase)
+        
+        p.fase_atual = body.novaFase
+        p.updated_at = datetime.utcnow()
+        db.add(p)
+        logger.info(f"[AVANCAR_FASE] Fazendo commit das mudancas...")
+        db.commit()
+        logger.info(f"[AVANCAR_FASE] Avanco de fase realizado com sucesso")
+        
+        p_atualizado = db.query(Processo).filter_by(id=p.id).first()
+        cliente = db.query(Cliente).filter_by(id=p_atualizado.cliente_id).first()
+        return _to_dict(p_atualizado, cliente)
+        
+    except Exception as e:
+        logger.error(f"[AVANCAR_FASE] ERRO: {str(e)}", exc_info=True)
+        db.rollback()
+        raise HTTPException(500, f"Erro ao avancar fase: {str(e)}")
 
 @app.post("/k1/lex/processos/{processo_id}/proximas-fases")
 def proximas_fases(processo_id: str, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id")
     p = db.query(Processo).filter_by(id=processo_id, tenant_id=tenant_id).first()
     if not p:
-        raise HTTPException(404, "Processo não encontrado")
+        raise HTTPException(404, "Processo nao encontrado")
     
     fases = db.query(Fase).filter_by(processo_id=processo_id).order_by(Fase.ordem).all()
     fase_atual = p.fase_atual
