@@ -141,8 +141,8 @@ class FaseIn(BaseModel):
     ordem: int
 
 class AvancarFaseIn(BaseModel):
-    id: str
-    novaFase: int
+    processoId: str
+    faseAtual: int
 
 def _to_dict(p: Processo, cliente: Cliente = None):
     fases = sorted(p.fases, key=lambda f: f.ordem) if p.fases else []
@@ -181,7 +181,7 @@ def list_processos(db: Session = Depends(get_db), payload=Depends(verify_token))
 @app.post("/k1/lex/processos/get")
 def get_processo(body: ProcessoGetIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id")
-    p = db.query(Processo).filter_by(id=body.id, tenant_id=tenant_id).first()
+    p = db.query(Processo).filter_by(id=body.processoId, tenant_id=tenant_id).first()
     if not p:
         raise HTTPException(404, "Nao encontrado")
     cliente = db.query(Cliente).filter_by(id=p.cliente_id).first()
@@ -261,7 +261,7 @@ def create_processo(body: ProcessoIn, db: Session = Depends(get_db), payload=Dep
 @app.post("/k1/lex/processos/update")
 def update_processo(body: ProcessoUpdate, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id")
-    p = db.query(Processo).filter_by(id=body.id, tenant_id=tenant_id).first()
+    p = db.query(Processo).filter_by(id=body.processoId, tenant_id=tenant_id).first()
     if not p:
         raise HTTPException(404, "Nao encontrado")
     for k, v in body.model_dump(exclude_none=True, exclude={"id"}).items():
@@ -274,7 +274,7 @@ def update_processo(body: ProcessoUpdate, db: Session = Depends(get_db), payload
 @app.post("/k1/lex/processos/delete")
 def delete_processo(body: ProcessoDeleteIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id")
-    p = db.query(Processo).filter_by(id=body.id, tenant_id=tenant_id).first()
+    p = db.query(Processo).filter_by(id=body.processoId, tenant_id=tenant_id).first()
     if not p:
         raise HTTPException(404, "Nao encontrado")
     db.delete(p); db.commit()
@@ -283,12 +283,12 @@ def delete_processo(body: ProcessoDeleteIn, db: Session = Depends(get_db), paylo
 @app.post("/k1/lex/processos/avancar-fase")
 def avancar_fase(body: AvancarFaseIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
     try:
-        logger.info(f"[AVANCAR_FASE] Iniciando avanco de fase para processo: {body.id}, nova fase: {body.novaFase}")
+        logger.info(f"[AVANCAR_FASE] Iniciando avanco de fase para processo: {body.processoId}, nova fase: {body.faseAtual}")
         tenant_id = payload.get("tenant_id")
         
-        p = db.query(Processo).filter_by(id=body.id, tenant_id=tenant_id).first()
+        p = db.query(Processo).filter_by(id=body.processoId, tenant_id=tenant_id).first()
         if not p:
-            logger.error(f"[AVANCAR_FASE] Processo nao encontrado: {body.id}")
+            logger.error(f"[AVANCAR_FASE] Processo nao encontrado: {body.processoId}")
             raise HTTPException(404, "Processo nao encontrado")
         logger.info(f"[AVANCAR_FASE] Processo encontrado: {p.numero}")
         
@@ -296,21 +296,21 @@ def avancar_fase(body: AvancarFaseIn, db: Session = Depends(get_db), payload=Dep
         logger.info(f"[AVANCAR_FASE] Total de fases encontradas: {len(fases)}")
         
         if not fases:
-            logger.error(f"[AVANCAR_FASE] Nenhuma fase encontrada para o processo {body.id}")
+            logger.error(f"[AVANCAR_FASE] Nenhuma fase encontrada para o processo {body.processoId}")
             raise HTTPException(400, "Nenhuma fase encontrada para este processo")
         
-        if body.novaFase < 0 or body.novaFase >= len(fases):
-            logger.error(f"[AVANCAR_FASE] Fase invalida: {body.novaFase}. Maximo: {len(fases) - 1}")
+        if body.faseAtual < 0 or body.faseAtual >= len(fases):
+            logger.error(f"[AVANCAR_FASE] Fase invalida: {body.faseAtual}. Maximo: {len(fases) - 1}")
             raise HTTPException(400, f"Fase invalida. Maximo: {len(fases) - 1}")
         
         logger.info(f"[AVANCAR_FASE] Atualizando status das fases...")
         for i, fase in enumerate(fases):
-            if i < body.novaFase:
+            if i < body.faseAtual:
                 fase.status = "concluida"
                 if not fase.data_conclusao:
                     fase.data_conclusao = datetime.utcnow()
                 logger.debug(f"[AVANCAR_FASE] Fase {i} ({fase.label}) marcada como concluida")
-            elif i == body.novaFase:
+            elif i == body.faseAtual:
                 fase.status = "ativa"
                 logger.debug(f"[AVANCAR_FASE] Fase {i} ({fase.label}) marcada como ativa")
             else:
@@ -318,7 +318,7 @@ def avancar_fase(body: AvancarFaseIn, db: Session = Depends(get_db), payload=Dep
                 logger.debug(f"[AVANCAR_FASE] Fase {i} ({fase.label}) marcada como futura")
             db.add(fase)
         
-        p.fase_atual = body.novaFase
+        p.fase_atual = body.faseAtual
         p.updated_at = datetime.utcnow()
         db.add(p)
         logger.info(f"[AVANCAR_FASE] Fazendo commit das mudancas...")
