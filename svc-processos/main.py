@@ -301,7 +301,7 @@ def avancar_fase(body: AvancarFaseIn, db: Session = Depends(get_db), payload=Dep
         
         if body.faseAtual < 0 or body.faseAtual >= len(fases):
             logger.error(f"[AVANCAR_FASE] Fase invalida: {body.faseAtual}. Maximo: {len(fases) - 1}")
-            raise HTTPException(400, f"Fase invalida. Maximo: {len(fases) - 1}")
+            raise HTTPException(400, f"Nenhuma próxima fase disponível")
         
         logger.info(f"[AVANCAR_FASE] Atualizando status das fases...")
         for i, fase in enumerate(fases):
@@ -333,7 +333,6 @@ def avancar_fase(body: AvancarFaseIn, db: Session = Depends(get_db), payload=Dep
         logger.error(f"[AVANCAR_FASE] ERRO: {str(e)}", exc_info=True)
         db.rollback()
         raise HTTPException(500, f"Erro ao avancar fase: {str(e)}")
-
 @app.post("/k1/lex/processos/{processo_id}/proximas-fases")
 def proximas_fases(processo_id: str, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id")
