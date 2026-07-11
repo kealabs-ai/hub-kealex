@@ -191,25 +191,40 @@ def create_processo(body: ProcessoIn, db: Session = Depends(get_db), payload=Dep
     cliente = db.query(Cliente).filter_by(id=body.clienteId, tenant_id=tenant_id).first()
     if not cliente:
         raise HTTPException(404, "Cliente não encontrado")
-    p = Processo(tenant_id=tenant_id, user_id=payload["sub"], escritorio_id=body.escritorioId,
-                 numero=body.numero, titulo=body.titulo, descricao=body.descricao,
-                 advogado_id=payload["sub"], cliente_id=body.clienteId, vara=body.vara, tribunal=body.tribunal)
+    
+    p = Processo(
+        id=str(uuid.uuid4()),
+        tenant_id=tenant_id,
+        user_id=payload["sub"],
+        escritorio_id=body.escritorioId,
+        numero=body.numero,
+        titulo=body.titulo,
+        descricao=body.descricao,
+        status=StatusEnum.ativo,
+        advogado_id=payload["sub"],
+        cliente_id=body.clienteId,
+        vara=body.vara,
+        tribunal=body.tribunal,
+        fase_atual=0
+    )
     db.add(p)
-    db.flush()
+    db.commit()
     
     fases_padrao = [
-        Fase(processo_id=p.id, label="Protocolo", ordem=0, status="ativa"),
-        Fase(processo_id=p.id, label="Citação", ordem=1, status="futura"),
-        Fase(processo_id=p.id, label="Contestação", ordem=2, status="futura"),
-        Fase(processo_id=p.id, label="Audiência", ordem=3, status="futura"),
-        Fase(processo_id=p.id, label="Sentença", ordem=4, status="futura"),
-        Fase(processo_id=p.id, label="Recurso", ordem=5, status="futura"),
-        Fase(processo_id=p.id, label="Encerrado", ordem=6, status="futura"),
+        Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Protocolo", ordem=0, status="ativa"),
+        Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Citação", ordem=1, status="futura"),
+        Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Contestação", ordem=2, status="futura"),
+        Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Audiência", ordem=3, status="futura"),
+        Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Sentença", ordem=4, status="futura"),
+        Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Recurso", ordem=5, status="futura"),
+        Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Encerrado", ordem=6, status="futura"),
     ]
-    db.add_all(fases_padrao)
+    for fase in fases_padrao:
+        db.add(fase)
     db.commit()
-    db.refresh(p, ["fases"])
-    return _to_dict(p, cliente)
+    
+    p_atualizado = db.query(Processo).filter_by(id=p.id).first()
+    return _to_dict(p_atualizado, cliente)
 
 @app.post("/k1/lex/processos/update")
 def update_processo(body: ProcessoUpdate, db: Session = Depends(get_db), payload=Depends(verify_token)):
@@ -240,11 +255,13 @@ def avancar_fase(body: AvancarFaseIn, db: Session = Depends(get_db), payload=Dep
     if not p:
         raise HTTPException(404, "Processo não encontrado")
     
-    fases = sorted(p.fases, key=lambda f: f.ordem)
-    if body.novaFase < 0 or body.novaFase >= len(fases):
-        raise HTTPException(400, "Fase inválida")
+    fases = db.query(Fase).filter_by(processo_id=p.id).order_by(Fase.ordem).all()
+    if not fases:
+        raise HTTPException(400, "Nenhuma fase encontrada para este processo")
     
-    # Atualizar status das fases
+    if body.novaFase < 0 or body.novaFase >= len(fases):
+        raise HTTPException(400, f"Fase inválida. Máximo: {len(fases) - 1}")
+    
     for i, fase in enumerate(fases):
         if i < body.novaFase:
             fase.status = "concluida"
@@ -254,10 +271,38 @@ def avancar_fase(body: AvancarFaseIn, db: Session = Depends(get_db), payload=Dep
             fase.status = "ativa"
         else:
             fase.status = "futura"
+        db.add(fase)
     
     p.fase_atual = body.novaFase
     p.updated_at = datetime.utcnow()
+    db.add(p)
     db.commit()
-    db.refresh(p)
-    cliente = db.query(Cliente).filter_by(id=p.cliente_id).first()
-    return _to_dict(p, cliente)
+    
+    p_atualizado = db.query(Processo).filter_by(id=p.id).first()
+    cliente = db.query(Cliente).filter_by(id=p_atualizado.cliente_id).first()
+    return _to_dict(p_atualizado, cliente)
+
+@app.post("/k1/lex/processos/{processo_id}/proximas-fases")
+def proximas_fases(processo_id: str, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    tenant_id = payload.get("tenant_id")
+    p = db.query(Processo).filter_by(id=processo_id, tenant_id=tenant_id).first()
+    if not p:
+        raise HTTPException(404, "Processo não encontrado")
+    
+    fases = db.query(Fase).filter_by(processo_id=processo_id).order_by(Fase.ordem).all()
+    fase_atual = p.fase_atual
+    
+    proximas = []
+    for i, fase in enumerate(fases):
+        if i > fase_atual:
+            proximas.append({
+                "ordem": i,
+                "label": fase.label,
+                "status": fase.status
+            })
+    
+    return {
+        "faseAtual": fase_atual,
+        "faseAtualLabel": fases[fase_atual].label if fase_atual < len(fases) else None,
+        "proximasFases": proximas
+    }
