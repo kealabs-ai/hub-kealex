@@ -554,7 +554,7 @@ def avancar_fase(body: dict, db: Session = Depends(get_db), payload=Depends(veri
     if not fases:
         raise HTTPException(400, "Nenhuma fase encontrada para este processo")
     
-    fase_atual = db.query(Fase).filter_by(processo_id=processo_id, status="em_andamento").first()
+    fase_atual = db.query(Fase).filter_by(processo_id=processo_id, status="ativa").first()
     
     if not fase_atual:
         proxima_fase = fases[0]
@@ -568,7 +568,7 @@ def avancar_fase(body: dict, db: Session = Depends(get_db), payload=Depends(veri
         fase_atual.status = "concluida"
         fase_atual.data_conclusao = datetime.utcnow()
     
-    proxima_fase.status = "em_andamento"
+    proxima_fase.status = "ativa"
     proxima_fase.updated_at = datetime.utcnow()
     
     db.commit()
@@ -576,7 +576,7 @@ def avancar_fase(body: dict, db: Session = Depends(get_db), payload=Depends(veri
     return {
         "ok": True,
         "faseAnterior": {"id": fase_atual.id, "label": fase_atual.label, "status": "concluida"} if fase_atual else None,
-        "faseAtual": {"id": proxima_fase.id, "label": proxima_fase.label, "status": "em_andamento"}
+        "faseAtual": {"id": proxima_fase.id, "label": proxima_fase.label, "status": "ativa"}
     }
 
 @app.post("/k1/lex/processos/listar-fases")
