@@ -499,7 +499,8 @@ def create_processo(body: ProcessoIn, db: Session = Depends(get_db), payload=Dep
     p = Processo(tenant_id=tenant_id, user_id=payload["sub"], escritorio_id=body.escritorioId,
                  numero=body.numero, titulo=body.titulo, descricao=body.descricao,
                  advogado_id=payload["sub"], cliente_id=body.clienteId, vara=body.vara, tribunal=body.tribunal)
-    db.add(p); db.commit(); db.refresh(p)
+    db.add(p)
+    db.flush()
     
     fases_padrao = [
         Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Protocolo", ordem=0, status="ativa"),
@@ -592,6 +593,21 @@ def listar_fases(body: dict, db: Session = Depends(get_db), payload=Depends(veri
     
     fases = db.query(Fase).filter_by(processo_id=processo_id).order_by(Fase.ordem).all()
     return [{"id": f.id, "label": f.label, "ordem": f.ordem, "status": f.status, "dataConclusao": f.data_conclusao.isoformat() if f.data_conclusao else None} for f in fases]
+
+@app.get("/k1/lex/debug/fases/{processo_id}")
+def debug_fases(processo_id: str, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    tenant_id = payload.get("tenant_id")
+    p = db.query(Processo).filter_by(id=processo_id, tenant_id=tenant_id).first()
+    if not p:
+        return {"erro": "Processo nao encontrado", "processo_id": processo_id}
+    
+    fases = db.query(Fase).filter_by(processo_id=processo_id).all()
+    return {
+        "processo_id": processo_id,
+        "processo_numero": p.numero,
+        "total_fases": len(fases),
+        "fases": [{"id": f.id, "label": f.label, "ordem": f.ordem, "status": f.status} for f in fases]
+    }
 
 # Basic endpoints for other services (placeholder endpoints)
 @app.get("/clientes")
