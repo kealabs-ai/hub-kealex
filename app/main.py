@@ -274,7 +274,10 @@ def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
         raise HTTPException(401, "Token inválido")
 
 # Helper functions
-def _processo_to_dict(p: Processo, cliente: Cliente = None):
+def _processo_to_dict(p: Processo, cliente: Cliente = None, db: Session = None):
+    fases = []
+    if db and hasattr(p, 'id'):
+        fases = db.query(Fase).filter_by(processo_id=p.id).order_by(Fase.ordem).all()
     return {
         "id": p.id, "tenantId": p.tenant_id, "userId": p.user_id, "escritorioId": p.escritorio_id,
         "numero": p.numero, "titulo": p.titulo, "descricao": p.descricao, "status": p.status,
@@ -282,13 +285,14 @@ def _processo_to_dict(p: Processo, cliente: Cliente = None):
         "clienteNome": cliente.nome if cliente else None,
         "clienteEmail": cliente.email if cliente else None,
         "vara": p.vara, "tribunal": p.tribunal,
+        "fases": [{"id": f.id, "label": f.label, "ordem": f.ordem, "status": f.status, "dataConclusao": f.data_conclusao.isoformat() if f.data_conclusao else None} for f in fases],
         "createdAt": p.created_at.isoformat(), "updatedAt": p.updated_at.isoformat()
     }
 
 def _enrich_processos(db: Session, processos: list[Processo]):
     ids = list({p.cliente_id for p in processos})
     clientes = {c.id: c for c in db.query(Cliente).filter(Cliente.id.in_(ids)).all()}
-    return [_processo_to_dict(p, clientes.get(p.cliente_id)) for p in processos]
+    return [_processo_to_dict(p, clientes.get(p.cliente_id), db) for p in processos]
 
 # Pydantic models
 class LoginIn(BaseModel):
@@ -484,7 +488,7 @@ def get_processo(body: ProcessoGetIn, db: Session = Depends(get_db), payload=Dep
     if not p:
         raise HTTPException(404, "Não encontrado")
     cliente = db.query(Cliente).filter_by(id=p.cliente_id).first()
-    return _processo_to_dict(p, cliente)
+    return _processo_to_dict(p, cliente, db)
 
 @app.post("/k1/lex/processos", status_code=201)
 def create_processo(body: ProcessoIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
@@ -496,7 +500,22 @@ def create_processo(body: ProcessoIn, db: Session = Depends(get_db), payload=Dep
                  numero=body.numero, titulo=body.titulo, descricao=body.descricao,
                  advogado_id=payload["sub"], cliente_id=body.clienteId, vara=body.vara, tribunal=body.tribunal)
     db.add(p); db.commit(); db.refresh(p)
-    return _processo_to_dict(p, cliente)
+    
+    fases_padrao = [
+        Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Protocolo", ordem=0, status="ativa"),
+        Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Citacao", ordem=1, status="futura"),
+        Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Contestacao", ordem=2, status="futura"),
+        Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Audiencia", ordem=3, status="futura"),
+        Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Sentenca", ordem=4, status="futura"),
+        Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Recurso", ordem=5, status="futura"),
+        Fase(id=str(uuid.uuid4()), processo_id=p.id, label="Encerrado", ordem=6, status="futura"),
+    ]
+    for fase in fases_padrao:
+        db.add(fase)
+    db.commit()
+    db.refresh(p)
+    
+    return _processo_to_dict(p, cliente, db)
 
 @app.post("/k1/lex/processos/update")
 def update_processo(body: ProcessoUpdate, db: Session = Depends(get_db), payload=Depends(verify_token)):
@@ -509,7 +528,7 @@ def update_processo(body: ProcessoUpdate, db: Session = Depends(get_db), payload
     p.updated_at = datetime.utcnow()
     db.commit(); db.refresh(p)
     cliente = db.query(Cliente).filter_by(id=p.cliente_id).first()
-    return _processo_to_dict(p, cliente)
+    return _processo_to_dict(p, cliente, db)
 
 @app.post("/k1/lex/processos/delete")
 def delete_processo(body: ProcessoDeleteIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
