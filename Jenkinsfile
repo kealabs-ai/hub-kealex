@@ -27,11 +27,19 @@ pipeline {
                     fi
 
                     echo "  ✔ Repositório atualizado em $DEPLOY_PATH"
+
+                    cp -f $WORKSPACE/docker-compose.yml $DEPLOY_PATH/docker-compose.yml
+                    cp -f $WORKSPACE/app/main.py $DEPLOY_PATH/app/main.py
+                    mkdir -p $DEPLOY_PATH/svc-cobrancas
+                    cp -f $WORKSPACE/svc-cobrancas/main.py $DEPLOY_PATH/svc-cobrancas/main.py
+                    cp -f $WORKSPACE/svc-cobrancas/Dockerfile $DEPLOY_PATH/svc-cobrancas/Dockerfile
+                    cp -f $WORKSPACE/svc-cobrancas/requirements.txt $DEPLOY_PATH/svc-cobrancas/requirements.txt
+                    echo "  ✔ Arquivos sincronizados do workspace"
                 '''
             }
         }
 
-        // ── 3. GARANTIR DOCKER BUILDX ─────────────────────────────────────
+        // ── 2. GARANTIR DOCKER BUILDX ─────────────────────────────────────
         stage('Ensure Buildx') {
             steps {
                 sh '''
@@ -50,12 +58,12 @@ pipeline {
             }
         }
 
-        // ── 4. BUILD E DEPLOY ─────────────────────────────────────────────
+        // ── 3. BUILD E DEPLOY ─────────────────────────────────────────────
         stage('Deploy') {
             steps {
                 sh '''
                     set -e
-                    cd $WORKSPACE
+                    cd $DEPLOY_PATH
 
                     echo "▶ Garantindo rede kealabs-net..."
                     $DOCKER network inspect kealabs-net >/dev/null 2>&1 || \
@@ -76,33 +84,31 @@ pipeline {
             }
         }
 
-        // ── 5. HEALTH CHECK ───────────────────────────────────────────────
+        // ── 4. HEALTH CHECK ───────────────────────────────────────────────
         stage('Health Check') {
             steps {
                 sh '''
-                    echo "▶ Aguardando container ficar healthy..."
-                    
-                    for i in 1 2 3 4 5 6 7 8 9 10; do
-                        HEALTH_STATUS=$($DOCKER inspect --format='{{.State.Health.Status}}' hubkealex 2>/dev/null || echo "none")
-                        
-                        echo "  Tentativa $i/10: Status = $HEALTH_STATUS"
-                        
-                        if [ "$HEALTH_STATUS" = "healthy" ]; then
-                            echo "  ✔ Container → HEALTHY"
-                            exit 0
-                        fi
-                        
-                        if [ $i -lt 10 ]; then
-                            sleep 2
-                        fi
+                    echo "▶ Aguardando containers ficarem healthy..."
+
+                    for CONTAINER in hubkealex svc-cobrancas; do
+                        echo "  Verificando $CONTAINER..."
+                        for i in 1 2 3 4 5 6 7 8 9 10; do
+                            HEALTH_STATUS=$($DOCKER inspect --format="{{.State.Health.Status}}" $CONTAINER 2>/dev/null || echo "none")
+                            echo "    Tentativa $i/10: $CONTAINER = $HEALTH_STATUS"
+                            if [ "$HEALTH_STATUS" = "healthy" ]; then
+                                echo "  ✔ $CONTAINER → HEALTHY"
+                                break
+                            fi
+                            if [ $i -eq 10 ]; then
+                                echo "  ✘ $CONTAINER não ficou healthy"
+                                $DOCKER logs $CONTAINER | tail -20
+                                exit 1
+                            fi
+                            sleep 3
+                        done
                     done
-                    
-                    echo "  ✘ Container não ficou healthy após 10 tentativas"
-                    echo "▶ Logs do container hubkealex:"
-                    $DOCKER logs hubkealex | tail -30
-                    echo "▶ Status dos containers:"
-                    $DOCKER ps -a --filter "name=hubkealex"
-                    exit 1
+
+                    echo "✅ Todos os containers healthy"
                 '''
             }
         }
@@ -120,8 +126,7 @@ pipeline {
             node('built-in') {
                 sh '''
                     echo "▶ Estado final dos containers:"
-                    /var/jenkins_home/docker ps --filter "name=hubkealex" || true
-
+                    /var/jenkins_home/docker ps --filter "name=hubkealex" --filter "name=svc-cobrancas" || true
                 '''
             }
         }

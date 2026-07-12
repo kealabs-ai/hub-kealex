@@ -125,6 +125,7 @@ def _get_proximas_acoes(cobranca: Cobranca):
         acoes.append({"acao": "cancelar", "label": "Cancelar", "descricao": "Cancelar esta cobranca"})
     return acoes
 
+@app.post("/v1/lex/cobrancas", status_code=201)
 @app.post("/k1/lex/cobrancas", status_code=201)
 @app.post(PREFIX, status_code=201, include_in_schema=False)
 def criar_cobranca(body: CobrancaIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
@@ -165,6 +166,7 @@ def criar_cobranca(body: CobrancaIn, db: Session = Depends(get_db), payload=Depe
         db.rollback()
         raise HTTPException(500, f"Erro ao criar cobranca: {str(e)}")
 
+@app.get("/v1/lex/cobrancas")
 @app.get("/k1/lex/cobrancas")
 @app.get(PREFIX, include_in_schema=False)
 def listar_cobrancas(db: Session = Depends(get_db), payload=Depends(verify_token)):
@@ -177,6 +179,7 @@ def listar_cobrancas(db: Session = Depends(get_db), payload=Depends(verify_token
         logger.error(f"[LIST_COBRANCAS] ERRO: {str(e)}", exc_info=True)
         raise HTTPException(500, f"Erro ao listar cobrancas: {str(e)}")
 
+@app.post("/v1/lex/cobrancas/get")
 @app.post("/k1/lex/cobrancas/get")
 @app.post(f"{PREFIX}/get", include_in_schema=False)
 def get_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
@@ -198,6 +201,7 @@ def get_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends(veri
         logger.error(f"[GET_COBRANCA] ERRO: {str(e)}", exc_info=True)
         raise HTTPException(500, f"Erro ao obter cobranca: {str(e)}")
 
+@app.post("/v1/lex/cobrancas/proxima-fase")
 @app.post("/k1/lex/cobrancas/proxima-fase")
 @app.post(f"{PREFIX}/proxima-fase", include_in_schema=False)
 def proxima_fase_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
@@ -243,6 +247,7 @@ def proxima_fase_cobranca(body: dict, db: Session = Depends(get_db), payload=Dep
         db.rollback()
         raise HTTPException(500, f"Erro ao avancar fase: {str(e)}")
 
+@app.post("/v1/lex/cobrancas/marcar-pago")
 @app.post("/k1/lex/cobrancas/marcar-pago")
 @app.post(f"{PREFIX}/marcar-pago", include_in_schema=False)
 def marcar_pago(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
@@ -286,6 +291,7 @@ def marcar_pago(body: dict, db: Session = Depends(get_db), payload=Depends(verif
         db.rollback()
         raise HTTPException(500, f"Erro ao marcar como pago: {str(e)}")
 
+@app.post("/v1/lex/cobrancas/cancelar")
 @app.post("/k1/lex/cobrancas/cancelar")
 @app.post(f"{PREFIX}/cancelar", include_in_schema=False)
 def cancelar_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
@@ -330,6 +336,7 @@ def cancelar_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends
         db.rollback()
         raise HTTPException(500, f"Erro ao cancelar cobranca: {str(e)}")
 
+@app.post("/v1/lex/cobrancas/timeline")
 @app.post("/k1/lex/cobrancas/timeline")
 @app.post(f"{PREFIX}/timeline", include_in_schema=False)
 def timeline_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
