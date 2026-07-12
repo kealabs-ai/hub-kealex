@@ -90,6 +90,9 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 def health():
     return {"status": "healthy", "service": "svc-cobrancas"}
 
+# Alias: suporte a /k1/lex/cobrancas (legado) e /cobrancas (via stripprefix /v1/lex)
+PREFIX = "/cobrancas"
+
 class CobrancaIn(BaseModel):
     processoId: str
     clienteId: str
@@ -123,6 +126,7 @@ def _get_proximas_acoes(cobranca: Cobranca):
     return acoes
 
 @app.post("/k1/lex/cobrancas", status_code=201)
+@app.post(PREFIX, status_code=201, include_in_schema=False)
 def criar_cobranca(body: CobrancaIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
     try:
         logger.info(f"[CREATE_COBRANCA] Iniciando criacao de cobranca para processo: {body.processoId}")
@@ -162,6 +166,7 @@ def criar_cobranca(body: CobrancaIn, db: Session = Depends(get_db), payload=Depe
         raise HTTPException(500, f"Erro ao criar cobranca: {str(e)}")
 
 @app.get("/k1/lex/cobrancas")
+@app.get(PREFIX, include_in_schema=False)
 def listar_cobrancas(db: Session = Depends(get_db), payload=Depends(verify_token)):
     try:
         tenant_id = payload.get("tenant_id")
@@ -173,6 +178,7 @@ def listar_cobrancas(db: Session = Depends(get_db), payload=Depends(verify_token
         raise HTTPException(500, f"Erro ao listar cobrancas: {str(e)}")
 
 @app.post("/k1/lex/cobrancas/get")
+@app.post(f"{PREFIX}/get", include_in_schema=False)
 def get_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
     try:
         cobranca_id = body.get("id")
@@ -193,6 +199,7 @@ def get_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends(veri
         raise HTTPException(500, f"Erro ao obter cobranca: {str(e)}")
 
 @app.post("/k1/lex/cobrancas/proxima-fase")
+@app.post(f"{PREFIX}/proxima-fase", include_in_schema=False)
 def proxima_fase_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
     try:
         cobranca_id = body.get("id")
@@ -237,6 +244,7 @@ def proxima_fase_cobranca(body: dict, db: Session = Depends(get_db), payload=Dep
         raise HTTPException(500, f"Erro ao avancar fase: {str(e)}")
 
 @app.post("/k1/lex/cobrancas/marcar-pago")
+@app.post(f"{PREFIX}/marcar-pago", include_in_schema=False)
 def marcar_pago(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
     try:
         cobranca_id = body.get("id")
@@ -279,6 +287,7 @@ def marcar_pago(body: dict, db: Session = Depends(get_db), payload=Depends(verif
         raise HTTPException(500, f"Erro ao marcar como pago: {str(e)}")
 
 @app.post("/k1/lex/cobrancas/cancelar")
+@app.post(f"{PREFIX}/cancelar", include_in_schema=False)
 def cancelar_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
     try:
         cobranca_id = body.get("id")
@@ -322,6 +331,7 @@ def cancelar_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends
         raise HTTPException(500, f"Erro ao cancelar cobranca: {str(e)}")
 
 @app.post("/k1/lex/cobrancas/timeline")
+@app.post(f"{PREFIX}/timeline", include_in_schema=False)
 def timeline_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
     try:
         cobranca_id = body.get("id")

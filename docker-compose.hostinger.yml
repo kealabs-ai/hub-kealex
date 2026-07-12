@@ -21,6 +21,7 @@ services:
       - svc-configuracoes
       - svc-escritorios
       - svc-clientes
+      - svc-cobrancas
     networks:
       - kealex-network
     restart: unless-stopped
@@ -160,9 +161,9 @@ services:
         reservations:
           memory: 256M
 
-  svc-clientes:
-    build: ./svc-clientes
-    container_name: kealex-svc-clientes
+  svc-cobrancas:
+    build: ./svc-cobrancas
+    container_name: kealex-svc-cobrancas
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL}

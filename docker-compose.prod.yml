@@ -264,6 +264,34 @@ services:
       retries: 3
       start_period: 40s
 
+  kealex-svc-cobrancas:
+    build: ./svc-cobrancas
+    image: kealex/svc-cobrancas:latest
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=easypanel"
+      - "traefik.http.routers.kealex-cobrancas.rule=(Host(`srv1023256.hstgr.cloud`) || Host(`kealex.com.br`) || Host(`www.kealex.com.br`)) && PathPrefix(`/v1/lex/cobrancas`)"
+      - "traefik.http.routers.kealex-cobrancas.entrypoints=https"
+      - "traefik.http.routers.kealex-cobrancas.tls=true"
+      - "traefik.http.routers.kealex-cobrancas.service=kealex-cobrancas"
+      - "traefik.http.services.kealex-cobrancas.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.kealex-cob-strip.stripprefix.prefixes=/v1/lex"
+      - "traefik.http.routers.kealex-cobrancas.middlewares=kealex-cob-strip,kealex-cors"
+      - "traefik.http.routers.kealex-cobrancas.priority=100"
+    networks:
+      - easypanel
+      - kealex-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
   kealex-api-gateway:
     build: ./api-gateway
     image: kealex/api-gateway:latest
