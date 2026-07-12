@@ -1041,12 +1041,14 @@ def deletar_agente(body: dict, db: Session = Depends(get_db), payload=Depends(_r
 
 # ── COBRANCAS ──────────────────────────────────────────────────────────────
 
+@app.get("/v1/lex/cobrancas")
 @app.get("/k1/lex/cobrancas")
 def list_cobrancas(db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id")
     cobrancas = db.query(Cobranca).filter_by(tenant_id=tenant_id).order_by(Cobranca.created_at.desc()).all()
     return [_cobranca_to_dict(c) for c in cobrancas]
 
+@app.post("/v1/lex/cobrancas", status_code=201)
 @app.post("/k1/lex/cobrancas", status_code=201)
 def create_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id")
@@ -1063,12 +1065,14 @@ def create_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends(v
     db.refresh(c)
     return _cobranca_to_dict(c)
 
+@app.post("/v1/lex/cobrancas/get")
 @app.post("/k1/lex/cobrancas/get")
 def get_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
     c = db.query(Cobranca).filter_by(id=body.get("id"), tenant_id=payload.get("tenant_id")).first()
     if not c: raise HTTPException(404, "Cobrança não encontrada")
     return _cobranca_to_dict(c)
 
+@app.post("/v1/lex/cobrancas/proxima-fase")
 @app.post("/k1/lex/cobrancas/proxima-fase")
 def cobranca_proxima_fase(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
     c = db.query(Cobranca).filter_by(id=body.get("id"), tenant_id=payload.get("tenant_id")).first()
@@ -1084,6 +1088,7 @@ def cobranca_proxima_fase(body: dict, db: Session = Depends(get_db), payload=Dep
     db.commit()
     return _cobranca_to_dict(c)
 
+@app.post("/v1/lex/cobrancas/marcar-pago")
 @app.post("/k1/lex/cobrancas/marcar-pago")
 def cobranca_marcar_pago(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
     c = db.query(Cobranca).filter_by(id=body.get("id"), tenant_id=payload.get("tenant_id")).first()
@@ -1096,6 +1101,7 @@ def cobranca_marcar_pago(body: dict, db: Session = Depends(get_db), payload=Depe
     db.commit()
     return _cobranca_to_dict(c)
 
+@app.post("/v1/lex/cobrancas/cancelar")
 @app.post("/k1/lex/cobrancas/cancelar")
 def cobranca_cancelar(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
     c = db.query(Cobranca).filter_by(id=body.get("id"), tenant_id=payload.get("tenant_id")).first()
@@ -1109,6 +1115,7 @@ def cobranca_cancelar(body: dict, db: Session = Depends(get_db), payload=Depends
     db.commit()
     return _cobranca_to_dict(c)
 
+@app.post("/v1/lex/cobrancas/timeline")
 @app.post("/k1/lex/cobrancas/timeline")
 def cobranca_timeline(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
     c = db.query(Cobranca).filter_by(id=body.get("id"), tenant_id=payload.get("tenant_id")).first()
