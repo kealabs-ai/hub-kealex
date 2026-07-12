@@ -27,16 +27,11 @@ pipeline {
                     fi
 
                     echo "  ✔ Repositório atualizado em $DEPLOY_PATH"
-
-                    # Sobrescrever com arquivos do workspace (alterações locais commitadas via SCM)
-                    cp -f $WORKSPACE/docker-compose.yml $DEPLOY_PATH/docker-compose.yml
-                    cp -f $WORKSPACE/app/main.py $DEPLOY_PATH/app/main.py
-                    echo "  ✔ Arquivos sincronizados do workspace"
                 '''
             }
         }
 
-        // ── 2. GARANTIR DOCKER BUILDX ─────────────────────────────────────
+        // ── 3. GARANTIR DOCKER BUILDX ─────────────────────────────────────
         stage('Ensure Buildx') {
             steps {
                 sh '''
@@ -55,12 +50,12 @@ pipeline {
             }
         }
 
-        // ── 3. BUILD E DEPLOY ─────────────────────────────────────────────
+        // ── 4. BUILD E DEPLOY ─────────────────────────────────────────────
         stage('Deploy') {
             steps {
                 sh '''
                     set -e
-                    cd $DEPLOY_PATH
+                    cd $WORKSPACE
 
                     echo "▶ Garantindo rede kealabs-net..."
                     $DOCKER network inspect kealabs-net >/dev/null 2>&1 || \
@@ -81,27 +76,27 @@ pipeline {
             }
         }
 
-        // ── 4. HEALTH CHECK ───────────────────────────────────────────────
+        // ── 5. HEALTH CHECK ───────────────────────────────────────────────
         stage('Health Check') {
             steps {
                 sh '''
                     echo "▶ Aguardando container ficar healthy..."
-
+                    
                     for i in 1 2 3 4 5 6 7 8 9 10; do
                         HEALTH_STATUS=$($DOCKER inspect --format='{{.State.Health.Status}}' hubkealex 2>/dev/null || echo "none")
-
+                        
                         echo "  Tentativa $i/10: Status = $HEALTH_STATUS"
-
+                        
                         if [ "$HEALTH_STATUS" = "healthy" ]; then
                             echo "  ✔ Container → HEALTHY"
                             exit 0
                         fi
-
+                        
                         if [ $i -lt 10 ]; then
                             sleep 2
                         fi
                     done
-
+                    
                     echo "  ✘ Container não ficou healthy após 10 tentativas"
                     echo "▶ Logs do container hubkealex:"
                     $DOCKER logs hubkealex | tail -30
@@ -126,6 +121,7 @@ pipeline {
                 sh '''
                     echo "▶ Estado final dos containers:"
                     /var/jenkins_home/docker ps --filter "name=hubkealex" || true
+
                 '''
             }
         }
