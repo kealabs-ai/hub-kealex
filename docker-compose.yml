@@ -43,6 +43,43 @@ services:
       - kealabs-net
       - easypanel
 
+  # ── SVC-COBRANCAS ──────────────────────────────────────────────────────
+  svc-cobrancas:
+    build: ./svc-cobrancas
+    container_name: svc-cobrancas
+    ports:
+      - "8001:8000"
+    environment:
+      - DATABASE_URL=mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex
+      - SECRET_KEY=your-super-secret-jwt-key
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.svc-cobrancas.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/lex/cobrancas`)"
+      - "traefik.http.routers.svc-cobrancas.entrypoints=https"
+      - "traefik.http.routers.svc-cobrancas.tls=true"
+      - "traefik.http.routers.svc-cobrancas.middlewares=svc-cobrancas-cors,svc-cobrancas-compress"
+      - "traefik.http.middlewares.svc-cobrancas-cors.headers.accesscontrolalloworiginlist=https://darkorange-raven-554257.hostingersite.com,https://kealabs.cloud,https://www.kealabs.cloud,https://kealabs.com.br,https://www.kealabs.com.br"
+      - "traefik.http.middlewares.svc-cobrancas-cors.headers.accesscontrolallowmethods=GET,POST,OPTIONS"
+      - "traefik.http.middlewares.svc-cobrancas-cors.headers.accesscontrolallowheaders=*"
+      - "traefik.http.middlewares.svc-cobrancas-cors.headers.accesscontrolmaxage=3600"
+      - "traefik.http.middlewares.svc-cobrancas-cors.headers.accesscontrolallowcredentials=true"
+      - "traefik.http.middlewares.svc-cobrancas-cors.headers.addvaryheader=true"
+      - "traefik.http.middlewares.svc-cobrancas-compress.compress=true"
+      - "traefik.http.services.svc-cobrancas.loadbalancer.server.port=8000"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    networks:
+      - kealabs-net
+      - easypanel
+
 networks:
   kealabs-net:
     external: true
