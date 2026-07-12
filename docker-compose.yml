@@ -17,7 +17,7 @@ services:
       - JWT_SECRET=your-super-secret-jwt-key
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.hubkealex.rule=(Host(`srv1023256.hstgr.cloud`) || Host(`kealabs.cloud`) || Host(`www.kealabs.cloud`)) && (PathPrefix(`/v1/lex`) || PathPrefix(`/k1/lex`) || PathPrefix(`/auth`) || PathPrefix(`/health`) || PathPrefix(`/debug`))"
+      - "traefik.http.routers.hubkealex.rule=Host(`srv1023256.hstgr.cloud`) || Host(`kealabs.cloud`) || Host(`www.kealabs.cloud`)"
       - "traefik.http.routers.hubkealex.entrypoints=https"
       - "traefik.http.routers.hubkealex.tls=true"
       - "traefik.http.routers.hubkealex.middlewares=hubkealex-cors,hubkealex-compress"
