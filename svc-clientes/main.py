@@ -47,8 +47,6 @@ class Cliente(Base):
     created_at    = Column(DateTime,    default=datetime.utcnow)
     updated_at    = Column(DateTime,    default=datetime.utcnow, onupdate=datetime.utcnow)
 
-Base.metadata.create_all(engine)
-
 def get_db():
     db = SessionLocal()
     try:
@@ -72,6 +70,15 @@ def require_admin_or_advogado(payload=Depends(verify_token)):
 
 app = FastAPI(title="svc-clientes")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+@app.on_event("startup")
+def startup_event():
+    try:
+        Base.metadata.create_all(engine)
+    except Exception as e:
+        print(f"[ERRO] Database init falhou: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
 
 @app.get("/health")
 def health():

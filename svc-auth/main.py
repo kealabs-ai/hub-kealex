@@ -69,8 +69,6 @@ class Usuario(Base):
     created_at = Column(DateTime,    default=datetime.utcnow)
     updated_at = Column(DateTime,    default=datetime.utcnow, onupdate=datetime.utcnow)
 
-Base.metadata.create_all(engine)
-
 def get_db():
     db = SessionLocal()
     try:
@@ -81,8 +79,9 @@ def get_db():
     finally:
         db.close()
 
-def _seed():
+def _init_db():
     try:
+        Base.metadata.create_all(engine)
         with SessionLocal() as db:
             tenant = db.query(Tenant).filter_by(slug="kealex").first()
             if not tenant:
@@ -90,7 +89,6 @@ def _seed():
                 db.add(tenant)
                 db.flush()
             
-            # Verificar se já existe um usuário admin com este email (globalmente)
             admin = db.query(Usuario).filter_by(email="admin@kealex.com").first()
             if not admin:
                 admin = Usuario(tenant_id=tenant.id, nome="Admin Kealex",
@@ -99,7 +97,6 @@ def _seed():
                 db.add(admin)
                 db.commit()
             else:
-                # Atualizar tenant_id se estiver vazio e atualizar senha se necessário
                 updated = False
                 if not admin.tenant_id or admin.tenant_id == "":
                     admin.tenant_id = tenant.id
@@ -110,13 +107,17 @@ def _seed():
                 if updated:
                     db.commit()
     except Exception as e:
-        print(f"Seed error (ignorando): {e}")
-        # Ignorar erros de seed - o usuário pode já existir
-
-_seed()
+        print(f"[ERRO] Database init falhou: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 app = FastAPI(title="svc-auth")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+@app.on_event("startup")
+def startup_event():
+    _init_db()
 
 class LoginIn(BaseModel):
     email: EmailStr

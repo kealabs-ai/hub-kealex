@@ -65,8 +65,6 @@ class HistoricoCobranca(Base):
     observacao = Column(String(500), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-Base.metadata.create_all(engine)
-
 def get_db():
     db = SessionLocal()
     try:
@@ -85,6 +83,15 @@ def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
 
 app = FastAPI(title="svc-cobrancas")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+@app.on_event("startup")
+def startup_event():
+    try:
+        Base.metadata.create_all(engine)
+    except Exception as e:
+        print(f"[ERRO] Database init falhou: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
 
 @app.get("/health")
 def health():
