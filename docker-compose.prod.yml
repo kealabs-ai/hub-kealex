@@ -23,7 +23,7 @@ services:
       - "traefik.http.routers.kealex-auth.service=kealex-auth"
       - "traefik.http.services.kealex-auth.loadbalancer.server.port=8000"
       - "traefik.http.middlewares.kealex-auth-strip.stripprefix.prefixes=/v1/lex"
-      - "traefik.http.middlewares.kealex-cors.headers.accesscontrolalloworiginlist=*"
+      - "traefik.http.middlewares.kealex-cors.headers.accesscontrolalloworiginlist=https://kealex.com.br,https://www.kealex.com.br,https://srv1023256.hstgr.cloud"
       - "traefik.http.middlewares.kealex-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
       - "traefik.http.middlewares.kealex-cors.headers.accesscontrolallowheaders=*"
       - "traefik.http.middlewares.kealex-cors.headers.accesscontrolallowcredentials=true"
