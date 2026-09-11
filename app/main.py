@@ -86,6 +86,7 @@ class Tenant(Base):
     trial_expires_at = Column(DateTime, nullable=True)
     email            = Column(String(255), nullable=True)
     whatsapp         = Column(String(20), nullable=True)
+    perfil           = Column(String(50), nullable=True)
     ativo            = Column(Boolean, default=True)
     created_at       = Column(DateTime, default=datetime.utcnow)
     updated_at       = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -558,6 +559,7 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
         trial_expires_at=now + timedelta(days=TRIAL_DAYS),
         email=body.email,
         whatsapp=body.whatsapp,
+        perfil=body.perfil,
     )
     db.add(tenant)
     db.flush()
