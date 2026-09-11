@@ -74,14 +74,19 @@ class StatusEnum(str, enum.Enum):
     encerrado = "encerrado"
 
 # Models
+TRIAL_DAYS = 7
+
 class Tenant(Base):
     __tablename__ = "tenants"
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    nome = Column(String(255), nullable=False)
-    slug = Column(String(100), unique=True, nullable=False)
-    ativo = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    id               = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    nome             = Column(String(255), nullable=False)
+    slug             = Column(String(100), unique=True, nullable=False)
+    plano            = Column(String(20), nullable=False, default="trial")
+    trial_started_at = Column(DateTime, nullable=True)
+    trial_expires_at = Column(DateTime, nullable=True)
+    ativo            = Column(Boolean, default=True)
+    created_at       = Column(DateTime, default=datetime.utcnow)
+    updated_at       = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class Usuario(Base):
     __tablename__ = "usuarios"
@@ -258,10 +263,19 @@ def _init_db():
         with SessionLocal() as db:
             tenant = db.query(Tenant).filter_by(slug="kealex").first()
             if not tenant:
-                tenant = Tenant(nome="Kealex", slug="kealex")
+                now = datetime.utcnow()
+                tenant = Tenant(
+                    nome="Kealex", slug="kealex", plano="admin",
+                    trial_started_at=None, trial_expires_at=None,
+                )
                 db.add(tenant)
                 db.flush()
                 print("[INIT] Tenant criado")
+            else:
+                # tenant admin nunca expira
+                if tenant.plano == "trial" and tenant.trial_started_at is None:
+                    tenant.plano = "admin"
+                    db.flush()
             
             admin = db.query(Usuario).filter_by(email="admin@kealex.com").first()
             if not admin:
@@ -339,11 +353,22 @@ class LoginIn(BaseModel):
     email: EmailStr
     senha: str
 
+class RegisterIn(BaseModel):
+    nome:     str
+    email:    EmailStr
+    whatsapp: str
+    perfil:   str = "advogado"
+
 class AuthUser(BaseModel):
-    nome: str
-    role: str
-    tenantId: str
-    accessToken: str
+    id:             str
+    nome:           str
+    email:          str
+    role:           str
+    tenantId:       str
+    accessToken:    str
+    plano:          str           = "trial"
+    trialStartedAt: str | None    = None
+    trialExpiresAt: str | None    = None
 
 class ProcessoIn(BaseModel):
     numero: str
@@ -490,15 +515,74 @@ def login(body: LoginIn, db: Session = Depends(get_db)):
         user = db.query(Usuario).filter_by(email=body.email, ativo=True).first()
         if not user or not _verify(body.senha, user.senha_hash):
             raise HTTPException(401, "Credenciais inválidas")
-        return AuthUser(nome=user.nome, role=user.role,
-                        tenantId=user.tenant_id, accessToken=_make_token(user))
+        tenant = db.query(Tenant).filter_by(id=user.tenant_id).first()
+        return AuthUser(
+            id=user.id,
+            nome=user.nome,
+            email=user.email,
+            role=user.role,
+            tenantId=user.tenant_id,
+            accessToken=_make_token(user),
+            plano=tenant.plano if tenant else "trial",
+            trialStartedAt=tenant.trial_started_at.isoformat() if tenant and tenant.trial_started_at else None,
+            trialExpiresAt=tenant.trial_expires_at.isoformat() if tenant and tenant.trial_expires_at else None,
+        )
     except HTTPException:
         raise
     except Exception as e:
         print(f"[LOGIN_ERROR] {type(e).__name__}: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        import traceback; traceback.print_exc()
         raise HTTPException(500, f"Erro no login: {str(e)}")
+
+
+@app.post("/k1/lex/auth/register", response_model=AuthUser, status_code=201)
+def register(body: RegisterIn, db: Session = Depends(get_db)):
+    if db.query(Usuario).filter_by(email=body.email).first():
+        raise HTTPException(409, "E-mail já cadastrado. Acesse /entrar para fazer login.")
+
+    now  = datetime.utcnow()
+    slug = body.email.split("@")[0].lower().replace(".", "-")[:80]
+    base_slug, counter = slug, 1
+    while db.query(Tenant).filter_by(slug=slug).first():
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+
+    tenant = Tenant(
+        nome=body.nome,
+        slug=slug,
+        plano="trial",
+        trial_started_at=now,
+        trial_expires_at=now + timedelta(days=TRIAL_DAYS),
+    )
+    db.add(tenant)
+    db.flush()
+
+    senha_temp = str(uuid.uuid4())[:8]
+    user = Usuario(
+        tenant_id=tenant.id,
+        nome=body.nome,
+        email=body.email,
+        senha_hash=_hash(senha_temp),
+        role=RoleEnum.advogado,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    db.refresh(tenant)
+
+    print(f"[REGISTER] novo trial: {body.email} | tenant={tenant.id} | expires={tenant.trial_expires_at}")
+
+    return AuthUser(
+        id=user.id,
+        nome=user.nome,
+        email=user.email,
+        role=user.role,
+        tenantId=tenant.id,
+        accessToken=_make_token(user),
+        plano=tenant.plano,
+        trialStartedAt=tenant.trial_started_at.isoformat(),
+        trialExpiresAt=tenant.trial_expires_at.isoformat(),
+    )
 
 @app.get("/auth/me")
 @app.get("/k1/lex/auth/me")
