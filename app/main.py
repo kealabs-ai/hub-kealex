@@ -84,6 +84,8 @@ class Tenant(Base):
     plano            = Column(String(20), nullable=False, default="trial")
     trial_started_at = Column(DateTime, nullable=True)
     trial_expires_at = Column(DateTime, nullable=True)
+    email            = Column(String(255), nullable=True)
+    whatsapp         = Column(String(20), nullable=True)
     ativo            = Column(Boolean, default=True)
     created_at       = Column(DateTime, default=datetime.utcnow)
     updated_at       = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -358,6 +360,7 @@ class RegisterIn(BaseModel):
     email:    EmailStr
     whatsapp: str
     perfil:   str = "advogado"
+    # whatsapp já inclui máscara do frontend, ex: (11) 99999-9999
 
 class AuthUser(BaseModel):
     id:             str
@@ -553,6 +556,8 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
         plano="trial",
         trial_started_at=now,
         trial_expires_at=now + timedelta(days=TRIAL_DAYS),
+        email=body.email,
+        whatsapp=body.whatsapp,
     )
     db.add(tenant)
     db.flush()
