@@ -176,18 +176,78 @@ class LoginIn(BaseModel):
     email: EmailStr
     senha: str
 
+class RegisterIn(BaseModel):
+    nome:     str
+    email:    EmailStr
+    whatsapp: str
+    perfil:   str = "advogado"  # advogado | escritorio | corporativo
+
 class AuthUser(BaseModel):
-    id:              str
-    nome:            str
-    email:           str
-    role:            str
-    tenantId:        str
-    accessToken:     str
-    plano:           str
-    trialStartedAt:  str | None = None
-    trialExpiresAt:  str | None = None
+    id:             str
+    nome:           str
+    email:          str
+    role:           str
+    tenantId:       str
+    accessToken:    str
+    plano:          str
+    trialStartedAt: str | None = None
+    trialExpiresAt: str | None = None
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@app.post("/k1/lex/auth/register", response_model=AuthUser, status_code=201)
+def register(body: RegisterIn, db: Session = Depends(get_db)):
+    # e-mail já cadastrado?
+    if db.query(Usuario).filter_by(email=body.email).first():
+        raise HTTPException(409, "E-mail já cadastrado. Acesse /entrar para fazer login.")
+
+    now   = datetime.utcnow()
+    slug  = body.email.split("@")[0].lower().replace(".", "-")[:80]
+
+    # garante slug único
+    base_slug, counter = slug, 1
+    while db.query(Tenant).filter_by(slug=slug).first():
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+
+    tenant = Tenant(
+        nome=body.nome,
+        slug=slug,
+        plano="trial",
+        trial_started_at=now,
+        trial_expires_at=now + timedelta(days=TRIAL_DAYS),
+    )
+    db.add(tenant)
+    db.flush()  # gera tenant.id sem commit
+
+    # senha temporária = 8 primeiros chars do uuid
+    senha_temp = str(uuid.uuid4())[:8]
+    user = Usuario(
+        tenant_id=tenant.id,
+        nome=body.nome,
+        email=body.email,
+        senha_hash=_hash(senha_temp),
+        role=RoleEnum.advogado,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    db.refresh(tenant)
+
+    print(f"[REGISTER] novo trial: {body.email} | tenant={tenant.id} | senha_temp={senha_temp}")
+
+    return AuthUser(
+        id=user.id,
+        nome=user.nome,
+        email=user.email,
+        role=user.role,
+        tenantId=tenant.id,
+        accessToken=_make_token(user),
+        plano=tenant.plano,
+        trialStartedAt=tenant.trial_started_at.isoformat(),
+        trialExpiresAt=tenant.trial_expires_at.isoformat(),
+    )
+
 
 @app.post("/k1/lex/auth/login", response_model=AuthUser)
 def login(body: LoginIn, db: Session = Depends(get_db)):
