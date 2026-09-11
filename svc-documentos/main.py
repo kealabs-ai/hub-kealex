@@ -1,4 +1,4 @@
-import os, uuid, enum
+import os, uuid, enum, sys
 from datetime import datetime
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Depends
@@ -8,6 +8,11 @@ from pydantic import BaseModel
 from jose import jwt, JWTError
 from sqlalchemy import create_engine, Column, String, Integer, DateTime, Enum as SAEnum
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+sys.path.insert(0, "/app")
+try:
+    from trial_guard import require_active_trial
+except ImportError:
+    require_active_trial = None
 
 def _get_database_url(default: str) -> str:
     raw = os.getenv("DATABASE_URL")
@@ -78,6 +83,8 @@ def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
     except JWTError:
         raise HTTPException(401, "Token inválido")
 
+_guard = require_active_trial if require_active_trial else verify_token
+
 app = FastAPI(title="svc-documentos")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
@@ -118,12 +125,12 @@ def _to_dict(d: Documento):
     }
 
 @app.get("/v1/lex/documentos")
-def list_docs(db: Session = Depends(get_db), payload=Depends(verify_token)):
+def list_docs(db: Session = Depends(get_db), payload=Depends(_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     return [_to_dict(d) for d in db.query(Documento).filter_by(tenant_id=tenant_id).all()]
 
 @app.post("/v1/lex/documentos/get")
-def get_doc(body: DocumentoGetIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def get_doc(body: DocumentoGetIn, db: Session = Depends(get_db), payload=Depends(_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     d = db.query(Documento).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not d:
@@ -131,13 +138,13 @@ def get_doc(body: DocumentoGetIn, db: Session = Depends(get_db), payload=Depends
     return _to_dict(d)
 
 @app.post("/v1/lex/documentos/by-processo")
-def by_processo(body: DocumentoByProcessoIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def by_processo(body: DocumentoByProcessoIn, db: Session = Depends(get_db), payload=Depends(_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     return [_to_dict(d) for d in db.query(Documento).filter_by(
         tenant_id=tenant_id, processo_id=body.processoId).all()]
 
 @app.post("/v1/lex/documentos", status_code=201)
-def create_doc(body: DocumentoIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def create_doc(body: DocumentoIn, db: Session = Depends(get_db), payload=Depends(_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     d = Documento(tenant_id=tenant_id, user_id=payload["sub"], escritorio_id=body.escritorioId,
                   processo_id=body.processoId, uploadado_por_id=payload["sub"], nome=body.nome, tipo=body.tipo,
@@ -146,7 +153,7 @@ def create_doc(body: DocumentoIn, db: Session = Depends(get_db), payload=Depends
     return _to_dict(d)
 
 @app.post("/v1/lex/documentos/update")
-def update_doc(body: DocumentoUpdate, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def update_doc(body: DocumentoUpdate, db: Session = Depends(get_db), payload=Depends(_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     d = db.query(Documento).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not d:
@@ -161,7 +168,7 @@ def update_doc(body: DocumentoUpdate, db: Session = Depends(get_db), payload=Dep
     return _to_dict(d)
 
 @app.post("/v1/lex/documentos/delete")
-def delete_doc(body: DocumentoDeleteIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def delete_doc(body: DocumentoDeleteIn, db: Session = Depends(get_db), payload=Depends(_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     d = db.query(Documento).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not d:

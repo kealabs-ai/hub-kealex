@@ -1,4 +1,4 @@
-import os, uuid, enum
+import os, uuid, enum, sys
 from datetime import datetime
 from typing import Optional
 import logging
@@ -9,6 +9,11 @@ from pydantic import BaseModel
 from jose import jwt, JWTError
 from sqlalchemy import create_engine, Column, String, DateTime, Enum as SAEnum, Text, Integer, ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker, relationship
+sys.path.insert(0, "/app")
+try:
+    from trial_guard import require_active_trial
+except ImportError:
+    require_active_trial = None
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -103,6 +108,9 @@ def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
     except JWTError:
         raise HTTPException(401, "Token invalido")
 
+# usa trial guard se disponível, senão cai no verify_token simples
+_guard = require_active_trial if require_active_trial else verify_token
+
 app = FastAPI(title="svc-processos")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
@@ -174,7 +182,7 @@ def _enrich(db: Session, processos: list[Processo]):
     return [_to_dict(p, clientes.get(p.cliente_id)) for p in processos]
 
 @app.get("/k1/lex/processos")
-def list_processos(db: Session = Depends(get_db), payload=Depends(verify_token)):
+def list_processos(db: Session = Depends(get_db), payload=Depends(_guard)):
     role, uid, tid = payload.get("role"), payload.get("sub"), payload.get("tenant_id")
     q = db.query(Processo).filter_by(tenant_id=tid)
     
@@ -186,7 +194,7 @@ def list_processos(db: Session = Depends(get_db), payload=Depends(verify_token))
     return _enrich(db, q.all())
 
 @app.post("/k1/lex/processos/get")
-def get_processo(body: ProcessoGetIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def get_processo(body: ProcessoGetIn, db: Session = Depends(get_db), payload=Depends(_guard)):
     tenant_id = payload.get("tenant_id")
     p = db.query(Processo).filter_by(id=body.processoId, tenant_id=tenant_id).first()
     if not p:
@@ -195,7 +203,7 @@ def get_processo(body: ProcessoGetIn, db: Session = Depends(get_db), payload=Dep
     return _to_dict(p, cliente)
 
 @app.post("/k1/lex/processos", status_code=201)
-def create_processo(body: ProcessoIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def create_processo(body: ProcessoIn, db: Session = Depends(get_db), payload=Depends(_guard)):
     try:
         logger.info(f"[CREATE_PROCESSO] Iniciando criacao de processo: {body.numero}")
         tenant_id = payload.get("tenant_id")
@@ -266,7 +274,7 @@ def create_processo(body: ProcessoIn, db: Session = Depends(get_db), payload=Dep
         raise HTTPException(500, f"Erro ao criar processo: {str(e)}")
 
 @app.post("/k1/lex/processos/update")
-def update_processo(body: ProcessoUpdate, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def update_processo(body: ProcessoUpdate, db: Session = Depends(get_db), payload=Depends(_guard)):
     tenant_id = payload.get("tenant_id")
     p = db.query(Processo).filter_by(id=body.processoId, tenant_id=tenant_id).first()
     if not p:
@@ -279,7 +287,7 @@ def update_processo(body: ProcessoUpdate, db: Session = Depends(get_db), payload
     return _to_dict(p, cliente)
 
 @app.post("/k1/lex/processos/delete")
-def delete_processo(body: ProcessoDeleteIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def delete_processo(body: ProcessoDeleteIn, db: Session = Depends(get_db), payload=Depends(_guard)):
     tenant_id = payload.get("tenant_id")
     p = db.query(Processo).filter_by(id=body.processoId, tenant_id=tenant_id).first()
     if not p:
@@ -288,7 +296,7 @@ def delete_processo(body: ProcessoDeleteIn, db: Session = Depends(get_db), paylo
     return {"ok": True}
 
 @app.post("/k1/lex/processos/avancar-fase")
-def avancar_fase(body: AvancarFaseIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def avancar_fase(body: AvancarFaseIn, db: Session = Depends(get_db), payload=Depends(_guard)):
     try:
         logger.info(f"[AVANCAR_FASE] Iniciando avanco de fase para processo: {body.processoId}, nova fase: {body.faseAtual}")
         tenant_id = payload.get("tenant_id")

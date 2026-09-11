@@ -1,4 +1,4 @@
-import os, uuid, enum
+import os, uuid, enum, sys
 from datetime import datetime
 from typing import Optional
 import logging
@@ -9,6 +9,11 @@ from pydantic import BaseModel
 from jose import jwt, JWTError
 from sqlalchemy import create_engine, Column, String, DateTime, Text, Integer
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+sys.path.insert(0, "/app")
+try:
+    from trial_guard import require_active_trial
+except ImportError:
+    require_active_trial = None
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -81,6 +86,8 @@ def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
     except JWTError:
         raise HTTPException(401, "Token invalido")
 
+_guard = require_active_trial if require_active_trial else verify_token
+
 app = FastAPI(title="svc-cobrancas")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
@@ -135,7 +142,7 @@ def _get_proximas_acoes(cobranca: Cobranca):
 @app.post("/v1/lex/cobrancas", status_code=201)
 @app.post("/k1/lex/cobrancas", status_code=201)
 @app.post(PREFIX, status_code=201, include_in_schema=False)
-def criar_cobranca(body: CobrancaIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def criar_cobranca(body: CobrancaIn, db: Session = Depends(get_db), payload=Depends(_guard)):
     try:
         logger.info(f"[CREATE_COBRANCA] Iniciando criacao de cobranca para processo: {body.processoId}")
         tenant_id = payload.get("tenant_id")
@@ -176,7 +183,7 @@ def criar_cobranca(body: CobrancaIn, db: Session = Depends(get_db), payload=Depe
 @app.get("/v1/lex/cobrancas")
 @app.get("/k1/lex/cobrancas")
 @app.get(PREFIX, include_in_schema=False)
-def listar_cobrancas(db: Session = Depends(get_db), payload=Depends(verify_token)):
+def listar_cobrancas(db: Session = Depends(get_db), payload=Depends(_guard)):
     try:
         tenant_id = payload.get("tenant_id")
         cobrancas = db.query(Cobranca).filter_by(tenant_id=tenant_id).order_by(Cobranca.created_at.desc()).all()
@@ -189,7 +196,7 @@ def listar_cobrancas(db: Session = Depends(get_db), payload=Depends(verify_token
 @app.post("/v1/lex/cobrancas/get")
 @app.post("/k1/lex/cobrancas/get")
 @app.post(f"{PREFIX}/get", include_in_schema=False)
-def get_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def get_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends(_guard)):
     try:
         cobranca_id = body.get("id")
         if not cobranca_id:
@@ -211,7 +218,7 @@ def get_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends(veri
 @app.post("/v1/lex/cobrancas/proxima-fase")
 @app.post("/k1/lex/cobrancas/proxima-fase")
 @app.post(f"{PREFIX}/proxima-fase", include_in_schema=False)
-def proxima_fase_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def proxima_fase_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends(_guard)):
     try:
         cobranca_id = body.get("id")
         if not cobranca_id:
@@ -257,7 +264,7 @@ def proxima_fase_cobranca(body: dict, db: Session = Depends(get_db), payload=Dep
 @app.post("/v1/lex/cobrancas/marcar-pago")
 @app.post("/k1/lex/cobrancas/marcar-pago")
 @app.post(f"{PREFIX}/marcar-pago", include_in_schema=False)
-def marcar_pago(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def marcar_pago(body: dict, db: Session = Depends(get_db), payload=Depends(_guard)):
     try:
         cobranca_id = body.get("id")
         if not cobranca_id:
@@ -301,7 +308,7 @@ def marcar_pago(body: dict, db: Session = Depends(get_db), payload=Depends(verif
 @app.post("/v1/lex/cobrancas/cancelar")
 @app.post("/k1/lex/cobrancas/cancelar")
 @app.post(f"{PREFIX}/cancelar", include_in_schema=False)
-def cancelar_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def cancelar_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends(_guard)):
     try:
         cobranca_id = body.get("id")
         if not cobranca_id:

@@ -1,4 +1,4 @@
-import os, uuid
+import os, uuid, sys
 from datetime import datetime
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Depends
@@ -8,6 +8,11 @@ from pydantic import BaseModel, EmailStr
 from jose import jwt, JWTError
 from sqlalchemy import create_engine, Column, String, DateTime, Text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+sys.path.insert(0, "/app")
+try:
+    from trial_guard import require_active_trial
+except ImportError:
+    require_active_trial = None
 
 def _get_database_url(default: str) -> str:
     raw = os.getenv("DATABASE_URL")
@@ -68,6 +73,11 @@ def require_admin_or_advogado(payload=Depends(verify_token)):
         raise HTTPException(403, "Acesso negado")
     return payload
 
+def _guard(payload=Depends(require_active_trial if require_active_trial else verify_token)):
+    if payload.get("role") not in ("admin", "advogado"):
+        raise HTTPException(403, "Acesso negado")
+    return payload
+
 app = FastAPI(title="svc-clientes")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
@@ -116,7 +126,7 @@ def _to_dict(c: Cliente):
     }
 
 @app.get("/v1/lex/clientes")
-def list_clientes(db: Session = Depends(get_db), payload=Depends(require_admin_or_advogado)):
+def list_clientes(db: Session = Depends(get_db), payload=Depends(_guard)):
     tid  = payload.get("tenant_id") or payload.get("sub")
     role = payload.get("role")
     uid  = payload.get("sub")
@@ -126,7 +136,7 @@ def list_clientes(db: Session = Depends(get_db), payload=Depends(require_admin_o
     return [_to_dict(c) for c in q.all()]
 
 @app.post("/v1/lex/clientes/get")
-def get_cliente(body: ClienteGetIn, db: Session = Depends(get_db), payload=Depends(require_admin_or_advogado)):
+def get_cliente(body: ClienteGetIn, db: Session = Depends(get_db), payload=Depends(_guard)):
     tid = payload.get("tenant_id") or payload.get("sub")
     c = db.query(Cliente).filter_by(id=body.id, tenant_id=tid).first()
     if not c:
@@ -134,7 +144,7 @@ def get_cliente(body: ClienteGetIn, db: Session = Depends(get_db), payload=Depen
     return _to_dict(c)
 
 @app.post("/v1/lex/clientes", status_code=201)
-def create_cliente(body: ClienteIn, db: Session = Depends(get_db), payload=Depends(require_admin_or_advogado)):
+def create_cliente(body: ClienteIn, db: Session = Depends(get_db), payload=Depends(_guard)):
     tid = payload.get("tenant_id") or payload.get("sub")
     uid = payload.get("sub")
     if db.query(Cliente).filter_by(email=body.email, tenant_id=tid).first():
@@ -148,7 +158,7 @@ def create_cliente(body: ClienteIn, db: Session = Depends(get_db), payload=Depen
     return _to_dict(c)
 
 @app.post("/v1/lex/clientes/update")
-def update_cliente(body: ClienteUpdate, db: Session = Depends(get_db), payload=Depends(require_admin_or_advogado)):
+def update_cliente(body: ClienteUpdate, db: Session = Depends(get_db), payload=Depends(_guard)):
     tid = payload.get("tenant_id") or payload.get("sub")
     c = db.query(Cliente).filter_by(id=body.id, tenant_id=tid).first()
     if not c:
@@ -163,7 +173,7 @@ def update_cliente(body: ClienteUpdate, db: Session = Depends(get_db), payload=D
     return _to_dict(c)
 
 @app.post("/v1/lex/clientes/delete")
-def delete_cliente(body: ClienteDeleteIn, db: Session = Depends(get_db), payload=Depends(require_admin_or_advogado)):
+def delete_cliente(body: ClienteDeleteIn, db: Session = Depends(get_db), payload=Depends(_guard)):
     tid = payload.get("tenant_id") or payload.get("sub")
     c = db.query(Cliente).filter_by(id=body.id, tenant_id=tid).first()
     if not c:

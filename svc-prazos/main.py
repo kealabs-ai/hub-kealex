@@ -1,4 +1,4 @@
-import os, uuid, enum
+import os, uuid, enum, sys
 from datetime import datetime, date, timedelta
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Depends
@@ -8,6 +8,11 @@ from pydantic import BaseModel
 from jose import jwt, JWTError
 from sqlalchemy import create_engine, Column, String, DateTime, Enum as SAEnum
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+sys.path.insert(0, "/app")
+try:
+    from trial_guard import require_active_trial
+except ImportError:
+    require_active_trial = None
 
 def _get_database_url(default: str) -> str:
     raw = os.getenv("DATABASE_URL")
@@ -71,6 +76,8 @@ def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
     except JWTError:
         raise HTTPException(401, "Token inválido")
 
+_guard = require_active_trial if require_active_trial else verify_token
+
 app = FastAPI(title="svc-prazos")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
@@ -113,12 +120,12 @@ def _to_dict(p: Prazo):
     }
 
 @app.get("/v1/lex/prazos")
-def list_prazos(db: Session = Depends(get_db), payload=Depends(verify_token)):
+def list_prazos(db: Session = Depends(get_db), payload=Depends(_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     return [_to_dict(p) for p in db.query(Prazo).filter_by(tenant_id=tenant_id).all()]
 
 @app.post("/v1/lex/prazos/get")
-def get_prazo(body: PrazoGetIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def get_prazo(body: PrazoGetIn, db: Session = Depends(get_db), payload=Depends(_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     p = db.query(Prazo).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not p:
@@ -126,7 +133,7 @@ def get_prazo(body: PrazoGetIn, db: Session = Depends(get_db), payload=Depends(v
     return _to_dict(p)
 
 @app.post("/v1/lex/prazos/vencendo")
-def vencendo(body: PrazoVencendoIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def vencendo(body: PrazoVencendoIn, db: Session = Depends(get_db), payload=Depends(_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     hoje   = date.today().isoformat()
     limite = (date.today() + timedelta(days=body.dias)).isoformat()
@@ -139,13 +146,13 @@ def vencendo(body: PrazoVencendoIn, db: Session = Depends(get_db), payload=Depen
     return [_to_dict(p) for p in rows]
 
 @app.post("/v1/lex/prazos/by-processo")
-def by_processo(body: PrazoByProcessoIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def by_processo(body: PrazoByProcessoIn, db: Session = Depends(get_db), payload=Depends(_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     return [_to_dict(p) for p in db.query(Prazo).filter_by(
         tenant_id=tenant_id, processo_id=body.processoId).all()]
 
 @app.post("/v1/lex/prazos", status_code=201)
-def create_prazo(body: PrazoIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def create_prazo(body: PrazoIn, db: Session = Depends(get_db), payload=Depends(_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     p = Prazo(tenant_id=tenant_id, user_id=payload["sub"], escritorio_id=body.escritorioId,
               processo_id=body.processoId, advogado_id=payload["sub"], titulo=body.titulo,
@@ -154,7 +161,7 @@ def create_prazo(body: PrazoIn, db: Session = Depends(get_db), payload=Depends(v
     return _to_dict(p)
 
 @app.post("/v1/lex/prazos/update")
-def update_prazo(body: PrazoUpdate, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def update_prazo(body: PrazoUpdate, db: Session = Depends(get_db), payload=Depends(_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     p = db.query(Prazo).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not p:
@@ -169,7 +176,7 @@ def update_prazo(body: PrazoUpdate, db: Session = Depends(get_db), payload=Depen
     return _to_dict(p)
 
 @app.post("/v1/lex/prazos/delete")
-def delete_prazo(body: PrazoDeleteIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def delete_prazo(body: PrazoDeleteIn, db: Session = Depends(get_db), payload=Depends(_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     p = db.query(Prazo).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not p:

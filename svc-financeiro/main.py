@@ -1,4 +1,4 @@
-import os, uuid, enum
+import os, uuid, enum, sys
 from datetime import datetime
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Depends
@@ -8,6 +8,11 @@ from pydantic import BaseModel
 from jose import jwt, JWTError
 from sqlalchemy import create_engine, Column, String, Integer, DateTime, Enum as SAEnum
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+sys.path.insert(0, "/app")
+try:
+    from trial_guard import require_active_trial
+except ImportError:
+    require_active_trial = None
 
 def _get_database_url(default: str) -> str:
     raw = os.getenv("DATABASE_URL")
@@ -74,6 +79,8 @@ def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
     except JWTError:
         raise HTTPException(401, "Token inválido")
 
+_guard = require_active_trial if require_active_trial else verify_token
+
 app = FastAPI(title="svc-financeiro")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
@@ -113,12 +120,12 @@ def _to_dict(h: Honorario):
     }
 
 @app.get("/v1/lex/financeiro")
-def list_honorarios(db: Session = Depends(get_db), payload=Depends(verify_token)):
+def list_honorarios(db: Session = Depends(get_db), payload=Depends(_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     return [_to_dict(h) for h in db.query(Honorario).filter_by(tenant_id=tenant_id).all()]
 
 @app.get("/v1/lex/financeiro/dashboard")
-def dashboard(db: Session = Depends(get_db), payload=Depends(verify_token)):
+def dashboard(db: Session = Depends(get_db), payload=Depends(_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     rows = db.query(Honorario).filter_by(tenant_id=tenant_id).all()
     return {
@@ -129,7 +136,7 @@ def dashboard(db: Session = Depends(get_db), payload=Depends(verify_token)):
     }
 
 @app.post("/v1/lex/financeiro/get")
-def get_honorario(body: HonorarioGetIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def get_honorario(body: HonorarioGetIn, db: Session = Depends(get_db), payload=Depends(_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     h = db.query(Honorario).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not h:
@@ -137,7 +144,7 @@ def get_honorario(body: HonorarioGetIn, db: Session = Depends(get_db), payload=D
     return _to_dict(h)
 
 @app.post("/v1/lex/financeiro", status_code=201)
-def create_honorario(body: HonorarioIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def create_honorario(body: HonorarioIn, db: Session = Depends(get_db), payload=Depends(_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     h = Honorario(tenant_id=tenant_id, user_id=payload["sub"], escritorio_id=body.escritorioId,
                   processo_id=body.processoId, cliente_id=body.clienteId, advogado_id=payload["sub"],
@@ -147,7 +154,7 @@ def create_honorario(body: HonorarioIn, db: Session = Depends(get_db), payload=D
     return _to_dict(h)
 
 @app.post("/v1/lex/financeiro/update")
-def update_honorario(body: HonorarioUpdate, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def update_honorario(body: HonorarioUpdate, db: Session = Depends(get_db), payload=Depends(_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     h = db.query(Honorario).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not h:
@@ -161,7 +168,7 @@ def update_honorario(body: HonorarioUpdate, db: Session = Depends(get_db), paylo
     return _to_dict(h)
 
 @app.post("/v1/lex/financeiro/delete")
-def delete_honorario(body: HonorarioDeleteIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def delete_honorario(body: HonorarioDeleteIn, db: Session = Depends(get_db), payload=Depends(_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     h = db.query(Honorario).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not h:

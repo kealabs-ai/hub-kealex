@@ -1,4 +1,4 @@
-import os, uuid, enum
+import os, uuid, enum, sys
 from datetime import datetime
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Depends
@@ -9,6 +9,11 @@ import bcrypt
 from jose import jwt, JWTError
 from sqlalchemy import create_engine, Column, String, Boolean, DateTime, Enum as SAEnum
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+sys.path.insert(0, "/app")
+try:
+    from trial_guard import require_active_trial
+except ImportError:
+    require_active_trial = None
 
 def _get_database_url(default: str) -> str:
     raw = os.getenv("DATABASE_URL")
@@ -78,6 +83,15 @@ def require_admin(payload=Depends(verify_token)):
         raise HTTPException(403, "Acesso negado")
     return payload
 
+# admin é sempre isento do trial, mas aplicamos o guard para bloquear
+# advogados/clientes que tentem acessar endpoints de usuários com trial expirado
+_base_guard = require_active_trial if require_active_trial else verify_token
+
+def _admin_guard(payload=Depends(_base_guard)):
+    if payload.get("role") != "admin":
+        raise HTTPException(403, "Acesso negado")
+    return payload
+
 app = FastAPI(title="svc-usuarios")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
@@ -118,12 +132,12 @@ def _to_dict(u: Usuario):
     }
 
 @app.get("/v1/lex/usuarios")
-def list_usuarios(db: Session = Depends(get_db), payload=Depends(require_admin)):
+def list_usuarios(db: Session = Depends(get_db), payload=Depends(_admin_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     return [_to_dict(u) for u in db.query(Usuario).filter_by(tenant_id=tenant_id).all()]
 
 @app.post("/v1/lex/usuarios/list")
-def list_usuarios_filtered(body: UsuarioListIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
+def list_usuarios_filtered(body: UsuarioListIn, db: Session = Depends(get_db), payload=Depends(_admin_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     q = db.query(Usuario).filter_by(tenant_id=tenant_id)
     if body.role:
@@ -131,7 +145,7 @@ def list_usuarios_filtered(body: UsuarioListIn, db: Session = Depends(get_db), p
     return [_to_dict(u) for u in q.all()]
 
 @app.post("/v1/lex/usuarios/get")
-def get_usuario(body: UsuarioGetIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
+def get_usuario(body: UsuarioGetIn, db: Session = Depends(get_db), payload=Depends(_admin_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     u = db.query(Usuario).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not u:
@@ -139,7 +153,7 @@ def get_usuario(body: UsuarioGetIn, db: Session = Depends(get_db), payload=Depen
     return _to_dict(u)
 
 @app.post("/v1/lex/usuarios", status_code=201)
-def create_usuario(body: UsuarioIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
+def create_usuario(body: UsuarioIn, db: Session = Depends(get_db), payload=Depends(_admin_guard)):
     tid = payload.get("tenant_id") or payload.get("sub")
     if db.query(Usuario).filter_by(email=body.email, tenant_id=tid).first():
         raise HTTPException(409, "Email já cadastrado")
@@ -149,7 +163,7 @@ def create_usuario(body: UsuarioIn, db: Session = Depends(get_db), payload=Depen
     return _to_dict(u)
 
 @app.post("/v1/lex/usuarios/update")
-def update_usuario(body: UsuarioUpdate, db: Session = Depends(get_db), payload=Depends(require_admin)):
+def update_usuario(body: UsuarioUpdate, db: Session = Depends(get_db), payload=Depends(_admin_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     u = db.query(Usuario).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not u:
@@ -166,7 +180,7 @@ def update_usuario(body: UsuarioUpdate, db: Session = Depends(get_db), payload=D
     return _to_dict(u)
 
 @app.post("/v1/lex/usuarios/delete")
-def delete_usuario(body: UsuarioDeleteIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
+def delete_usuario(body: UsuarioDeleteIn, db: Session = Depends(get_db), payload=Depends(_admin_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     u = db.query(Usuario).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not u:
