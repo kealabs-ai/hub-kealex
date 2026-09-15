@@ -360,6 +360,7 @@ class RegisterIn(BaseModel):
     nome:     str
     email:    EmailStr
     whatsapp: str
+    senha:    str
     perfil:   str = "advogado"
     # whatsapp já inclui máscara do frontend, ex: (11) 99999-9999
 
@@ -569,7 +570,7 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
         tenant_id=tenant.id,
         nome=body.nome,
         email=body.email,
-        senha_hash=_hash(senha_temp),
+        senha_hash=_hash(body.senha if body.senha else senha_temp),
         role=RoleEnum.advogado,
     )
     db.add(user)

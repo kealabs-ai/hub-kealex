@@ -74,7 +74,11 @@ pipeline {
                         $DOCKER network create easypanel
 
                     echo "▶ Derrubando stack anterior..."
-                    $DOCKER compose -f docker-compose.yml -p $PROJETO down --remove-orphans 2>/dev/null || true
+                    $DOCKER compose -f docker-compose.yml -p $PROJETO down --remove-orphans -v 2>/dev/null || true
+                    sleep 2
+
+                    echo "▶ Limpando containers órfãos..."
+                    $DOCKER container prune -f 2>/dev/null || true
 
                     echo "▶ Build e subida dos containers..."
                     $DOCKER compose -f docker-compose.yml -p $PROJETO up -d --build
