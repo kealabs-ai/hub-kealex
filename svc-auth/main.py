@@ -284,6 +284,237 @@ def login(body: LoginIn, db: Session = Depends(get_db)):
 def me(payload=Depends(require_active_trial)):
     return payload
 
+
+# ── Pre-registro (fluxo de assinatura) ───────────────────────────────────────
+
+class PreRegisterIn(BaseModel):
+    nome:  str
+    email: EmailStr
+    senha: str
+
+class PreRegisterOut(BaseModel):
+    userId:   str
+    tenantId: str
+    token:    str  # token temporario para continuar o fluxo
+
+@app.post("/k1/lex/auth/pre-register", response_model=PreRegisterOut, status_code=201)
+def pre_register(body: PreRegisterIn, db: Session = Depends(get_db)):
+    """Cria usuario INATIVO + tenant pendente. Ativado apos pagamento confirmado."""
+    if len(body.senha) < 6:
+        raise HTTPException(400, "Senha deve ter no minimo 6 caracteres")
+    if db.query(Usuario).filter_by(email=body.email).first():
+        raise HTTPException(409, "E-mail ja cadastrado. Acesse /entrar para fazer login.")
+
+    slug = body.email.split("@")[0].lower().replace(".", "-")[:80]
+    base_slug, counter = slug, 1
+    while db.query(Tenant).filter_by(slug=slug).first():
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+
+    tenant = Tenant(
+        nome=body.nome, slug=slug,
+        plano="pendente",  # pendente ate pagamento
+        ativo=False,
+    )
+    db.add(tenant)
+    db.flush()
+
+    user = Usuario(
+        tenant_id=tenant.id, nome=body.nome, email=body.email,
+        senha_hash=_hash(body.senha), role=RoleEnum.advogado,
+        ativo=False,  # inativo ate pagamento
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    # token temporario para o fluxo de assinatura (nao passa pelo trial guard)
+    token = jwt.encode(
+        {"sub": user.id, "role": user.role, "tenant_id": tenant.id,
+         "exp": datetime.utcnow() + timedelta(hours=2), "pre": True},
+        SECRET_KEY, ALGORITHM,
+    )
+    print(f"[PRE-REGISTER] usuario inativo criado: {body.email} | tenant={tenant.id}")
+    return PreRegisterOut(userId=user.id, tenantId=tenant.id, token=token)
+
+
+@app.post("/k1/lex/auth/ativar", response_model=AuthUser)
+def ativar_usuario(db: Session = Depends(get_db), payload=Depends(verify_token)):
+    """Ativa usuario + tenant apos pagamento confirmado. Chamado internamente pelo /assinar."""
+    user_id   = payload.get("sub")
+    tenant_id = payload.get("tenant_id")
+
+    user   = db.query(Usuario).filter_by(id=user_id).first()
+    tenant = db.query(Tenant).filter_by(id=tenant_id).first()
+    if not user or not tenant:
+        raise HTTPException(404, "Usuario ou tenant nao encontrado")
+
+    now = datetime.utcnow()
+    user.ativo   = True
+    tenant.ativo = True
+    # nao inicia trial — plano ja sera definido pelo /assinar
+    tenant.updated_at = now
+    user.updated_at   = now
+    db.commit()
+    db.refresh(user)
+    db.refresh(tenant)
+
+    return AuthUser(
+        id=user.id, nome=user.nome, email=user.email, role=user.role,
+        tenantId=tenant.id, accessToken=_make_token(user),
+        plano=tenant.plano,
+        trialStartedAt=tenant.trial_started_at.isoformat() if tenant.trial_started_at else None,
+        trialExpiresAt=tenant.trial_expires_at.isoformat() if tenant.trial_expires_at else None,
+        escritorioId=user.escritorio_id,
+        modalidade="escritorio" if user.escritorio_id else "autonomo",
+    )
+
+
+# ── Assinatura (Asaas) ────────────────────────────────────────────────────────
+
+import httpx
+
+ASAAS_API_KEY = os.getenv("ASAAS_API_KEY", "")
+ASAAS_BASE    = os.getenv("ASAAS_BASE_URL", "https://api-sandbox.asaas.com/v3")
+
+PLANOS = {
+    "starter":      {"value": 197.00, "description": "Plano Starter"},
+    "professional": {"value": 397.00, "description": "Plano Professional"},
+}
+
+class CreditCardIn(BaseModel):
+    holderName:  str
+    number:      str
+    expiryMonth: str
+    expiryYear:  str
+    ccv:         str
+
+class HolderInfoIn(BaseModel):
+    name:              str
+    email:             str
+    cpfCnpj:           str
+    postalCode:        str
+    addressNumber:     str
+    addressComplement: str | None = None
+    phone:             str | None = None
+    mobilePhone:       str | None = None
+
+class AssinarIn(BaseModel):
+    plano:          str          # starter | professional
+    asaasCustomerId: str         # cus_xxx criado previamente no Asaas
+    creditCard:     CreditCardIn
+    holderInfo:     HolderInfoIn
+    remoteIp:       str = "127.0.0.1"
+
+class AssinarOut(BaseModel):
+    subscriptionId: str
+    plano:          str
+    status:         str
+    nextDueDate:    str
+    value:          float
+
+@app.post("/k1/lex/auth/assinar", response_model=AssinarOut)
+def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    plano_cfg = PLANOS.get(body.plano)
+    if not plano_cfg:
+        raise HTTPException(400, f"Plano invalido: {body.plano}. Use: {list(PLANOS.keys())}")
+
+    tenant_id = payload.get("tenant_id")
+    tenant = db.query(Tenant).filter_by(id=tenant_id).first()
+    if not tenant:
+        raise HTTPException(404, "Tenant nao encontrado")
+
+    # Calcula nextDueDate: se ainda em trial, agenda para o fim do trial
+    now = datetime.utcnow()
+    if tenant.plano == "trial" and tenant.trial_expires_at and tenant.trial_expires_at > now:
+        next_due = tenant.trial_expires_at.strftime("%Y-%m-%d")
+    else:
+        next_due = (now + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    payload_asaas = {
+        "customer":    body.asaasCustomerId,
+        "billingType": "CREDIT_CARD",
+        "nextDueDate": next_due,
+        "value":       plano_cfg["value"],
+        "cycle":       "MONTHLY",
+        "description": plano_cfg["description"],
+        "creditCard": {
+            "holderName":  body.creditCard.holderName,
+            "number":      body.creditCard.number,
+            "expiryMonth": body.creditCard.expiryMonth,
+            "expiryYear":  body.creditCard.expiryYear,
+            "ccv":         body.creditCard.ccv,
+        },
+        "creditCardHolderInfo": {
+            "name":               body.holderInfo.name,
+            "email":              body.holderInfo.email,
+            "cpfCnpj":            body.holderInfo.cpfCnpj,
+            "postalCode":         body.holderInfo.postalCode,
+            "addressNumber":      body.holderInfo.addressNumber,
+            "addressComplement":  body.holderInfo.addressComplement,
+            "phone":              body.holderInfo.phone,
+            "mobilePhone":        body.holderInfo.mobilePhone,
+        },
+        "remoteIp": body.remoteIp,
+    }
+
+    try:
+        resp = httpx.post(
+            f"{ASAAS_BASE}/subscriptions",
+            json=payload_asaas,
+            headers={"access_token": ASAAS_API_KEY, "Content-Type": "application/json"},
+            timeout=20,
+        )
+        if resp.status_code not in (200, 201):
+            detail = resp.json().get("errors", resp.text)
+            raise HTTPException(422, f"Asaas recusou: {detail}")
+        data = resp.json()
+    except httpx.TimeoutException:
+        raise HTTPException(504, "Timeout ao conectar com Asaas")
+
+    # Atualiza plano do tenant e ativa usuario/tenant se ainda inativo
+    tenant.plano = body.plano
+    tenant.updated_at = datetime.utcnow()
+    if not tenant.ativo:
+        tenant.ativo = True
+    user = db.query(Usuario).filter_by(tenant_id=tenant_id, role=RoleEnum.advogado).first()
+    if user and not user.ativo:
+        user.ativo = True
+        user.updated_at = datetime.utcnow()
+    db.commit()
+
+    return AssinarOut(
+        subscriptionId=data.get("id", ""),
+        plano=body.plano,
+        status=data.get("status", "ACTIVE"),
+        nextDueDate=data.get("nextDueDate", next_due),
+        value=plano_cfg["value"],
+    )
+
+
+@app.post("/k1/lex/auth/criar-cliente-asaas")
+def criar_cliente_asaas(body: HolderInfoIn, payload=Depends(verify_token)):
+    """Cria ou recupera um customer no Asaas para o usuario autenticado."""
+    try:
+        resp = httpx.post(
+            f"{ASAAS_BASE}/customers",
+            json={
+                "name":     body.name,
+                "email":    body.email,
+                "cpfCnpj": body.cpfCnpj,
+                "phone":    body.phone,
+                "mobilePhone": body.mobilePhone,
+            },
+            headers={"access_token": ASAAS_API_KEY, "Content-Type": "application/json"},
+            timeout=15,
+        )
+        if resp.status_code not in (200, 201):
+            detail = resp.json().get("errors", resp.text)
+            raise HTTPException(422, f"Asaas recusou: {detail}")
+        return {"customerId": resp.json().get("id")}
+    except httpx.TimeoutException:
+        raise HTTPException(504, "Timeout ao conectar com Asaas")
+
 @app.get("/health")
 def health_simple():
     return {"status": "healthy", "service": "svc-auth"}
