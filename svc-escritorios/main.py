@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from jose import jwt, JWTError
-from sqlalchemy import create_engine, Column, String, Boolean, DateTime
+from sqlalchemy import create_engine, Column, String, Boolean, DateTime, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 def _get_database_url(default: str) -> str:
@@ -138,6 +138,10 @@ def update_escritorio(body: EscritorioUpdate, db: Session = Depends(get_db), pay
     db.commit(); db.refresh(e)
     return _to_dict(e)
 
+class MembroIn(BaseModel):
+    usuarioId: str
+    escritorioId: Optional[str] = None  # None = desassociar
+
 @app.post("/v1/lex/escritorios/delete")
 def delete_escritorio(body: EscritorioDeleteIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
@@ -146,3 +150,23 @@ def delete_escritorio(body: EscritorioDeleteIn, db: Session = Depends(get_db), p
         raise HTTPException(404, "Não encontrado")
     db.delete(e); db.commit()
     return {"ok": True}
+
+@app.post("/v1/lex/escritorios/associar-membro")
+def associar_membro(body: MembroIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
+    """Associa ou desassocia um usuário a um escritório."""
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+
+    # Verifica se o escritório pertence ao tenant
+    if body.escritorioId:
+        e = db.query(Escritorio).filter_by(id=body.escritorioId, tenant_id=tenant_id).first()
+        if not e:
+            raise HTTPException(404, "Escritório não encontrado")
+
+    # Atualiza escritorio_id do usuário via tabela usuarios
+    db.execute(
+        text("UPDATE usuarios SET escritorio_id = :eid, updated_at = NOW() WHERE id = :uid AND tenant_id = :tid"),
+        {"eid": body.escritorioId, "uid": body.usuarioId, "tid": tenant_id}
+    )
+    db.commit()
+    return {"ok": True, "usuarioId": body.usuarioId, "escritorioId": body.escritorioId,
+            "modalidade": "escritorio" if body.escritorioId else "autonomo"}

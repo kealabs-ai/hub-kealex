@@ -63,15 +63,16 @@ class Tenant(Base):
 
 class Usuario(Base):
     __tablename__ = "usuarios"
-    id         = Column(String(36),  primary_key=True, default=lambda: str(uuid.uuid4()))
-    tenant_id  = Column(String(36),  nullable=False)
-    nome       = Column(String(255), nullable=False)
-    email      = Column(String(255), nullable=False)
-    senha_hash = Column(String(255), nullable=False)
-    role       = Column(SAEnum(RoleEnum, name="role_enum_auth"), nullable=False)
-    ativo      = Column(Boolean,     default=True)
-    created_at = Column(DateTime,    default=datetime.utcnow)
-    updated_at = Column(DateTime,    default=datetime.utcnow, onupdate=datetime.utcnow)
+    id            = Column(String(36),  primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id     = Column(String(36),  nullable=False)
+    escritorio_id = Column(String(36),  nullable=True)
+    nome          = Column(String(255), nullable=False)
+    email         = Column(String(255), nullable=False)
+    senha_hash    = Column(String(255), nullable=False)
+    role          = Column(SAEnum(RoleEnum, name="role_enum_auth"), nullable=False)
+    ativo         = Column(Boolean,     default=True)
+    created_at    = Column(DateTime,    default=datetime.utcnow)
+    updated_at    = Column(DateTime,    default=datetime.utcnow, onupdate=datetime.utcnow)
 
 # ── DB ────────────────────────────────────────────────────────────────────────
 
@@ -181,6 +182,7 @@ class RegisterIn(BaseModel):
     email:    EmailStr
     whatsapp: str
     perfil:   str = "advogado"  # advogado | escritorio | corporativo
+    senha:    str | None = None  # opcional; se omitida, gera senha temporária
 
 class AuthUser(BaseModel):
     id:             str
@@ -192,6 +194,8 @@ class AuthUser(BaseModel):
     plano:          str
     trialStartedAt: str | None = None
     trialExpiresAt: str | None = None
+    escritorioId:   str | None = None
+    modalidade:     str | None = None  # autonomo | escritorio
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
@@ -220,13 +224,12 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
     db.add(tenant)
     db.flush()  # gera tenant.id sem commit
 
-    # senha temporária = 8 primeiros chars do uuid
-    senha_temp = str(uuid.uuid4())[:8]
+    senha_final = body.senha if body.senha and len(body.senha) >= 6 else str(uuid.uuid4())[:8]
     user = Usuario(
         tenant_id=tenant.id,
         nome=body.nome,
         email=body.email,
-        senha_hash=_hash(senha_temp),
+        senha_hash=_hash(senha_final),
         role=RoleEnum.advogado,
     )
     db.add(user)
@@ -234,7 +237,7 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
     db.refresh(user)
     db.refresh(tenant)
 
-    print(f"[REGISTER] novo trial: {body.email} | tenant={tenant.id} | senha_temp={senha_temp}")
+    print(f"[REGISTER] novo trial: {body.email} | tenant={tenant.id}")
 
     return AuthUser(
         id=user.id,
@@ -246,6 +249,8 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
         plano=tenant.plano,
         trialStartedAt=tenant.trial_started_at.isoformat(),
         trialExpiresAt=tenant.trial_expires_at.isoformat(),
+        escritorioId=getattr(user, 'escritorio_id', None),
+        modalidade="escritorio" if getattr(user, 'escritorio_id', None) else "autonomo",
     )
 
 
@@ -271,6 +276,8 @@ def login(body: LoginIn, db: Session = Depends(get_db)):
         plano=tenant.plano if tenant else "trial",
         trialStartedAt=tenant.trial_started_at.isoformat() if tenant and tenant.trial_started_at else None,
         trialExpiresAt=tenant.trial_expires_at.isoformat() if tenant and tenant.trial_expires_at else None,
+        escritorioId=getattr(user, 'escritorio_id', None),
+        modalidade="escritorio" if getattr(user, 'escritorio_id', None) else "autonomo",
     )
 
 @app.get("/k1/lex/auth/me")

@@ -120,6 +120,7 @@ class UsuarioUpdate(BaseModel):
     role:         Optional[RoleEnum] = None
     ativo:        Optional[bool]     = None
     escritorioId: Optional[str]      = None
+    clearEscritorio: bool            = False  # True = desassociar escritório
 
 class UsuarioDeleteIn(BaseModel):
     id: str
@@ -127,6 +128,7 @@ class UsuarioDeleteIn(BaseModel):
 def _to_dict(u: Usuario):
     return {
         "id": u.id, "tenantId": u.tenant_id, "escritorioId": u.escritorio_id,
+        "modalidade": "escritorio" if u.escritorio_id else "autonomo",
         "nome": u.nome, "email": u.email, "role": u.role, "ativo": u.ativo,
         "createdAt": u.created_at.isoformat(), "updatedAt": u.updated_at.isoformat()
     }
@@ -168,16 +170,21 @@ def update_usuario(body: UsuarioUpdate, db: Session = Depends(get_db), payload=D
     u = db.query(Usuario).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not u:
         raise HTTPException(404, "Não encontrado")
-    data = body.model_dump(exclude_none=True, exclude={"id"})
+    data = body.model_dump(exclude_none=True, exclude={"id", "clearEscritorio"})
     if "senha" in data:
         u.senha_hash = _hash(data.pop("senha"))
     if "escritorioId" in data:
         u.escritorio_id = data.pop("escritorioId")
+    elif body.clearEscritorio:
+        u.escritorio_id = None
     for k, v in data.items():
         setattr(u, k, v)
     u.updated_at = datetime.utcnow()
     db.commit(); db.refresh(u)
     return _to_dict(u)
+
+class ModalidadeIn(BaseModel):
+    escritorioId: Optional[str] = None  # None = autônomo
 
 @app.post("/v1/lex/usuarios/delete")
 def delete_usuario(body: UsuarioDeleteIn, db: Session = Depends(get_db), payload=Depends(_admin_guard)):
@@ -187,3 +194,26 @@ def delete_usuario(body: UsuarioDeleteIn, db: Session = Depends(get_db), payload
         raise HTTPException(404, "Não encontrado")
     db.delete(u); db.commit()
     return {"ok": True}
+
+@app.post("/v1/lex/usuarios/modalidade")
+def set_modalidade(body: ModalidadeIn, db: Session = Depends(get_db), payload=Depends(_base_guard)):
+    """Permite que o próprio usuário altere sua modalidade (autônomo ou associado a escritório)."""
+    uid = payload.get("sub")
+    tenant_id = payload.get("tenant_id")
+    u = db.query(Usuario).filter_by(id=uid, tenant_id=tenant_id).first()
+    if not u:
+        raise HTTPException(404, "Usuário não encontrado")
+    u.escritorio_id = body.escritorioId
+    u.updated_at = datetime.utcnow()
+    db.commit(); db.refresh(u)
+    return _to_dict(u)
+
+@app.get("/v1/lex/usuarios/me")
+def get_me(db: Session = Depends(get_db), payload=Depends(_base_guard)):
+    """Retorna dados do próprio usuário autenticado."""
+    uid = payload.get("sub")
+    tenant_id = payload.get("tenant_id")
+    u = db.query(Usuario).filter_by(id=uid, tenant_id=tenant_id).first()
+    if not u:
+        raise HTTPException(404, "Não encontrado")
+    return _to_dict(u)
