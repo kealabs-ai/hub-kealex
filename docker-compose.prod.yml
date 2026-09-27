@@ -29,6 +29,12 @@ services:
       - "traefik.http.middlewares.kealex-cors.headers.accesscontrolallowcredentials=true"
       - "traefik.http.routers.kealex-auth.middlewares=kealex-auth-strip,kealex-cors"
       - "traefik.http.routers.kealex-auth.priority=100"
+      - "traefik.http.routers.kealex-auth-k1.rule=(Host(`srv1023256.hstgr.cloud`) || Host(`kealex.com.br`) || Host(`www.kealex.com.br`)) && PathPrefix(`/k1/lex/auth`)"
+      - "traefik.http.routers.kealex-auth-k1.entrypoints=https"
+      - "traefik.http.routers.kealex-auth-k1.tls=true"
+      - "traefik.http.routers.kealex-auth-k1.service=kealex-auth"
+      - "traefik.http.routers.kealex-auth-k1.middlewares=kealex-cors"
+      - "traefik.http.routers.kealex-auth-k1.priority=101"
     networks:
       - easypanel
       - kealex-internal
