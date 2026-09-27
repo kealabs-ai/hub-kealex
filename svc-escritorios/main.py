@@ -119,8 +119,22 @@ def get_escritorio(body: EscritorioGetIn, db: Session = Depends(get_db), payload
     return _to_dict(e)
 
 @app.post("/v1/lex/escritorios", status_code=201)
-def create_escritorio(body: EscritorioIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
+def create_escritorio(body: EscritorioIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
+    if payload.get("role") != "admin":
+        if payload.get("role") != "advogado":
+            raise HTTPException(403, "Acesso negado")
+        tenant = db.execute(
+            text("SELECT plano, trial_expires_at FROM tenants WHERE id = :tid"),
+            {"tid": tenant_id},
+        ).mappings().first()
+        if not tenant or tenant["plano"] != "trial":
+            raise HTTPException(403, "A criação de escritório pelo titular está disponível durante o trial")
+        expires_at = tenant["trial_expires_at"]
+        if expires_at and expires_at < datetime.utcnow():
+            raise HTTPException(403, "Trial expirado. Assine um plano para criar o escritório")
+        if db.query(Escritorio).filter_by(tenant_id=tenant_id).first():
+            raise HTTPException(403, "Este tenant já possui um escritório cadastrado")
     e = Escritorio(tenant_id=tenant_id, nome=body.nome, cnpj=body.cnpj,
                    endereco=body.endereco, telefone=body.telefone, email=body.email)
     db.add(e); db.commit(); db.refresh(e)

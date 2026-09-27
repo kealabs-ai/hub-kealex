@@ -207,10 +207,12 @@ def delete_usuario(body: UsuarioDeleteIn, db: Session = Depends(get_db), payload
     return {"ok": True}
 
 @app.post("/v1/lex/usuarios/modalidade")
-def set_modalidade(body: ModalidadeIn, db: Session = Depends(get_db), payload=Depends(_admin_guard)):
-    """Somente admin do tenant pode alterar a associação ao escritório."""
+def set_modalidade(body: ModalidadeIn, db: Session = Depends(get_db), payload=Depends(_base_guard)):
+    """Admin gerencia membros; advogado pode alterar apenas o próprio vínculo."""
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     uid = body.usuarioId
+    if payload.get("role") != "admin" and (payload.get("role") != "advogado" or uid != payload.get("sub")):
+        raise HTTPException(403, "Você só pode alterar sua própria modalidade")
     u = db.query(Usuario).filter_by(id=uid, tenant_id=tenant_id).first()
     if not u:
         raise HTTPException(404, "Usuário não encontrado")

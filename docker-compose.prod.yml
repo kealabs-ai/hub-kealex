@@ -172,9 +172,8 @@ services:
       - "traefik.http.routers.kealex-usuarios.tls=true"
       - "traefik.http.routers.kealex-usuarios.service=kealex-usuarios"
       - "traefik.http.services.kealex-usuarios.loadbalancer.server.port=8000"
-      - "traefik.http.middlewares.kealex-user-strip.stripprefix.prefixes=/v1/lex"
-      - "traefik.http.routers.kealex-usuarios.middlewares=kealex-user-strip,kealex-cors"
-      - "traefik.http.routers.kealex-usuarios.priority=100"
+      - "traefik.http.routers.kealex-usuarios.middlewares=kealex-cors"
+      - "traefik.http.routers.kealex-usuarios.priority=300"
     networks:
       - easypanel
       - kealex-internal
@@ -228,9 +227,8 @@ services:
       - "traefik.http.routers.kealex-escritorios.tls=true"
       - "traefik.http.routers.kealex-escritorios.service=kealex-escritorios"
       - "traefik.http.services.kealex-escritorios.loadbalancer.server.port=8000"
-      - "traefik.http.middlewares.kealex-esc-strip.stripprefix.prefixes=/v1/lex"
-      - "traefik.http.routers.kealex-escritorios.middlewares=kealex-esc-strip,kealex-cors"
-      - "traefik.http.routers.kealex-escritorios.priority=100"
+      - "traefik.http.routers.kealex-escritorios.middlewares=kealex-cors"
+      - "traefik.http.routers.kealex-escritorios.priority=300"
     networks:
       - easypanel
       - kealex-internal
