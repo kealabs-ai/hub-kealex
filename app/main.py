@@ -86,6 +86,8 @@ class Tenant(Base):
     trial_expires_at = Column(DateTime, nullable=True)
     email            = Column(String(255), nullable=True)
     whatsapp         = Column(String(20), nullable=True)
+    billing_cpf_cnpj = Column(String(20), nullable=True)
+    billing_mobile_phone = Column(String(30), nullable=True)
     perfil           = Column(String(50), nullable=True)
     ativo            = Column(Boolean, default=True)
     created_at       = Column(DateTime, default=datetime.utcnow)
@@ -359,6 +361,7 @@ class LoginIn(BaseModel):
 class RegisterIn(BaseModel):
     nome:     str
     email:    EmailStr
+    cpfCnpj:  str = ""
     whatsapp: str
     senha:    str
     perfil:   str = "advogado"
@@ -542,6 +545,10 @@ def login(body: LoginIn, db: Session = Depends(get_db)):
 
 @app.post("/k1/lex/auth/register", response_model=AuthUser, status_code=201)
 def register(body: RegisterIn, db: Session = Depends(get_db)):
+    cpf_cnpj = "".join(filter(str.isdigit, body.cpfCnpj or ""))
+    if len(cpf_cnpj) not in (11, 14):
+        raise HTTPException(400, "Informe um CPF ou CNPJ válido.")
+
     if db.query(Usuario).filter_by(email=body.email).first():
         raise HTTPException(409, "E-mail já cadastrado. Acesse /entrar para fazer login.")
 
@@ -560,6 +567,8 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
         trial_expires_at=now + timedelta(days=TRIAL_DAYS),
         email=body.email,
         whatsapp=body.whatsapp,
+        billing_cpf_cnpj=cpf_cnpj,
+        billing_mobile_phone="".join(filter(str.isdigit, body.whatsapp or "")),
         perfil=body.perfil,
     )
     db.add(tenant)
