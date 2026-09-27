@@ -7,7 +7,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
 import bcrypt
 from jose import jwt, JWTError
-from sqlalchemy import create_engine, Column, String, Boolean, DateTime, Enum as SAEnum
+from sqlalchemy import create_engine, Column, String, Boolean, DateTime, Enum as SAEnum, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 sys.path.insert(0, "/app")
 try:
@@ -157,6 +157,11 @@ def get_usuario(body: UsuarioGetIn, db: Session = Depends(get_db), payload=Depen
 @app.post("/v1/lex/usuarios", status_code=201)
 def create_usuario(body: UsuarioIn, db: Session = Depends(get_db), payload=Depends(_admin_guard)):
     tid = payload.get("tenant_id") or payload.get("sub")
+    if body.escritorioId and not db.execute(
+        text("SELECT id FROM escritorios WHERE id = :eid AND tenant_id = :tid"),
+        {"eid": body.escritorioId, "tid": tid},
+    ).first():
+        raise HTTPException(404, "Escritório não encontrado")
     if db.query(Usuario).filter_by(email=body.email, tenant_id=tid).first():
         raise HTTPException(409, "Email já cadastrado")
     u = Usuario(tenant_id=tid, escritorio_id=body.escritorioId, nome=body.nome, email=body.email,
@@ -170,6 +175,11 @@ def update_usuario(body: UsuarioUpdate, db: Session = Depends(get_db), payload=D
     u = db.query(Usuario).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not u:
         raise HTTPException(404, "Não encontrado")
+    if body.escritorioId and not db.execute(
+        text("SELECT id FROM escritorios WHERE id = :eid AND tenant_id = :tid"),
+        {"eid": body.escritorioId, "tid": tenant_id},
+    ).first():
+        raise HTTPException(404, "Escritório não encontrado")
     data = body.model_dump(exclude_none=True, exclude={"id", "clearEscritorio"})
     if "senha" in data:
         u.senha_hash = _hash(data.pop("senha"))
@@ -184,6 +194,7 @@ def update_usuario(body: UsuarioUpdate, db: Session = Depends(get_db), payload=D
     return _to_dict(u)
 
 class ModalidadeIn(BaseModel):
+    usuarioId: str
     escritorioId: Optional[str] = None  # None = autônomo
 
 @app.post("/v1/lex/usuarios/delete")
@@ -196,13 +207,18 @@ def delete_usuario(body: UsuarioDeleteIn, db: Session = Depends(get_db), payload
     return {"ok": True}
 
 @app.post("/v1/lex/usuarios/modalidade")
-def set_modalidade(body: ModalidadeIn, db: Session = Depends(get_db), payload=Depends(_base_guard)):
-    """Permite que o próprio usuário altere sua modalidade (autônomo ou associado a escritório)."""
-    uid = payload.get("sub")
-    tenant_id = payload.get("tenant_id")
+def set_modalidade(body: ModalidadeIn, db: Session = Depends(get_db), payload=Depends(_admin_guard)):
+    """Somente admin do tenant pode alterar a associação ao escritório."""
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    uid = body.usuarioId
     u = db.query(Usuario).filter_by(id=uid, tenant_id=tenant_id).first()
     if not u:
         raise HTTPException(404, "Usuário não encontrado")
+    if body.escritorioId and not db.execute(
+        text("SELECT id FROM escritorios WHERE id = :eid AND tenant_id = :tid"),
+        {"eid": body.escritorioId, "tid": tenant_id},
+    ).first():
+        raise HTTPException(404, "Escritório não encontrado")
     u.escritorio_id = body.escritorioId
     u.updated_at = datetime.utcnow()
     db.commit(); db.refresh(u)

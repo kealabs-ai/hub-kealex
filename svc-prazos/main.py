@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from jose import jwt, JWTError
 from sqlalchemy import create_engine, Column, String, DateTime, Enum as SAEnum
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy import text
 sys.path.insert(0, "/app")
 try:
     from trial_guard import require_active_trial
@@ -154,8 +155,14 @@ def by_processo(body: PrazoByProcessoIn, db: Session = Depends(get_db), payload=
 @app.post("/v1/lex/prazos", status_code=201)
 def create_prazo(body: PrazoIn, db: Session = Depends(get_db), payload=Depends(_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
-    p = Prazo(tenant_id=tenant_id, user_id=payload["sub"], escritorio_id=body.escritorioId,
-              processo_id=body.processoId, advogado_id=payload["sub"], titulo=body.titulo,
+    processo = db.execute(
+        text("SELECT id, advogado_id, escritorio_id FROM processos WHERE id = :pid AND tenant_id = :tid"),
+        {"pid": body.processoId, "tid": tenant_id},
+    ).first()
+    if not processo:
+        raise HTTPException(404, "Processo não encontrado")
+    p = Prazo(tenant_id=tenant_id, user_id=payload["sub"], escritorio_id=processo.escritorio_id,
+              processo_id=body.processoId, advogado_id=processo.advogado_id, titulo=body.titulo,
               descricao=body.descricao, data_vencimento=body.dataVencimento)
     db.add(p); db.commit(); db.refresh(p)
     return _to_dict(p)

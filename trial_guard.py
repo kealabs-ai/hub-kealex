@@ -1,5 +1,5 @@
-"""
-trial_guard.py — dependência FastAPI reutilizável para controle de trial.
+﻿"""
+trial_guard.py â€” dependÃªncia FastAPI reutilizÃ¡vel para controle de trial.
 
 Uso em qualquer svc-*:
     from trial_guard import require_active_trial
@@ -37,10 +37,11 @@ class _Base(DeclarativeBase): pass
 
 class _Tenant(_Base):
     __tablename__ = "tenants"
-    id               = Column(String(36), primary_key=True)
-    plano            = Column(String(20), default="trial")
-    trial_expires_at = Column(DateTime,   nullable=True)
-    ativo            = Column(Boolean,    default=True)
+    id = Column(String(36), primary_key=True)
+    plano = Column(String(20), default="trial")
+    trial_expires_at = Column(DateTime, nullable=True)
+    subscription_status = Column(String(20), nullable=False, default="trialing")
+    ativo = Column(Boolean, default=True)
 
 def _get_db():
     db = _SessionLocal()
@@ -53,32 +54,26 @@ def verify_token(creds: HTTPAuthorizationCredentials = Depends(_bearer)) -> dict
     try:
         return jwt.decode(creds.credentials, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
-        raise HTTPException(401, "Token inválido")
+        raise HTTPException(401, "Token invÃ¡lido")
 
 def require_active_trial(
     payload: dict = Depends(verify_token),
     db: Session = Depends(_get_db),
 ) -> dict:
-    """
-    Verifica token + trial ativo.
-    - Admin nunca é bloqueado.
-    - Planos pagos nunca são bloqueados.
-    - Trial expirado → 403.
-    """
-    role      = payload.get("role", "")
+    role = payload.get("role", "")
     tenant_id = payload.get("tenant_id")
-
-    if role == "admin" or not tenant_id:
+    if role == "admin":
         return payload
+    if not tenant_id:
+        raise HTTPException(403, "Conta sem tenant associado")
 
     tenant = db.query(_Tenant).filter_by(id=tenant_id).first()
-    if tenant is None:
+    if tenant is None or not tenant.ativo:
+        raise HTTPException(403, "Conta inativa. Regularize sua assinatura para continuar.")
+    if tenant.plano == "trial":
+        if tenant.trial_expires_at and datetime.utcnow() > tenant.trial_expires_at:
+            raise HTTPException(403, "Trial expirado. Assine um plano para continuar.")
         return payload
-
-    if tenant.plano != "trial":
+    if tenant.plano in ("starter", "professional", "enterprise") and tenant.subscription_status == "active":
         return payload
-
-    if tenant.trial_expires_at and datetime.utcnow() > tenant.trial_expires_at:
-        raise HTTPException(403, "Trial expirado. Assine um plano para continuar.")
-
-    return payload
+    raise HTTPException(403, "Assinatura pendente ou vencida. Regularize o pagamento para continuar.")

@@ -1,6 +1,6 @@
-import os, uuid, enum
+import os, uuid, enum, hmac
 from datetime import datetime, timedelta
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
@@ -57,6 +57,14 @@ class Tenant(Base):
     plano            = Column(String(20),  nullable=False, default="trial")
     trial_started_at = Column(DateTime,    nullable=True)
     trial_expires_at = Column(DateTime,    nullable=True)
+    asaas_customer_id = Column(String(80), nullable=True)
+    billing_cpf_cnpj = Column(String(20), nullable=True)
+    billing_phone = Column(String(30), nullable=True)
+    billing_mobile_phone = Column(String(30), nullable=True)
+    asaas_subscription_id = Column(String(80), nullable=True)
+    subscription_plan = Column(String(20), nullable=True)
+    subscription_status = Column(String(20), nullable=False, default="trialing")
+    next_due_date = Column(String(10), nullable=True)
     ativo            = Column(Boolean,     default=True)
     created_at       = Column(DateTime,    default=datetime.utcnow)
     updated_at       = Column(DateTime,    default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -73,6 +81,12 @@ class Usuario(Base):
     ativo         = Column(Boolean,     default=True)
     created_at    = Column(DateTime,    default=datetime.utcnow)
     updated_at    = Column(DateTime,    default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class AsaasWebhookEvent(Base):
+    __tablename__ = "asaas_webhook_events"
+    id = Column(String(100), primary_key=True)
+    event = Column(String(80), nullable=False)
+    received_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 # ── DB ────────────────────────────────────────────────────────────────────────
 
@@ -262,9 +276,7 @@ def login(body: LoginIn, db: Session = Depends(get_db)):
 
     tenant = db.query(Tenant).filter_by(id=user.tenant_id).first()
 
-    # Admin nunca é bloqueado, mas demais roles são verificados
-    if user.role != RoleEnum.admin:
-        _check_trial(tenant, user.role)
+    # Contas com trial vencido ainda podem autenticar para acessar a area de cobranca.
 
     return AuthUser(
         id=user.id,
@@ -311,10 +323,13 @@ def pre_register(body: PreRegisterIn, db: Session = Depends(get_db)):
         slug = f"{base_slug}-{counter}"
         counter += 1
 
+    now = datetime.utcnow()
     tenant = Tenant(
         nome=body.nome, slug=slug,
-        plano="pendente",  # pendente ate pagamento
-        ativo=False,
+        plano="trial",
+        trial_started_at=now,
+        trial_expires_at=now + timedelta(days=TRIAL_DAYS),
+        ativo=True,
     )
     db.add(tenant)
     db.flush()
@@ -322,7 +337,7 @@ def pre_register(body: PreRegisterIn, db: Session = Depends(get_db)):
     user = Usuario(
         tenant_id=tenant.id, nome=body.nome, email=body.email,
         senha_hash=_hash(body.senha), role=RoleEnum.advogado,
-        ativo=False,  # inativo ate pagamento
+        ativo=True,  # teste gratis liberado; billing valida o entitlement
     )
     db.add(user)
     db.commit()
@@ -340,34 +355,8 @@ def pre_register(body: PreRegisterIn, db: Session = Depends(get_db)):
 
 @app.post("/k1/lex/auth/ativar", response_model=AuthUser)
 def ativar_usuario(db: Session = Depends(get_db), payload=Depends(verify_token)):
-    """Ativa usuario + tenant apos pagamento confirmado. Chamado internamente pelo /assinar."""
-    user_id   = payload.get("sub")
-    tenant_id = payload.get("tenant_id")
-
-    user   = db.query(Usuario).filter_by(id=user_id).first()
-    tenant = db.query(Tenant).filter_by(id=tenant_id).first()
-    if not user or not tenant:
-        raise HTTPException(404, "Usuario ou tenant nao encontrado")
-
-    now = datetime.utcnow()
-    user.ativo   = True
-    tenant.ativo = True
-    # nao inicia trial — plano ja sera definido pelo /assinar
-    tenant.updated_at = now
-    user.updated_at   = now
-    db.commit()
-    db.refresh(user)
-    db.refresh(tenant)
-
-    return AuthUser(
-        id=user.id, nome=user.nome, email=user.email, role=user.role,
-        tenantId=tenant.id, accessToken=_make_token(user),
-        plano=tenant.plano,
-        trialStartedAt=tenant.trial_started_at.isoformat() if tenant.trial_started_at else None,
-        trialExpiresAt=tenant.trial_expires_at.isoformat() if tenant.trial_expires_at else None,
-        escritorioId=user.escritorio_id,
-        modalidade="escritorio" if user.escritorio_id else "autonomo",
-    )
+    """Endpoint legado desativado: somente webhook autenticado altera entitlement."""
+    raise HTTPException(410, "Ativacao manual desativada. Aguarde a confirmacao do pagamento.")
 
 
 # ── Assinatura (Asaas) ────────────────────────────────────────────────────────
@@ -399,6 +388,12 @@ class HolderInfoIn(BaseModel):
     phone:             str | None = None
     mobilePhone:       str | None = None
 
+
+def _digits(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return "".join(character for character in value if character.isdigit())
+
 class AssinarIn(BaseModel):
     plano:          str          # starter | professional
     asaasCustomerId: str         # cus_xxx criado previamente no Asaas
@@ -423,6 +418,13 @@ def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(veri
     tenant = db.query(Tenant).filter_by(id=tenant_id).first()
     if not tenant:
         raise HTTPException(404, "Tenant nao encontrado")
+    user = db.query(Usuario).filter_by(id=payload.get("sub"), tenant_id=tenant_id).first()
+    if not user or (not user.ativo and payload.get("pre") is not True):
+        raise HTTPException(403, "Sessao nao autorizada para contratar")
+    if tenant.asaas_customer_id != body.asaasCustomerId:
+        raise HTTPException(403, "Cliente Asaas nao vinculado a esta conta")
+    if tenant.asaas_subscription_id and tenant.subscription_status in ("pending", "active", "past_due"):
+        raise HTTPException(409, "Ja existe uma assinatura vinculada a esta conta")
 
     # Calcula nextDueDate: se ainda em trial, agenda para o fim do trial
     now = datetime.utcnow()
@@ -448,12 +450,12 @@ def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(veri
         "creditCardHolderInfo": {
             "name":               body.holderInfo.name,
             "email":              body.holderInfo.email,
-            "cpfCnpj":            body.holderInfo.cpfCnpj,
+            "cpfCnpj":            _digits(body.holderInfo.cpfCnpj),
             "postalCode":         body.holderInfo.postalCode,
             "addressNumber":      body.holderInfo.addressNumber,
             "addressComplement":  body.holderInfo.addressComplement,
-            "phone":              body.holderInfo.phone,
-            "mobilePhone":        body.holderInfo.mobilePhone,
+            "phone":              _digits(body.holderInfo.phone),
+            "mobilePhone":        _digits(body.holderInfo.mobilePhone),
         },
         "remoteIp": body.remoteIp,
     }
@@ -472,49 +474,164 @@ def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(veri
     except httpx.TimeoutException:
         raise HTTPException(504, "Timeout ao conectar com Asaas")
 
-    # Atualiza plano do tenant e ativa usuario/tenant se ainda inativo
-    tenant.plano = body.plano
+    # A criacao nao prova que a primeira cobranca foi liquidada.
+    tenant.asaas_subscription_id = data.get("id")
+    tenant.subscription_plan = body.plano
+    tenant.subscription_status = "pending"
+    tenant.next_due_date = data.get("nextDueDate", next_due)
     tenant.updated_at = datetime.utcnow()
-    if not tenant.ativo:
-        tenant.ativo = True
-    user = db.query(Usuario).filter_by(tenant_id=tenant_id, role=RoleEnum.advogado).first()
-    if user and not user.ativo:
-        user.ativo = True
-        user.updated_at = datetime.utcnow()
     db.commit()
 
     return AssinarOut(
         subscriptionId=data.get("id", ""),
         plano=body.plano,
-        status=data.get("status", "ACTIVE"),
+        status="PENDING_PAYMENT",
         nextDueDate=data.get("nextDueDate", next_due),
         value=plano_cfg["value"],
     )
 
 
 @app.post("/k1/lex/auth/criar-cliente-asaas")
-def criar_cliente_asaas(body: HolderInfoIn, payload=Depends(verify_token)):
+def criar_cliente_asaas(body: HolderInfoIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
     """Cria ou recupera um customer no Asaas para o usuario autenticado."""
+    tenant = db.query(Tenant).filter_by(id=payload.get("tenant_id")).first()
+    if not tenant:
+        raise HTTPException(404, "Tenant nao encontrado")
+    customer_data = {
+        "name": body.name,
+        "email": body.email,
+        "cpfCnpj": _digits(body.cpfCnpj),
+        "phone": _digits(body.phone),
+        "mobilePhone": _digits(body.mobilePhone),
+        "postalCode": body.postalCode,
+        "addressNumber": body.addressNumber,
+        "complement": body.addressComplement,
+    }
+    customer_data = {key: value for key, value in customer_data.items() if value not in (None, "")}
     try:
-        resp = httpx.post(
-            f"{ASAAS_BASE}/customers",
-            json={
-                "name":     body.name,
-                "email":    body.email,
-                "cpfCnpj": body.cpfCnpj,
-                "phone":    body.phone,
-                "mobilePhone": body.mobilePhone,
-            },
-            headers={"access_token": ASAAS_API_KEY, "Content-Type": "application/json"},
-            timeout=15,
-        )
+        if tenant.asaas_customer_id:
+            resp = httpx.put(
+                f"{ASAAS_BASE}/customers/{tenant.asaas_customer_id}",
+                json=customer_data,
+                headers={"access_token": ASAAS_API_KEY, "Content-Type": "application/json"},
+                timeout=15,
+            )
+        else:
+            resp = httpx.post(
+                f"{ASAAS_BASE}/customers",
+                json=customer_data,
+                headers={"access_token": ASAAS_API_KEY, "Content-Type": "application/json"},
+                timeout=15,
+            )
         if resp.status_code not in (200, 201):
             detail = resp.json().get("errors", resp.text)
-            raise HTTPException(422, f"Asaas recusou: {detail}")
-        return {"customerId": resp.json().get("id")}
+            raise HTTPException(422, f"Asaas recusou os dados do titular: {detail}")
+        customer_id = tenant.asaas_customer_id or resp.json().get("id")
+        tenant.asaas_customer_id = customer_id
+        tenant.billing_cpf_cnpj = _digits(body.cpfCnpj)
+        tenant.billing_phone = _digits(body.phone)
+        tenant.billing_mobile_phone = _digits(body.mobilePhone)
+        db.commit()
+        return {"customerId": customer_id}
     except httpx.TimeoutException:
         raise HTTPException(504, "Timeout ao conectar com Asaas")
 
+
+@app.get("/k1/lex/auth/billing-profile")
+def billing_profile(db: Session = Depends(get_db), payload=Depends(verify_token)):
+    tenant = db.query(Tenant).filter_by(id=payload.get("tenant_id")).first()
+    if not tenant:
+        raise HTTPException(404, "Tenant nao encontrado")
+
+    cpf_cnpj = tenant.billing_cpf_cnpj
+    phone = tenant.billing_phone
+    mobile_phone = tenant.billing_mobile_phone
+    if tenant.asaas_customer_id and (not cpf_cnpj or (not phone and not mobile_phone)):
+        try:
+            response = httpx.get(
+                f"{ASAAS_BASE}/customers/{tenant.asaas_customer_id}",
+                headers={"access_token": ASAAS_API_KEY},
+                timeout=10,
+            )
+            if response.status_code == 200:
+                customer = response.json()
+                cpf_cnpj = cpf_cnpj or customer.get("cpfCnpj")
+                phone = phone or customer.get("phone")
+                mobile_phone = mobile_phone or customer.get("mobilePhone")
+                tenant.billing_cpf_cnpj = cpf_cnpj
+                tenant.billing_phone = phone
+                tenant.billing_mobile_phone = mobile_phone
+                db.commit()
+        except httpx.TimeoutException:
+            pass
+
+    return {
+        "cpfCnpj": cpf_cnpj or "",
+        "phone": phone or "",
+        "mobilePhone": mobile_phone or "",
+    }
+
+
+@app.post("/k1/lex/auth/asaas-webhook")
+async def asaas_webhook(
+    request: Request,
+    db: Session = Depends(get_db),
+    access_token: str | None = Header(default=None, alias="asaas-access-token"),
+):
+    expected = os.getenv("ASAAS_WEBHOOK_TOKEN", "")
+    if not expected or not access_token or not hmac.compare_digest(access_token, expected):
+        raise HTTPException(401, "Webhook nao autenticado")
+
+    event = await request.json()
+    event_id = event.get("id")
+    event_name = event.get("event", "")
+    if not event_id:
+        raise HTTPException(400, "Evento sem identificador")
+    if db.get(AsaasWebhookEvent, event_id):
+        return {"ok": True, "duplicate": True}
+
+    payment = event.get("payment") or {}
+    subscription_id = payment.get("subscription") or (event.get("subscription") or {}).get("id")
+    if not subscription_id:
+        return {"ok": True, "ignored": True}
+    tenant = db.query(Tenant).filter_by(asaas_subscription_id=subscription_id).with_for_update().first()
+    db.add(AsaasWebhookEvent(id=event_id, event=event_name))
+    if tenant:
+        if event_name in ("PAYMENT_CONFIRMED", "PAYMENT_RECEIVED"):
+            tenant.subscription_status = "active"
+            tenant.plano = tenant.subscription_plan or tenant.plano
+            tenant.ativo = True
+            tenant.next_due_date = payment.get("dueDate") or tenant.next_due_date
+            db.query(Usuario).filter_by(tenant_id=tenant.id).update({"ativo": True})
+        elif event_name == "PAYMENT_OVERDUE":
+            tenant.subscription_status = "past_due"
+        elif event_name == "SUBSCRIPTION_DELETED":
+            tenant.subscription_status = "canceled"
+        tenant.updated_at = datetime.utcnow()
+    db.commit()
+    return {"ok": True, "ignored": tenant is None}
+
+@app.get("/k1/lex/auth/billing-status")
+def billing_status(db: Session = Depends(get_db), payload=Depends(verify_token)):
+    tenant = db.query(Tenant).filter_by(id=payload.get("tenant_id")).first()
+    if not tenant:
+        raise HTTPException(404, "Tenant nao encontrado")
+    now = datetime.utcnow()
+    if not tenant.ativo:
+        status = "inactive"
+    elif tenant.plano == "trial":
+        status = "trial_expired" if tenant.trial_expires_at and tenant.trial_expires_at <= now else "trial"
+    elif tenant.plano in ("starter", "professional", "enterprise"):
+        status = tenant.subscription_status or "inactive"
+    else:
+        status = "inactive"
+    return {
+        "plano": tenant.plano,
+        "status": status,
+        "subscriptionStatus": tenant.subscription_status,
+        "nextDueDate": tenant.next_due_date,
+        "trialExpiresAt": tenant.trial_expires_at.isoformat() if tenant.trial_expires_at else None,
+    }
 @app.get("/health")
 def health_simple():
     return {"status": "healthy", "service": "svc-auth"}
