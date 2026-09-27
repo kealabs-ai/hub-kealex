@@ -87,6 +87,7 @@ class Tenant(Base):
     email            = Column(String(255), nullable=True)
     whatsapp         = Column(String(20), nullable=True)
     billing_cpf_cnpj = Column(String(20), nullable=True)
+    billing_phone = Column(String(30), nullable=True)
     billing_mobile_phone = Column(String(30), nullable=True)
     perfil           = Column(String(50), nullable=True)
     ativo            = Column(Boolean, default=True)
@@ -605,6 +606,17 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
 @app.get("/k1/lex/auth/me")
 def me(payload=Depends(verify_token)):
     return payload
+
+@app.get("/k1/lex/auth/billing-profile")
+def billing_profile(db: Session = Depends(get_db), payload=Depends(verify_token)):
+    tenant = db.query(Tenant).filter_by(id=payload.get("tenant_id")).first()
+    if not tenant:
+        raise HTTPException(404, "Tenant não encontrado")
+    return {
+        "cpfCnpj": tenant.billing_cpf_cnpj or "",
+        "phone": tenant.billing_phone or "",
+        "mobilePhone": tenant.billing_mobile_phone or "",
+    }
 
 # Processos endpoints
 @app.get("/k1/lex/processos")
