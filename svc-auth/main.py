@@ -194,6 +194,7 @@ class LoginIn(BaseModel):
 class RegisterIn(BaseModel):
     nome:     str
     email:    EmailStr
+    cpfCnpj:  str
     whatsapp: str
     perfil:   str = "advogado"  # advogado | escritorio | corporativo
     senha:    str | None = None  # opcional; se omitida, gera senha temporária
@@ -215,6 +216,10 @@ class AuthUser(BaseModel):
 
 @app.post("/k1/lex/auth/register", response_model=AuthUser, status_code=201)
 def register(body: RegisterIn, db: Session = Depends(get_db)):
+    cpf_cnpj = _digits(body.cpfCnpj)
+    if not cpf_cnpj or len(cpf_cnpj) not in (11, 14):
+        raise HTTPException(400, "Informe um CPF ou CNPJ válido.")
+
     # e-mail já cadastrado?
     if db.query(Usuario).filter_by(email=body.email).first():
         raise HTTPException(409, "E-mail já cadastrado. Acesse /entrar para fazer login.")
@@ -234,6 +239,8 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
         plano="trial",
         trial_started_at=now,
         trial_expires_at=now + timedelta(days=TRIAL_DAYS),
+        billing_cpf_cnpj=cpf_cnpj,
+        billing_mobile_phone=_digits(body.whatsapp),
     )
     db.add(tenant)
     db.flush()  # gera tenant.id sem commit
