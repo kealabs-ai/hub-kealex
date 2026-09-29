@@ -1,4 +1,4 @@
-﻿"""
+"""
 trial_guard.py â€” dependÃªncia FastAPI reutilizÃ¡vel para controle de trial.
 
 Uso em qualquer svc-*:
@@ -16,20 +16,17 @@ from jose import jwt, JWTError
 from sqlalchemy import create_engine, Column, String, Boolean, DateTime
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-SECRET_KEY = os.getenv("SECRET_KEY", "changeme-secret-key")
-ALGORITHM  = "HS256"
+KEALEX_SECRET_KEY = os.getenv("KEALEX_SECRET_KEY") or os.getenv("KEALEX_JWT_SECRET")
+if not KEALEX_SECRET_KEY:
+    raise RuntimeError("KEALEX_SECRET_KEY ou KEALEX_JWT_SECRET precisa estar configurada no ambiente")
+ALGORITHM = "HS256"
 
-def _get_database_url(default: str) -> str:
-    raw = os.getenv("DATABASE_URL")
-    if raw is None or raw.strip().lower() in ("", "null", "none"):
-        return default
-    return raw.strip()
+KEALEX_DATABASE_URL = os.getenv("KEALEX_DATABASE_URL")
+if not KEALEX_DATABASE_URL:
+    raise RuntimeError("KEALEX_DATABASE_URL precisa estar configurada no ambiente")
 
-DATABASE_URL = _get_database_url(
-    "mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex"
-)
-
-_engine       = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=280, pool_size=3, max_overflow=5)
+_engine = create_engine(
+    KEALEX_DATABASE_URL, pool_pre_ping=True, pool_recycle=280, pool_size=3, max_overflow=5)
 _SessionLocal = sessionmaker(bind=_engine, autocommit=False, autoflush=False)
 _bearer       = HTTPBearer()
 
@@ -52,7 +49,7 @@ def _get_db():
 
 def verify_token(creds: HTTPAuthorizationCredentials = Depends(_bearer)) -> dict:
     try:
-        return jwt.decode(creds.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        return jwt.decode(creds.credentials, KEALEX_SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
         raise HTTPException(401, "Token invÃ¡lido")
 

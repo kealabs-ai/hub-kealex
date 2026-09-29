@@ -121,8 +121,8 @@ file: <arquivo>
 ## Variáveis de Ambiente
 
 ```bash
-DATABASE_URL=mysql+pymysql://usuario:senha@host:3306/banco
-SECRET_KEY=sua_chave_segura
+KEALEX_DATABASE_URL=mysql+pymysql://usuario:senha@host:3306/banco
+KEALEX_SECRET_KEY=sua_chave_segura
 STORAGE_PATH=/tmp/repositorios
 GDRIVE_TOKEN=seu_token_google_drive
 ```
@@ -162,8 +162,8 @@ svc-repositorios:
   build: ./svc-repositorios
   container_name: svc-repositorios
   environment:
-    DATABASE_URL: ${DATABASE_URL}
-    SECRET_KEY: ${SECRET_KEY}
+    KEALEX_DATABASE_URL: ${KEALEX_DATABASE_URL}
+    KEALEX_SECRET_KEY: ${KEALEX_SECRET_KEY}
     STORAGE_PATH: /app/storage
     GDRIVE_TOKEN: ${GDRIVE_TOKEN}
   volumes:

@@ -24,8 +24,8 @@ chmod +x check-traefik.sh
 
 ```bash
 # 1. Configurar variáveis de ambiente
-export SECRET_KEY="sua-chave-secreta-aqui"
-export DATABASE_URL="mysql+pymysql://user:pass@host/db"
+export KEALEX_SECRET_KEY="sua-chave-secreta-aqui"
+export KEALEX_DATABASE_URL="mysql+pymysql://user:pass@host/db"
 
 # 2. Deploy completo
 docker-compose up -d --build

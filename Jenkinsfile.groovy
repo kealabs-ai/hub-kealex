@@ -3,9 +3,9 @@ pipeline {
 
     environment {
         IMAGE_PREFIX = "kealex"
-        TAG = "latest"
-        SECRET_KEY = "${env.SECRET_KEY ?: 'fallback-chave-segura'}"
-        DATABASE_URL = "${env.DATABASE_URL ?: 'mysql+pymysql://user:pass@host/db'}"
+        KEALEX_TAG = "latest"
+        KEALEX_SECRET_KEY = "${env.KEALEX_SECRET_KEY ?: 'fallback-chave-segura'}"
+        KEALEX_DATABASE_URL = "${env.KEALEX_DATABASE_URL ?: 'mysql+pymysql://user:pass@host/db'}"
     }
 
     stages {
@@ -28,7 +28,7 @@ pipeline {
                     ]
                     
                     services.each { svc ->
-                        sh "docker build -t ${IMAGE_PREFIX}/${svc}:${TAG} ./${svc} || exit 1"
+                        sh "docker build -t ${IMAGE_PREFIX}/${svc}:${KEALEX_TAG} ./${svc} || exit 1"
                     }
                 }
             }
@@ -54,8 +54,8 @@ pipeline {
 
                     echo "Iniciando deploy..."
                     sh """
-                        export SECRET_KEY='${SECRET_KEY}'
-                        export DATABASE_URL='${DATABASE_URL}'
+                        export KEALEX_SECRET_KEY='${KEALEX_SECRET_KEY}'
+                        export KEALEX_DATABASE_URL='${KEALEX_DATABASE_URL}'
                         ${composeCmd} up -d --build --remove-orphans
                     """
 

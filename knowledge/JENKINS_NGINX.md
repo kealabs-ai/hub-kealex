@@ -12,10 +12,10 @@ Adicionado após o stage "Test Images" para validar a configuração do nginx an
 stage('Test Nginx Config') {
     steps {
         // Testa sintaxe da configuração do nginx
-        docker run --rm ${IMAGE_PREFIX}/api-gateway:${TAG} nginx -t
+        docker run --rm ${IMAGE_PREFIX}/api-gateway:${KEALEX_TAG} nginx -t
         
         // Verifica se arquivos de configuração existem
-        docker run --rm ${IMAGE_PREFIX}/api-gateway:${TAG} ls -la /etc/nginx/conf.d/
+        docker run --rm ${IMAGE_PREFIX}/api-gateway:${KEALEX_TAG} ls -la /etc/nginx/conf.d/
     }
 }
 ```

@@ -37,8 +37,11 @@ services:
     build: ./svc-auth
     container_name: kealex-svc-auth
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
+      - KEALEX_ASAAS_API_KEY=${KEALEX_ASAAS_API_KEY:-}
+      - KEALEX_ASAAS_BASE_URL=${KEALEX_ASAAS_BASE_URL}
+      - KEALEX_ASAAS_WEBHOOK_TOKEN=${KEALEX_ASAAS_WEBHOOK_TOKEN:-}
     networks:
       - kealex-network
     restart: unless-stopped
@@ -53,8 +56,8 @@ services:
     build: ./svc-processos
     container_name: kealex-svc-processos
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
     networks:
       - kealex-network
     restart: unless-stopped
@@ -69,8 +72,8 @@ services:
     build: ./svc-documentos
     container_name: kealex-svc-documentos
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
     networks:
       - kealex-network
     restart: unless-stopped
@@ -85,8 +88,8 @@ services:
     build: ./svc-financeiro
     container_name: kealex-svc-financeiro
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
     networks:
       - kealex-network
     restart: unless-stopped
@@ -101,8 +104,8 @@ services:
     build: ./svc-prazos
     container_name: kealex-svc-prazos
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
     networks:
       - kealex-network
     restart: unless-stopped
@@ -117,8 +120,8 @@ services:
     build: ./svc-usuarios
     container_name: kealex-svc-usuarios
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
     networks:
       - kealex-network
     restart: unless-stopped
@@ -133,8 +136,8 @@ services:
     build: ./svc-configuracoes
     container_name: kealex-svc-configuracoes
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
     networks:
       - kealex-network
     restart: unless-stopped
@@ -149,8 +152,8 @@ services:
     build: ./svc-escritorios
     container_name: kealex-svc-escritorios
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
     networks:
       - kealex-network
     restart: unless-stopped
@@ -165,8 +168,8 @@ services:
     build: ./svc-cobrancas
     container_name: kealex-svc-cobrancas
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
     networks:
       - kealex-network
     restart: unless-stopped

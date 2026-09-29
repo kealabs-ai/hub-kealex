@@ -5,16 +5,19 @@ services:
     build: ./svc-auth
     container_name: kealex-svc-auth
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
+      - KEALEX_ASAAS_API_KEY=${KEALEX_ASAAS_API_KEY:-}
+      - KEALEX_ASAAS_BASE_URL=${KEALEX_ASAAS_BASE_URL}
+      - KEALEX_ASAAS_WEBHOOK_TOKEN=${KEALEX_ASAAS_WEBHOOK_TOKEN:-}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-auth.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/kealex/auth`)"
+      - "traefik.http.routers.kealex-auth.rule=Host(`${KEALEX_PUBLIC_API_HOST}`) && PathPrefix(`/k1/kealex/auth`)"
       - "traefik.http.routers.kealex-auth.entrypoints=websecure"
       - "traefik.http.routers.kealex-auth.tls=true"
       - "traefik.http.middlewares.kealex-strip.stripprefix.prefixes=/k1/kealex"
-      - "traefik.http.middlewares.kealex-cors.headers.accesscontrolalloworiginlist=*"
+      - "traefik.http.middlewares.kealex-cors.headers.accesscontrolalloworiginlist=${KEALEX_CORS_ALLOWED_ORIGINS}"
       - "traefik.http.middlewares.kealex-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
       - "traefik.http.middlewares.kealex-cors.headers.accesscontrolallowheaders=*"
       - "traefik.http.middlewares.kealex-cors.headers.accesscontrolallowcredentials=true"
@@ -28,12 +31,12 @@ services:
     build: ./svc-processos
     container_name: kealex-svc-processos
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-processos.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/kealex/processos`)"
+      - "traefik.http.routers.kealex-processos.rule=Host(`${KEALEX_PUBLIC_API_HOST}`) && PathPrefix(`/k1/kealex/processos`)"
       - "traefik.http.routers.kealex-processos.entrypoints=websecure"
       - "traefik.http.routers.kealex-processos.tls=true"
       - "traefik.http.routers.kealex-processos.middlewares=kealex-strip,kealex-cors"
@@ -46,12 +49,12 @@ services:
     build: ./svc-documentos
     container_name: kealex-svc-documentos
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-documentos.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/kealex/documentos`)"
+      - "traefik.http.routers.kealex-documentos.rule=Host(`${KEALEX_PUBLIC_API_HOST}`) && PathPrefix(`/k1/kealex/documentos`)"
       - "traefik.http.routers.kealex-documentos.entrypoints=websecure"
       - "traefik.http.routers.kealex-documentos.tls=true"
       - "traefik.http.routers.kealex-documentos.middlewares=kealex-strip,kealex-cors"
@@ -64,12 +67,12 @@ services:
     build: ./svc-financeiro
     container_name: kealex-svc-financeiro
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-financeiro.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/kealex/financeiro`)"
+      - "traefik.http.routers.kealex-financeiro.rule=Host(`${KEALEX_PUBLIC_API_HOST}`) && PathPrefix(`/k1/kealex/financeiro`)"
       - "traefik.http.routers.kealex-financeiro.entrypoints=websecure"
       - "traefik.http.routers.kealex-financeiro.tls=true"
       - "traefik.http.routers.kealex-financeiro.middlewares=kealex-strip,kealex-cors"
@@ -82,12 +85,12 @@ services:
     build: ./svc-prazos
     container_name: kealex-svc-prazos
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-prazos.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/kealex/prazos`)"
+      - "traefik.http.routers.kealex-prazos.rule=Host(`${KEALEX_PUBLIC_API_HOST}`) && PathPrefix(`/k1/kealex/prazos`)"
       - "traefik.http.routers.kealex-prazos.entrypoints=websecure"
       - "traefik.http.routers.kealex-prazos.tls=true"
       - "traefik.http.routers.kealex-prazos.middlewares=kealex-strip,kealex-cors"
@@ -100,12 +103,12 @@ services:
     build: ./svc-usuarios
     container_name: kealex-svc-usuarios
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-usuarios.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/kealex/usuarios`)"
+      - "traefik.http.routers.kealex-usuarios.rule=Host(`${KEALEX_PUBLIC_API_HOST}`) && PathPrefix(`/k1/kealex/usuarios`)"
       - "traefik.http.routers.kealex-usuarios.entrypoints=websecure"
       - "traefik.http.routers.kealex-usuarios.tls=true"
       - "traefik.http.routers.kealex-usuarios.middlewares=kealex-strip,kealex-cors"
@@ -118,12 +121,12 @@ services:
     build: ./svc-configuracoes
     container_name: kealex-svc-configuracoes
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-configuracoes.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/kealex/configuracoes`)"
+      - "traefik.http.routers.kealex-configuracoes.rule=Host(`${KEALEX_PUBLIC_API_HOST}`) && PathPrefix(`/k1/kealex/configuracoes`)"
       - "traefik.http.routers.kealex-configuracoes.entrypoints=websecure"
       - "traefik.http.routers.kealex-configuracoes.tls=true"
       - "traefik.http.routers.kealex-configuracoes.middlewares=kealex-strip,kealex-cors"
@@ -136,12 +139,12 @@ services:
     build: ./svc-escritorios
     container_name: kealex-svc-escritorios
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-escritorios.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/kealex/escritorios`)"
+      - "traefik.http.routers.kealex-escritorios.rule=Host(`${KEALEX_PUBLIC_API_HOST}`) && PathPrefix(`/k1/kealex/escritorios`)"
       - "traefik.http.routers.kealex-escritorios.entrypoints=websecure"
       - "traefik.http.routers.kealex-escritorios.tls=true"
       - "traefik.http.routers.kealex-escritorios.middlewares=kealex-strip,kealex-cors"
@@ -154,12 +157,12 @@ services:
     build: ./svc-clientes
     container_name: kealex-svc-clientes
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-clientes.rule=Host(`srv1023256.hstgr.cloud`) && PathPrefix(`/k1/kealex/clientes`)"
+      - "traefik.http.routers.kealex-clientes.rule=Host(`${KEALEX_PUBLIC_API_HOST}`) && PathPrefix(`/k1/kealex/clientes`)"
       - "traefik.http.routers.kealex-clientes.entrypoints=websecure"
       - "traefik.http.routers.kealex-clientes.tls=true"
       - "traefik.http.routers.kealex-clientes.middlewares=kealex-strip,kealex-cors"

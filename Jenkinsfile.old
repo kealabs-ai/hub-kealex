@@ -5,7 +5,7 @@ pipeline {
         REGISTRY = "registry.kealex.io"
         IMAGE_PREFIX = "kealex"
         TAG = "${env.BUILD_NUMBER}"
-        DATABASE_URL = "mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex"
+        DATABASE_URL = credentials('kealex-database-url')
         COMPOSE_PROJECT_NAME = "kealex"
     }
 
@@ -31,7 +31,7 @@ pipeline {
                         export PATH=\$HOME/bin:\$PATH
                         echo 'Verificando docker-compose:'
                         docker-compose --version
-                        echo 'Localização:'
+                        echo 'LocalizaÃ§Ã£o:'
                         which docker-compose
                     """
                     
@@ -51,29 +51,29 @@ pipeline {
                     echo "=== LIMPEZA INTELIGENTE ==="
                     
                     sh """
-                        echo "Espaço antes da limpeza:"
+                        echo "EspaÃ§o antes da limpeza:"
                         df -h .
                         docker system df
                     """
                     
                     sh """
-                        echo "Removendo imagens não utilizadas..."
+                        echo "Removendo imagens nÃ£o utilizadas..."
                         docker image prune -f --filter "until=24h" || true
                         echo "Removendo containers parados..."
                         docker container prune -f || true
-                        echo "Removendo redes não utilizadas..."
+                        echo "Removendo redes nÃ£o utilizadas..."
                         docker network prune -f || true
-                        echo "Removendo volumes órfãos..."
+                        echo "Removendo volumes Ã³rfÃ£os..."
                         docker volume prune -f || true
                     """
                     
                     sh """
-                        echo "Espaço após limpeza:"
+                        echo "EspaÃ§o apÃ³s limpeza:"
                         df -h .
                         docker system df
                     """
                     
-                    echo "=== LIMPEZA CONCLUÍDA ==="
+                    echo "=== LIMPEZA CONCLUÃDA ==="
                 }
             }
         }
@@ -106,7 +106,7 @@ pipeline {
                         ).trim()
                         
                         if (imageExists) {
-                            echo "Imagem ${svc} já existe, pulando build..."
+                            echo "Imagem ${svc} jÃ¡ existe, pulando build..."
                         } else {
                             echo "Building ${svc}..."
                             sh """
@@ -123,7 +123,7 @@ pipeline {
         stage('Test Images') {
             steps {
                 script {
-                    echo "=== TESTANDO IMAGENS CONSTRUÍDAS ==="
+                    echo "=== TESTANDO IMAGENS CONSTRUÃDAS ==="
                     sh "docker images | grep kealex"
                     
                     sh """
@@ -140,25 +140,25 @@ pipeline {
         stage('Test Nginx Config') {
             steps {
                 script {
-                    echo "=== TESTANDO CONFIGURAÇÃO DO NGINX ==="
+                    echo "=== TESTANDO CONFIGURAÃ‡ÃƒO DO NGINX ==="
                     
                     sh """
-                        echo "Testando sintaxe da configuração do nginx..."
-                        echo "NOTA: Erros de 'host not found in upstream' são esperados fora da rede Docker"
+                        echo "Testando sintaxe da configuraÃ§Ã£o do nginx..."
+                        echo "NOTA: Erros de 'host not found in upstream' sÃ£o esperados fora da rede Docker"
                         docker run --rm ${IMAGE_PREFIX}/api-gateway:latest nginx -t 2>&1 || true
                     """
                     
                     sh """
-                        echo "Verificando arquivos de configuração..."
+                        echo "Verificando arquivos de configuraÃ§Ã£o..."
                         docker run --rm ${IMAGE_PREFIX}/api-gateway:latest ls -la /etc/nginx/conf.d/
                     """
                     
                     sh """
-                        echo "Verificando conteúdo do nginx.conf..."
+                        echo "Verificando conteÃºdo do nginx.conf..."
                         docker run --rm ${IMAGE_PREFIX}/api-gateway:latest cat /etc/nginx/conf.d/default.conf | head -20
                     """
                     
-                    echo "=== CONFIGURAÇÃO DO NGINX VALIDADA ==="
+                    echo "=== CONFIGURAÃ‡ÃƒO DO NGINX VALIDADA ==="
                 }
             }
         }
@@ -225,7 +225,7 @@ pipeline {
             when { branch 'main' }
             steps {
                 script {
-                    echo "=== VERIFICAÇÃO PRÉ-DEPLOY ==="
+                    echo "=== VERIFICAÃ‡ÃƒO PRÃ‰-DEPLOY ==="
                     
                     sh """
                         echo "Verificando containers existentes..."
@@ -233,23 +233,23 @@ pipeline {
                         if [ -n "\$EXISTING" ]; then
                             echo "Containers existentes encontrados:"
                             docker ps --filter "name=kealex" --filter "name=svc-" --filter "name=api-gateway"
-                            echo "Estes serão substituídos durante o deploy."
+                            echo "Estes serÃ£o substituÃ­dos durante o deploy."
                         else
                             echo "Nenhum container existente encontrado."
                         fi
                     """
                     
                     sh """
-                        echo "Verificando espaço em disco..."
+                        echo "Verificando espaÃ§o em disco..."
                         df -h .
                         
                         AVAILABLE=\$(df . | tail -1 | awk '{print \$4}' | sed 's/G//')
                         if [ "\$AVAILABLE" -lt 2 ]; then
-                            echo "[AVISO] Pouco espaço em disco disponível: \${AVAILABLE}G"
-                            echo "Limpando imagens não utilizadas..."
+                            echo "[AVISO] Pouco espaÃ§o em disco disponÃ­vel: \${AVAILABLE}G"
+                            echo "Limpando imagens nÃ£o utilizadas..."
                             docker image prune -f
                         else
-                            echo "[OK] Espaço suficiente: \${AVAILABLE}G"
+                            echo "[OK] EspaÃ§o suficiente: \${AVAILABLE}G"
                         fi
                     """
                     
@@ -265,13 +265,13 @@ pipeline {
                         fi
                         
                         if [ "\$PORT_CHECK" = "livre" ]; then
-                            echo "[OK] Porta 8000 está livre"
+                            echo "[OK] Porta 8000 estÃ¡ livre"
                         else
                             echo "[OK] Porta 8000 em uso: \$PORT_CHECK"
                         fi
                     """
                     
-                    echo "=== PRÉ-VERIFICAÇÃO CONCLUÍDA ==="
+                    echo "=== PRÃ‰-VERIFICAÃ‡ÃƒO CONCLUÃDA ==="
                 }
             }
         }
@@ -291,7 +291,7 @@ pipeline {
                             docker ps -aq --filter "name=kealex" | xargs -r docker rm -f 2>/dev/null || true
                             docker network rm kealex-network 2>/dev/null || true
                             
-                            echo 'Limpeza concluída'
+                            echo 'Limpeza concluÃ­da'
                         """
                         
                         sh """
@@ -329,7 +329,7 @@ EOF
                             
                             echo "Validando arquivo docker-compose..."
                             docker-compose -f \$COMPOSE_FILE config --quiet || {
-                                echo "[ERRO] Arquivo docker-compose inválido!"
+                                echo "[ERRO] Arquivo docker-compose invÃ¡lido!"
                                 docker-compose -f \$COMPOSE_FILE config
                                 exit 1
                             }
@@ -345,7 +345,7 @@ EOF
                                 exit \$EXIT_CODE
                             fi
                             
-                            echo "Aguardando inicialização (45s)..."
+                            echo "Aguardando inicializaÃ§Ã£o (45s)..."
                             sleep 45
                             
                             echo "=== STATUS DOS CONTAINERS ==="
@@ -363,7 +363,7 @@ EOF
                             fi
                         """
                         
-                        echo "=== DEPLOY CONCLUÍDO ==="
+                        echo "=== DEPLOY CONCLUÃDO ==="
                     }
                 }
             }
@@ -379,10 +379,10 @@ EOF
                         export PATH=\$HOME/bin:\$PATH
                         COMPOSE_FILE=\$(cat .compose_file)
                         
-                        echo "Verificando se nginx está rodando..."
+                        echo "Verificando se nginx estÃ¡ rodando..."
                         docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} ps api-gateway
                         
-                        echo "Testando configuração do nginx..."
+                        echo "Testando configuraÃ§Ã£o do nginx..."
                         docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} exec -T api-gateway nginx -t || true
                         
                         echo "Verificando logs do nginx..."
@@ -401,7 +401,7 @@ EOF
             when { branch 'main' }
             steps {
                 script {
-                    echo "=== VERIFICAÇÃO DE SAÚDE ==="
+                    echo "=== VERIFICAÃ‡ÃƒO DE SAÃšDE ==="
                     
                     sh """
                         export PATH=\$HOME/bin:\$PATH
@@ -410,27 +410,27 @@ EOF
                         echo "=== STATUS DOS CONTAINERS ==="
                         docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} ps
                         
-                        echo "=== VERIFICAÇÃO DO NGINX ==="
-                        echo "Testando configuração do nginx..."
+                        echo "=== VERIFICAÃ‡ÃƒO DO NGINX ==="
+                        echo "Testando configuraÃ§Ã£o do nginx..."
                         docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} exec -T api-gateway nginx -t || echo "Falha ao testar nginx"
                         
                         echo "Verificando processos nginx..."
-                        docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} exec -T api-gateway ps aux | grep nginx || echo "Nginx não encontrado"
+                        docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} exec -T api-gateway ps aux | grep nginx || echo "Nginx nÃ£o encontrado"
                         
-                        echo "=== LOGS DOS SERVIÇOS ==="
+                        echo "=== LOGS DOS SERVIÃ‡OS ==="
                         echo "--- API Gateway (Nginx) ---"
                         docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} logs --tail=20 api-gateway
                         
                         echo "--- SVC Auth ---"
                         docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} logs --tail=15 svc-auth
                         
-                        echo "=== VERIFICAÇÃO DE PORTA ==="
+                        echo "=== VERIFICAÃ‡ÃƒO DE PORTA ==="
                         if command -v ss &> /dev/null; then
-                            ss -tlnp | grep :8000 || echo "Porta 8000 não está em uso"
+                            ss -tlnp | grep :8000 || echo "Porta 8000 nÃ£o estÃ¡ em uso"
                         elif command -v netstat &> /dev/null; then
-                            netstat -tlnp | grep :8000 || echo "Porta 8000 não está em uso"
+                            netstat -tlnp | grep :8000 || echo "Porta 8000 nÃ£o estÃ¡ em uso"
                         else
-                            echo "Não foi possível verificar porta 8000"
+                            echo "NÃ£o foi possÃ­vel verificar porta 8000"
                         fi
                     """
                     
@@ -445,12 +445,12 @@ EOF
                                 curl -s http://localhost:8000/health
                                 break
                             elif [ \$i -eq 15 ]; then
-                                echo '[ERRO] Nginx não respondeu após 15 tentativas'
+                                echo '[ERRO] Nginx nÃ£o respondeu apÃ³s 15 tentativas'
                                 
                                 export PATH=\$HOME/bin:\$PATH
                                 COMPOSE_FILE=\$(cat .compose_file)
                                 
-                                echo "Diagnóstico do nginx:"
+                                echo "DiagnÃ³stico do nginx:"
                                 docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} logs --tail=50 api-gateway
                                 
                                 echo "Status do container:"
@@ -502,21 +502,21 @@ EOF
                             echo '[OK] Login via nginx funcionando!'
                             echo "Resposta: \$BODY"
                         elif [ "\$HTTP_CODE" = "000" ]; then
-                            echo '[ERRO] Nginx não está encaminhando requisições'
+                            echo '[ERRO] Nginx nÃ£o estÃ¡ encaminhando requisiÃ§Ãµes'
                             
                             export PATH=\$HOME/bin:\$PATH
                             COMPOSE_FILE=\$(cat .compose_file)
                             
-                            echo "Verificando configuração do nginx:"
+                            echo "Verificando configuraÃ§Ã£o do nginx:"
                             docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} exec -T api-gateway cat /etc/nginx/conf.d/default.conf | head -50
                         else
-                            echo '[AVISO] Login retornou código: \$HTTP_CODE'
+                            echo '[AVISO] Login retornou cÃ³digo: \$HTTP_CODE'
                             echo "Resposta: \$BODY"
                         fi
                     """
                     
                     echo "=== NGINX E API VALIDADOS ==="
-                    echo "=== SAÚDE VERIFICADA ==="
+                    echo "=== SAÃšDE VERIFICADA ==="
                 }
             }
         }
@@ -540,12 +540,12 @@ EOF
         }
         success {
             echo "[SUCESSO] Pipeline executado com sucesso!"
-            echo "[INFO] API disponível em: http://localhost:8000/v1/lex/"
-            echo "[INFO] Documentação: http://localhost:8000/docs"
-            echo "[INFO] Credenciais padrão: admin@kealex.com / admin123"
+            echo "[INFO] API disponÃ­vel em: http://localhost:8000/v1/lex/"
+            echo "[INFO] DocumentaÃ§Ã£o: http://localhost:8000/docs"
+            echo "[INFO] Credenciais padrÃ£o: admin@kealex.com / admin123"
         }
         failure {
-            echo "[ERRO] Pipeline falhou - coletando diagnóstico..."
+            echo "[ERRO] Pipeline falhou - coletando diagnÃ³stico..."
             sh """
                 export PATH=\$HOME/bin:\$PATH
                 
@@ -560,16 +560,16 @@ EOF
                 echo "Usando arquivo: \$COMPOSE_FILE"
                 
                 echo "--- Validando docker-compose ---"
-                docker-compose -f \$COMPOSE_FILE config 2>&1 || echo "Erro na validação do docker-compose"
+                docker-compose -f \$COMPOSE_FILE config 2>&1 || echo "Erro na validaÃ§Ã£o do docker-compose"
                 
                 echo "--- Verificando imagens ---"
                 docker images | grep kealex || echo "Nenhuma imagem kealex encontrada"
                 
                 echo "--- Logs do API Gateway ---"
-                docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} logs --tail=30 api-gateway 2>/dev/null || echo "Serviço não encontrado"
+                docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} logs --tail=30 api-gateway 2>/dev/null || echo "ServiÃ§o nÃ£o encontrado"
                 
                 echo "--- Logs do SVC Auth ---"
-                docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} logs --tail=30 svc-auth 2>/dev/null || echo "Serviço não encontrado"
+                docker-compose -f \$COMPOSE_FILE -p ${COMPOSE_PROJECT_NAME} logs --tail=30 svc-auth 2>/dev/null || echo "ServiÃ§o nÃ£o encontrado"
                 
                 echo "--- Status dos Containers ---"
                 docker ps -a --filter "name=kealex" --filter "name=svc-" --filter "name=api-gateway" || true
@@ -587,7 +587,7 @@ EOF
                 elif command -v netstat &> /dev/null; then
                     netstat -tlnp | grep :8000 || echo "Porta 8000 livre"
                 else
-                    echo "Não foi possível verificar portas"
+                    echo "NÃ£o foi possÃ­vel verificar portas"
                 fi
             """
         }

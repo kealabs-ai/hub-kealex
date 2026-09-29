@@ -132,8 +132,8 @@ Retorna as ações disponíveis baseado no status atual:
 ## Variáveis de Ambiente
 
 ```
-DATABASE_URL=mysql+pymysql://user:pass@host:3306/db
-SECRET_KEY=sua_chave_secreta
+KEALEX_DATABASE_URL=mysql+pymysql://user:pass@host:3306/db
+KEALEX_SECRET_KEY=sua_chave_secreta
 ```
 
 ## Build e Deploy
@@ -144,8 +144,8 @@ docker build -t svc-cobrancas .
 
 # Executar localmente
 docker run -p 8000:8000 \
-  -e DATABASE_URL="mysql+pymysql://..." \
-  -e SECRET_KEY="..." \
+  -e KEALEX_DATABASE_URL="mysql+pymysql://..." \
+  -e KEALEX_SECRET_KEY="..." \
   svc-cobrancas
 ```
 

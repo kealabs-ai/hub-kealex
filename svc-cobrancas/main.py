@@ -9,29 +9,32 @@ from pydantic import BaseModel
 from jose import jwt, JWTError
 from sqlalchemy import create_engine, Column, String, DateTime, Text, Integer
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from dotenv import load_dotenv
+
+load_dotenv()
 sys.path.insert(0, "/app")
 try:
     from trial_guard import require_active_trial
 except ImportError:
     require_active_trial = None
 
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.KEALEX_DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-def _get_database_url(default: str) -> str:
-    raw = os.getenv("DATABASE_URL")
+def _get_database_url() -> str:
+    raw = os.getenv("KEALEX_DATABASE_URL")
     if raw is None or raw.strip().lower() in ("", "null", "none"):
-        return default
+        raise RuntimeError("KEALEX_DATABASE_URL precisa estar configurada no ambiente")
     return raw.strip()
 
-DATABASE_URL = _get_database_url(
-    "mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex"
-)
-SECRET_KEY = os.getenv("SECRET_KEY", "changeme-secret-key")
+KEALEX_DATABASE_URL = _get_database_url()
+KEALEX_SECRET_KEY = os.getenv("KEALEX_SECRET_KEY") or os.getenv("KEALEX_JWT_SECRET")
+if not KEALEX_SECRET_KEY:
+    raise RuntimeError("KEALEX_SECRET_KEY ou KEALEX_JWT_SECRET precisa estar configurada no ambiente")
 ALGORITHM = "HS256"
 
 engine = create_engine(
-    DATABASE_URL,
+    KEALEX_DATABASE_URL,
     pool_pre_ping=True,
     pool_recycle=280,
     pool_size=5,
@@ -82,7 +85,7 @@ def get_db():
 
 def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
     try:
-        return jwt.decode(creds.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        return jwt.decode(creds.credentials, KEALEX_SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
         raise HTTPException(401, "Token invalido")
 

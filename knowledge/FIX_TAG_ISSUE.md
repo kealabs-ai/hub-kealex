@@ -5,7 +5,7 @@
 O pipeline estava falhando no stage "Test Images" com o seguinte erro:
 
 ```
-docker run --rm -e DATABASE_URL=sqlite:///./test.db -e SECRET_KEY=test-key kealex/svc-auth:32 python -c import main; print('svc-auth: OK')
+docker run --rm -e KEALEX_DATABASE_URL=sqlite:///./test.db -e KEALEX_SECRET_KEY=test-key kealex/svc-auth:32 python -c import main; print('svc-auth: OK')
 Unable to find image 'kealex/svc-auth:32' locally
 docker: Error response from daemon: pull access denied for kealex/svc-auth, repository does not exist or may require 'docker login'.
 ```
@@ -16,10 +16,10 @@ O problema ocorreu porque:
 
 1. **Build das Imagens**: No stage "Build Images", as imagens são construídas com duas tags:
    ```groovy
-   docker build -t ${IMAGE_PREFIX}/${svc}:${TAG} ./${svc}
-   docker tag ${IMAGE_PREFIX}/${svc}:${TAG} ${IMAGE_PREFIX}/${svc}:latest
+   docker build -t ${IMAGE_PREFIX}/${svc}:${KEALEX_TAG} ./${svc}
+   docker tag ${IMAGE_PREFIX}/${svc}:${KEALEX_TAG} ${IMAGE_PREFIX}/${svc}:latest
    ```
-   - `${TAG}` = BUILD_NUMBER (ex: 32)
+   - `${KEALEX_TAG}` = BUILD_NUMBER (ex: 32)
    - `latest` = tag padrão
 
 2. **Pulo do Build**: Como as imagens já existiam, o build foi pulado:
@@ -27,14 +27,14 @@ O problema ocorreu porque:
    Imagem svc-auth já existe, pulando build...
    ```
 
-3. **Teste com Tag Errada**: O teste tentou usar `${TAG}` (32), mas a imagem existente tinha apenas a tag `latest`:
+3. **Teste com Tag Errada**: O teste tentou usar `${KEALEX_TAG}` (32), mas a imagem existente tinha apenas a tag `latest`:
    ```groovy
-   docker run --rm ${IMAGE_PREFIX}/svc-auth:${TAG} ...
+   docker run --rm ${IMAGE_PREFIX}/svc-auth:${KEALEX_TAG} ...
    ```
 
 ## Solução Implementada
 
-Alterado os stages de teste para usar a tag `latest` em vez de `${TAG}`:
+Alterado os stages de teste para usar a tag `latest` em vez de `${KEALEX_TAG}`:
 
 ### Stage: Test Images
 
@@ -42,9 +42,9 @@ Alterado os stages de teste para usar a tag `latest` em vez de `${TAG}`:
 ```groovy
 sh """
     docker run --rm \
-      -e DATABASE_URL=sqlite:///./test.db \
-      -e SECRET_KEY=test-key \
-      ${IMAGE_PREFIX}/svc-auth:${TAG} \
+      -e KEALEX_DATABASE_URL=sqlite:///./test.db \
+      -e KEALEX_SECRET_KEY=test-key \
+      ${IMAGE_PREFIX}/svc-auth:${KEALEX_TAG} \
       python -c "import main; print('svc-auth: OK')"
 """
 ```
@@ -53,8 +53,8 @@ sh """
 ```groovy
 sh """
     docker run --rm \
-      -e DATABASE_URL=sqlite:///./test.db \
-      -e SECRET_KEY=test-key \
+      -e KEALEX_DATABASE_URL=sqlite:///./test.db \
+      -e KEALEX_SECRET_KEY=test-key \
       ${IMAGE_PREFIX}/svc-auth:latest \
       python -c "import main; print('svc-auth: OK')"
 """
@@ -66,7 +66,7 @@ sh """
 ```groovy
 sh """
     echo "Testando sintaxe da configuração do nginx..."
-    docker run --rm ${IMAGE_PREFIX}/api-gateway:${TAG} nginx -t
+    docker run --rm ${IMAGE_PREFIX}/api-gateway:${KEALEX_TAG} nginx -t
 """
 ```
 
@@ -92,8 +92,8 @@ Outra solução seria sempre fazer o build, mesmo que a imagem exista:
 services.each { svc ->
     echo "Building ${svc}..."
     sh """
-        docker build -t ${IMAGE_PREFIX}/${svc}:${TAG} ./${svc}
-        docker tag ${IMAGE_PREFIX}/${svc}:${TAG} ${IMAGE_PREFIX}/${svc}:latest
+        docker build -t ${IMAGE_PREFIX}/${svc}:${KEALEX_TAG} ./${svc}
+        docker tag ${IMAGE_PREFIX}/${svc}:${KEALEX_TAG} ${IMAGE_PREFIX}/${svc}:latest
     """
 }
 ```

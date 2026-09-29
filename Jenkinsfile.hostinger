@@ -5,7 +5,7 @@ pipeline {
         REGISTRY = "registry.kealex.io"
         IMAGE_PREFIX = "${REGISTRY}/kealex"
         TAG = "${env.BUILD_NUMBER}"
-        DATABASE_URL = "mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex"
+        DATABASE_URL = credentials('kealex-database-url')
         COMPOSE_PROJECT_NAME = "kealex"
     }
 
@@ -13,13 +13,13 @@ pipeline {
         stage('Environment Setup') {
             steps {
                 script {
-                    echo "=== CONFIGURAÇÃO DO AMBIENTE HOSTINGER ==="
+                    echo "=== CONFIGURAÃ‡ÃƒO DO AMBIENTE HOSTINGER ==="
                     
                     // Verificar Docker
                     sh "docker --version"
                     sh "docker info --format 'Server Version: {{.ServerVersion}}'"
                     
-                    // Instalar docker-compose se necessário
+                    // Instalar docker-compose se necessÃ¡rio
                     sh """
                         if ! command -v docker-compose &> /dev/null; then
                             echo 'Instalando docker-compose...'
@@ -33,7 +33,7 @@ pipeline {
                         docker-compose --version
                     """
                     
-                    // Verificar recursos disponíveis
+                    // Verificar recursos disponÃ­veis
                     sh """
                         echo "Recursos do sistema:"
                         df -h .
@@ -57,7 +57,7 @@ pipeline {
                         # Parar projeto anterior
                         docker-compose -p ${COMPOSE_PROJECT_NAME} down --remove-orphans 2>/dev/null || true
                         
-                        # Remover containers órfãos específicos
+                        # Remover containers Ã³rfÃ£os especÃ­ficos
                         docker ps -aq --filter "name=kealex" --filter "name=svc-" --filter "name=api-gateway" | xargs -r docker rm -f 2>/dev/null || true
                         
                         # Limpeza conservadora de imagens
@@ -65,7 +65,7 @@ pipeline {
                         docker container prune -f || true
                         docker network prune -f || true
                         
-                        echo "Espaço após limpeza:"
+                        echo "EspaÃ§o apÃ³s limpeza:"
                         df -h .
                     """
                 }
@@ -113,7 +113,7 @@ pipeline {
                     
                     sh "docker images | grep kealex"
                     
-                    // Teste básico apenas do svc-auth
+                    // Teste bÃ¡sico apenas do svc-auth
                     sh """
                         docker run --rm \
                           -e DATABASE_URL=sqlite:///./test.db \
@@ -155,7 +155,7 @@ EOF
                             echo "Fazendo deploy..."
                             docker-compose -p ${COMPOSE_PROJECT_NAME} up -d --build --remove-orphans
                             
-                            echo "Aguardando inicialização..."
+                            echo "Aguardando inicializaÃ§Ã£o..."
                             sleep 45
                         """
                     }
@@ -167,7 +167,7 @@ EOF
             when { branch 'main' }
             steps {
                 script {
-                    echo "=== VERIFICAÇÃO DE SAÚDE ==="
+                    echo "=== VERIFICAÃ‡ÃƒO DE SAÃšDE ==="
                     
                     sh """
                         export PATH=\$HOME/bin:\$PATH
@@ -175,11 +175,11 @@ EOF
                         echo "Status dos containers:"
                         docker-compose -p ${COMPOSE_PROJECT_NAME} ps
                         
-                        echo "Containers em execução:"
+                        echo "Containers em execuÃ§Ã£o:"
                         docker ps --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}"
                         
                         echo "Verificando porta 8000..."
-                        netstat -tlnp | grep :8000 || ss -tlnp | grep :8000 || echo "Porta não encontrada"
+                        netstat -tlnp | grep :8000 || ss -tlnp | grep :8000 || echo "Porta nÃ£o encontrada"
                     """
                     
                     // Teste de conectividade robusto
@@ -193,9 +193,9 @@ EOF
                                 echo '[OK] Porta 8000 respondendo!'
                                 break
                             elif [ \$i -eq 20 ]; then
-                                echo '[ERRO] Porta não respondeu após 20 tentativas'
+                                echo '[ERRO] Porta nÃ£o respondeu apÃ³s 20 tentativas'
                                 
-                                # Diagnóstico
+                                # DiagnÃ³stico
                                 export PATH=\$HOME/bin:\$PATH
                                 echo "Logs do API Gateway:"
                                 docker-compose -p ${COMPOSE_PROJECT_NAME} logs --tail=20 api-gateway || true
@@ -224,7 +224,7 @@ EOF
                         if [ "\$HTTP_CODE" = "200" ]; then
                             echo '[OK] Login funcionando!'
                         else
-                            echo '[AVISO] Login retornou código: \$HTTP_CODE'
+                            echo '[AVISO] Login retornou cÃ³digo: \$HTTP_CODE'
                         fi
                     """
                 }
@@ -250,13 +250,13 @@ EOF
             }
         }
         success {
-            echo "[SUCESSO] Deploy concluído na Hostinger!"
+            echo "[SUCESSO] Deploy concluÃ­do na Hostinger!"
             echo "[INFO] API: http://localhost:8000/v1/lex/"
             echo "[INFO] Docs: http://localhost:8000/docs"
             echo "[INFO] Login: admin@kealex.com / admin123"
         }
         failure {
-            echo "[ERRO] Deploy falhou - diagnóstico:"
+            echo "[ERRO] Deploy falhou - diagnÃ³stico:"
             sh """
                 export PATH=\$HOME/bin:\$PATH
                 

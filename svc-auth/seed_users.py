@@ -2,16 +2,16 @@ import os, bcrypt
 from sqlalchemy import create_engine, text
 
 def _get_database_url() -> str:
-    raw = os.getenv("DATABASE_URL")
+    raw = os.getenv("KEALEX_DATABASE_URL")
     if raw is None or raw.strip().lower() in ("", "null", "none"):
         raise RuntimeError(
-            "DATABASE_URL environment variable is missing or invalid. "
-            "Set DATABASE_URL to a valid SQLAlchemy URL."
+            "KEALEX_DATABASE_URL environment variable is missing or invalid. "
+            "Set KEALEX_DATABASE_URL to a valid SQLAlchemy URL."
         )
     return raw.strip()
 
-DATABASE_URL = _get_database_url()
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+KEALEX_DATABASE_URL = _get_database_url()
+engine = create_engine(KEALEX_DATABASE_URL, pool_pre_ping=True)
 
 users = [
     ("Advogado Teste", "adv@kealex.com",     "adv123",  "advogado"),
