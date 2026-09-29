@@ -75,8 +75,8 @@ Valida a configuração do nginx antes do deploy:
 ```groovy
 stage('Test Nginx Config') {
     steps {
-        sh "docker run --rm ${IMAGE_PREFIX}/api-gateway:${TAG} nginx -t"
-        sh "docker run --rm ${IMAGE_PREFIX}/api-gateway:${TAG} ls -la /etc/nginx/conf.d/"
+        sh "docker run --rm ${IMAGE_PREFIX}/api-gateway:${KEALEX_TAG} nginx -t"
+        sh "docker run --rm ${IMAGE_PREFIX}/api-gateway:${KEALEX_TAG} ls -la /etc/nginx/conf.d/"
     }
 }
 ```
@@ -170,9 +170,9 @@ docker-compose -f docker-compose.yml up
 
 ```bash
 # No Jenkins, verificar se as variáveis estão definidas
-echo $SECRET_KEY
-echo $DATABASE_URL
-echo $TAG
+echo $KEALEX_SECRET_KEY
+echo $KEALEX_DATABASE_URL
+echo $KEALEX_TAG
 ```
 
 ### 5. Verificar healthchecks

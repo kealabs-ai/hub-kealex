@@ -68,10 +68,10 @@ echo ""
 # 10. Verificar variáveis de ambiente
 echo "10. VARIÁVEIS DE AMBIENTE"
 echo "========================"
-echo "SECRET_KEY: ${SECRET_KEY:0:10}..." 
-echo "DATABASE_URL: ${DATABASE_URL:0:30}..."
-echo "TAG: $TAG"
-echo "REGISTRY: $REGISTRY"
+echo "KEALEX_SECRET_KEY: ${KEALEX_SECRET_KEY:0:10}..." 
+echo "KEALEX_DATABASE_URL: ${KEALEX_DATABASE_URL:0:30}..."
+echo "KEALEX_TAG: $KEALEX_TAG"
+echo "KEALEX_REGISTRY: $KEALEX_REGISTRY"
 echo ""
 
 # 11. Testar conectividade com banco
@@ -86,7 +86,7 @@ fi
 echo ""
 
 # 12. Comandos úteis para debug
-echo "12. COMANDOS ÚTEIS PARA DEBUG"
+echo "12. COMANDOS ÚTEIS PARA KEALEX_DEBUG"
 echo "============================"
 echo "# Ver logs em tempo real:"
 echo "docker-compose -f docker-compose.prod.yml logs -f"

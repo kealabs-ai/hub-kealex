@@ -11,8 +11,11 @@ services:
     image: kealex/svc-auth:latest
     container_name: kealex-svc-auth
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
+      - KEALEX_ASAAS_API_KEY=${KEALEX_ASAAS_API_KEY:-}
+      - KEALEX_ASAAS_BASE_URL=${KEALEX_ASAAS_BASE_URL}
+      - KEALEX_ASAAS_WEBHOOK_TOKEN=${KEALEX_ASAAS_WEBHOOK_TOKEN:-}
     ports:
       - "8001:8000"
     networks:
@@ -30,8 +33,8 @@ services:
     image: kealex/svc-processos:latest
     container_name: kealex-svc-processos
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
     ports:
       - "8002:8000"
     networks:
@@ -49,8 +52,8 @@ services:
     image: kealex/svc-documentos:latest
     container_name: kealex-svc-documentos
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
     ports:
       - "8003:8000"
     networks:
@@ -68,8 +71,8 @@ services:
     image: kealex/svc-financeiro:latest
     container_name: kealex-svc-financeiro
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
     ports:
       - "8004:8000"
     networks:
@@ -87,8 +90,8 @@ services:
     image: kealex/svc-prazos:latest
     container_name: kealex-svc-prazos
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
     ports:
       - "8005:8000"
     networks:
@@ -106,8 +109,8 @@ services:
     image: kealex/svc-usuarios:latest
     container_name: kealex-svc-usuarios
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
     ports:
       - "8006:8000"
     networks:
@@ -125,8 +128,8 @@ services:
     image: kealex/svc-configuracoes:latest
     container_name: kealex-svc-configuracoes
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
     ports:
       - "8007:8000"
     networks:
@@ -144,8 +147,8 @@ services:
     image: kealex/svc-escritorios:latest
     container_name: kealex-svc-escritorios
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
     ports:
       - "8008:8000"
     networks:
@@ -163,8 +166,8 @@ services:
     image: kealex/svc-clientes:latest
     container_name: kealex-svc-clientes
     environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL}
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
     ports:
       - "8009:8000"
     networks:

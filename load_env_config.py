@@ -15,7 +15,7 @@ print()
 
 # Variáveis de banco de dados
 db_vars = {
-    "DATABASE_URL": "URL de conexão do banco",
+    "KEALEX_DATABASE_URL": "URL de conexão do banco",
     "MYSQL_HOST": "Host do MySQL",
     "MYSQL_PORT": "Porta do MySQL",
     "MYSQL_DATABASE": "Nome do banco de dados",
@@ -26,9 +26,9 @@ db_vars = {
 
 # Variáveis de configuração
 config_vars = {
-    "SECRET_KEY": "Chave secreta",
-    "ENVIRONMENT": "Ambiente (dev/prod)",
-    "DEBUG": "Modo debug",
+    "KEALEX_SECRET_KEY": "Chave secreta",
+    "KEALEX_ENVIRONMENT": "Ambiente (dev/prod)",
+    "KEALEX_DEBUG": "Modo debug",
 }
 
 # Variáveis de serviço

@@ -12,8 +12,8 @@ Aplicação FastAPI única que consolida todos os serviços anteriores (auth, pr
 # Copiar arquivo de ambiente
 cp .env.example .env
 
-# Configurar SECRET_KEY no .env (opcional, possui padrão de desenvolvimento)
-# SECRET_KEY=sua_chave_segura_aqui
+# Configurar KEALEX_SECRET_KEY no .env (opcional, possui padrão de desenvolvimento)
+# KEALEX_SECRET_KEY=sua_chave_segura_aqui
 
 # Build e iniciar containers
 docker compose up --build
@@ -133,7 +133,7 @@ O `Jenkinsfile` executa:
 7. Relatório de status final
 
 Configure as credentials no Jenkins:
-- `SECRET_KEY` — Secret text com o valor da chave secreta
+- `KEALEX_SECRET_KEY` — Secret text com o valor da chave secreta
 
 **Fluxo:**
 ```
@@ -175,8 +175,8 @@ hubKealex/
 ## Variáveis de Ambiente
 
 ```bash
-SECRET_KEY=sua_chave_segura
-DATABASE_URL=mysql+pymysql://usuario:senha@host:3306/banco
+KEALEX_SECRET_KEY=sua_chave_segura
+KEALEX_DATABASE_URL=mysql+pymysql://usuario:senha@host:3306/banco
 MYSQL_HOST=srv1078.hstgr.io
 MYSQL_PORT=3306
 MYSQL_DATABASE=u549746795_kealex

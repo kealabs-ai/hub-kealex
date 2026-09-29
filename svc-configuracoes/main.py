@@ -7,26 +7,30 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from jose import jwt, JWTError
 from sqlalchemy import create_engine, Column, String, Text, Integer, Boolean, DateTime
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from google.oauth2.service_account import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from dotenv import load_dotenv
 
-def _get_database_url(default: str) -> str:
-    raw = os.getenv("DATABASE_URL")
+load_dotenv()
+
+def _get_database_url() -> str:
+    raw = os.getenv("KEALEX_DATABASE_URL")
     if raw is None or raw.strip().lower() in ("", "null", "none"):
-        return default
+        raise RuntimeError("KEALEX_DATABASE_URL precisa estar configurada no ambiente")
     return raw.strip()
 
-DATABASE_URL = _get_database_url(
-    "mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex"
-)
-SECRET_KEY   = os.getenv("SECRET_KEY", "changeme-secret-key")
-ALGORITHM    = "HS256"
+KEALEX_DATABASE_URL = _get_database_url()
+KEALEX_SECRET_KEY = os.getenv("KEALEX_SECRET_KEY") or os.getenv("KEALEX_JWT_SECRET")
+if not KEALEX_SECRET_KEY:
+    raise RuntimeError("KEALEX_SECRET_KEY ou KEALEX_JWT_SECRET precisa estar configurada no ambiente")
+ALGORITHM = "HS256"
 
 engine       = create_engine(
-    DATABASE_URL,
+    KEALEX_DATABASE_URL,
     pool_pre_ping=True,
     pool_recycle=280,
     pool_size=5,
@@ -45,8 +49,8 @@ class CfgGeral(Base):
     user_id         = Column(String(36),  nullable=False)
     escritorio_id   = Column(String(36),  nullable=True)
     nome_plataforma = Column(String(255), default="Kealex")
-    url_base        = Column(String(255), default="https://kealex.com.br")
-    email_suporte   = Column(String(255), default="suporte@kealex.com.br")
+    url_base        = Column(String(255), default=os.getenv("KEALEX_PUBLIC_APP_URL", ""))
+    email_suporte   = Column(String(255), default=os.getenv("KEALEX_SUPPORT_EMAIL", ""))
     descricao       = Column(Text,        nullable=True)
     fuso_horario    = Column(String(100), default="America/Sao_Paulo")
     idioma          = Column(String(20),  default="pt-BR")
@@ -212,7 +216,7 @@ def get_db():
 
 def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
     try:
-        return jwt.decode(creds.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        return jwt.decode(creds.credentials, KEALEX_SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
         raise HTTPException(401, "Token inválido")
 
@@ -328,14 +332,15 @@ class DatabaseIn(BaseModel):
 
 @app.get("/k1/lex/configuracoes/database/env")
 def get_database_env(payload=Depends(require_admin)):
-    """Retorna valores das variáveis de ambiente do banco de dados"""
+    """Retorna os dados de conexão sem revelar a senha."""
+    database_url = make_url(KEALEX_DATABASE_URL)
     return {
-        "host": os.getenv("DB_HOST", ""),
-        "port": os.getenv("DB_PORT", ""),
-        "name": os.getenv("DB_NAME", ""),
-        "user": os.getenv("DB_USER", ""),
-        "password": os.getenv("DB_PASSWORD", ""),
-        "connection_string": os.getenv("DATABASE_URL", "")
+        "host": database_url.host or "",
+        "port": str(database_url.port or ""),
+        "name": database_url.database or "",
+        "user": database_url.username or "",
+        "password": "********" if database_url.password else "",
+        "connection_string": database_url.render_as_string(hide_password=True),
     }
 
 @app.get("/k1/lex/configuracoes/database")

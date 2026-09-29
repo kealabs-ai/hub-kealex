@@ -5,7 +5,7 @@ pipeline {
         REGISTRY = "registry.kealex.io"
         IMAGE_PREFIX = "${REGISTRY}/kealex"
         TAG = "${env.BUILD_NUMBER}"
-        DATABASE_URL = "mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex"
+        DATABASE_URL = credentials('kealex-database-url')
     }
 
     stages {
@@ -14,10 +14,10 @@ pipeline {
                 script {
                     echo "=== CONFIGURANDO DOCKER-COMPOSE ==="
                     
-                    // Verificar e instalar docker-compose se necessário
+                    // Verificar e instalar docker-compose se necessÃ¡rio
                     sh '''
                         if ! command -v docker-compose &> /dev/null; then
-                            echo "docker-compose não encontrado. Instalando..."
+                            echo "docker-compose nÃ£o encontrado. Instalando..."
                             
                             # Baixar docker-compose
                             curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-linux-x86_64" -o /tmp/docker-compose
@@ -27,7 +27,7 @@ pipeline {
                                 sudo chmod +x /usr/local/bin/docker-compose
                                 sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
                             else
-                                # Fallback: instalar no diretório do usuário
+                                # Fallback: instalar no diretÃ³rio do usuÃ¡rio
                                 mkdir -p $HOME/bin
                                 mv /tmp/docker-compose $HOME/bin/docker-compose
                                 chmod +x $HOME/bin/docker-compose
@@ -35,7 +35,7 @@ pipeline {
                             fi
                         fi
                         
-                        # Verificar instalação
+                        # Verificar instalaÃ§Ã£o
                         echo "Verificando docker-compose:"
                         docker-compose --version
                         which docker-compose
@@ -58,11 +58,11 @@ pipeline {
                     // Verificar docker-compose
                     sh "docker-compose --version"
                     
-                    // Verificar permissões
+                    // Verificar permissÃµes
                     sh "whoami"
                     sh "groups || true"
                     
-                    // Verificar diretório
+                    // Verificar diretÃ³rio
                     sh "pwd"
                     sh "ls -la docker-compose.yml"
                     
@@ -74,7 +74,7 @@ pipeline {
         stage('Cleanup') {
             steps {
                 script {
-                    // Limpar apenas imagens não utilizadas, sem derrubar containers
+                    // Limpar apenas imagens nÃ£o utilizadas, sem derrubar containers
                     sh "docker image prune -f || true"
                     sh "docker builder prune -f || true"
                 }
@@ -156,10 +156,10 @@ pipeline {
         stage('Test Images') {
             steps {
                 script {
-                    echo "=== TESTANDO IMAGENS CONSTRUÍDAS ==="
+                    echo "=== TESTANDO IMAGENS CONSTRUÃDAS ==="
                     sh "docker images | grep kealex"
                     
-                    // Teste básico de importação
+                    // Teste bÃ¡sico de importaÃ§Ã£o
                     sh """
                         docker run --rm \\
                           -e DATABASE_URL=sqlite:///./test.db \\
@@ -244,13 +244,13 @@ pipeline {
                             docker-compose up -d --build --remove-orphans
                         """
                         
-                        // Aguardar inicialização
+                        // Aguardar inicializaÃ§Ã£o
                         sh "sleep 45"
                         
                         // Verificar status
                         sh "docker-compose ps"
                         
-                        echo "=== DEPLOY CONCLUÍDO ==="
+                        echo "=== DEPLOY CONCLUÃDO ==="
                     }
                 }
             }
@@ -260,7 +260,7 @@ pipeline {
             when { branch 'main' }
             steps {
                 script {
-                    echo "=== VERIFICAÇÃO DE SAÚDE ==="
+                    echo "=== VERIFICAÃ‡ÃƒO DE SAÃšDE ==="
                     
                     // Verificar containers
                     sh "docker-compose ps"
@@ -302,7 +302,7 @@ pipeline {
                         fi
                     """
                     
-                    echo "=== SAÚDE VERIFICADA ==="
+                    echo "=== SAÃšDE VERIFICADA ==="
                 }
             }
         }
@@ -311,7 +311,7 @@ pipeline {
     post {
         always {
             script {
-                // Limpar arquivo temporário
+                // Limpar arquivo temporÃ¡rio
                 sh "rm -f .env.deploy || true"
                 
                 // Mostrar status final

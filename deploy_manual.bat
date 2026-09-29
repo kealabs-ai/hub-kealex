@@ -5,18 +5,16 @@ echo === DEPLOY MANUAL KEALEX ===
 echo Data: %date% %time%
 echo.
 
-REM Verificar se estamos no diretório correto
+REM Verificar se estamos no diretÃ³rio correto
 if not exist "docker-compose.yml" (
-    echo [ERRO] docker-compose.yml não encontrado!
-    echo Execute este script no diretório raiz do projeto
+    echo [ERRO] docker-compose.yml nÃ£o encontrado!
+    echo Execute este script no diretÃ³rio raiz do projeto
     pause
     exit /b 1
 )
 
-REM Definir variáveis
-set SECRET_KEY=troque-por-uma-chave-segura-em-producao
-set DATABASE_URL=mysql+pymysql://u549746795_kealex:Sally2026%%40%%21%%40@srv1078.hstgr.io:3306/u549746795_kealex
-set TAG=latest
+REM Definir variÃ¡veis
+set KEALEX_TAG=latest
 
 echo 1. LIMPANDO AMBIENTE
 echo ====================
@@ -38,7 +36,7 @@ echo 3. SUBINDO SERVICOS
 echo ===================
 docker compose up -d --remove-orphans
 if %errorlevel% neq 0 (
-    echo [ERRO] Falha ao subir serviços
+    echo [ERRO] Falha ao subir serviÃ§os
     pause
     exit /b 1
 )
@@ -78,7 +76,7 @@ if %errorlevel% equ 0 (
 )
 
 if %attempts% geq 10 (
-    echo [ERRO] API não respondeu após 10 tentativas
+    echo [ERRO] API nÃ£o respondeu apÃ³s 10 tentativas
     echo Logs do API Gateway:
     docker compose logs api-gateway
     pause
@@ -112,8 +110,8 @@ echo.
 
 echo 9. INFORMACOES FINAIS
 echo =====================
-echo API disponível em: http://localhost:8000/k1/lex/
-echo Documentação: http://localhost:8000/docs
+echo API disponÃ­vel em: http://localhost:8000/k1/lex/
+echo DocumentaÃ§Ã£o: http://localhost:8000/docs
 echo.
 echo Containers rodando:
 docker compose ps
@@ -121,13 +119,13 @@ echo.
 
 echo === DEPLOY CONCLUIDO ===
 echo.
-echo Para parar os serviços:
+echo Para parar os serviÃ§os:
 echo   docker compose down
 echo.
 echo Para ver logs em tempo real:
 echo   docker compose logs -f
 echo.
-echo Para reiniciar um serviço:
+echo Para reiniciar um serviÃ§o:
 echo   docker compose restart ^<nome_do_servico^>
 
 pause

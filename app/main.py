@@ -8,6 +8,7 @@ from pydantic import BaseModel, EmailStr
 import bcrypt
 from jose import jwt, JWTError
 from sqlalchemy import create_engine, Column, String, Boolean, DateTime, Enum as SAEnum, Text, Integer, Numeric
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 # Carregar variáveis de ambiente
@@ -15,34 +16,36 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Configurações do Banco de Dados
-DB_HOST = os.getenv("DB_HOST", "srv1078.hstgr.io")
-DB_PORT = os.getenv("DB_PORT", "3306")
-DB_NAME = os.getenv("DB_NAME", "u549746795_kealex")
-DB_USER = os.getenv("DB_USER", "u549746795_kealex")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "Sally2026@!@")
-
-# Construir DATABASE_URL - usar URL pré-codificada se disponível
-DATABASE_URL = os.getenv("DATABASE_URL", f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
+KEALEX_DATABASE_URL = os.getenv("KEALEX_DATABASE_URL")
+if not KEALEX_DATABASE_URL:
+    raise RuntimeError("KEALEX_DATABASE_URL precisa estar configurada no ambiente")
+DATABASE_CONFIG = make_url(KEALEX_DATABASE_URL)
+DB_HOST = DATABASE_CONFIG.host or ""
+DB_PORT = str(DATABASE_CONFIG.port or "")
+DB_NAME = DATABASE_CONFIG.database or ""
+DB_USER = DATABASE_CONFIG.username or ""
 
 # Configurações de Autenticação
-SECRET_KEY = os.getenv("JWT_SECRET", "changeme-secret-key-development")
+KEALEX_SECRET_KEY = os.getenv("KEALEX_JWT_SECRET") or os.getenv("KEALEX_SECRET_KEY")
+if not KEALEX_SECRET_KEY:
+    raise RuntimeError("KEALEX_JWT_SECRET ou KEALEX_SECRET_KEY precisa estar configurada no ambiente")
 ALGORITHM = "HS256"
-JWT_EXPIRY_HOURS = int(os.getenv("JWT_EXPIRY_HOURS", "8"))
-TOKEN_EXPIRE_MINUTES = JWT_EXPIRY_HOURS * 60
+KEALEX_JWT_EXPIRY_HOURS = int(os.getenv("KEALEX_JWT_EXPIRY_HOURS", "8"))
+TOKEN_EXPIRE_MINUTES = KEALEX_JWT_EXPIRY_HOURS * 60
 
 # Configurações de LLM API Keys
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY", "")
+KEALEX_GEMINI_API_KEY = os.getenv("KEALEX_GEMINI_API_KEY", "")
+KEALEX_OPENAI_API_KEY = os.getenv("KEALEX_OPENAI_API_KEY", "")
+KEALEX_GROQ_API_KEY = os.getenv("KEALEX_GROQ_API_KEY", "")
+KEALEX_ANTHROPIC_API_KEY = os.getenv("KEALEX_ANTHROPIC_API_KEY", "")
+KEALEX_CEREBRAS_API_KEY = os.getenv("KEALEX_CEREBRAS_API_KEY", "")
 
 # Configurações de Aplicação
-ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
-DEBUG = os.getenv("DEBUG", "true").lower() == "true"
+KEALEX_ENVIRONMENT = os.getenv("KEALEX_ENVIRONMENT", "development")
+KEALEX_DEBUG = os.getenv("KEALEX_DEBUG", "true").lower() == "true"
 
 engine = create_engine(
-    DATABASE_URL,
+    KEALEX_DATABASE_URL,
     pool_pre_ping=True,
     pool_recycle=280,
     pool_size=5,
@@ -324,12 +327,12 @@ def _make_token(user: Usuario) -> str:
     exp = datetime.utcnow() + timedelta(minutes=TOKEN_EXPIRE_MINUTES)
     return jwt.encode(
         {"sub": user.id, "role": user.role, "tenant_id": user.tenant_id, "exp": exp},
-        SECRET_KEY, ALGORITHM
+        KEALEX_SECRET_KEY, ALGORITHM
     )
 
 def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
     try:
-        return jwt.decode(creds.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        return jwt.decode(creds.credentials, KEALEX_SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
         raise HTTPException(401, "Token inválido")
 
@@ -466,15 +469,14 @@ def _upsert_cfg_ia(db: Session, tenant_id: str, user_id: str, data: dict):
     return row
 
 app = FastAPI(title="HubKealex API")
+cors_allowed_origins = [
+    origin.strip()
+    for origin in os.getenv("KEALEX_CORS_ALLOWED_ORIGINS", "").split(",")
+    if origin.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://kealex.com.br",
-        "https://www.kealex.com.br",
-        "https://darkorange-raven-554257.hostingersite.com",
-        "http://localhost:5173",
-        "http://localhost:3000",
-    ],
+    allow_origins=cors_allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
     allow_credentials=True,
@@ -1325,13 +1327,14 @@ def get_database(db: Session = Depends(get_db), payload=Depends(_require_admin))
 @app.get("/k1/lex/admin/config/env")
 def get_database_env(payload=Depends(_require_admin)):
     """Retorna valores das variáveis de ambiente do banco de dados"""
+    database_url = make_url(KEALEX_DATABASE_URL)
     return {
-        "host": DB_HOST,
-        "port": DB_PORT,
-        "name": DB_NAME,
-        "user": DB_USER,
-        "password": DB_PASSWORD,
-        "connection_string": DATABASE_URL
+        "host": database_url.host or "",
+        "port": str(database_url.port or ""),
+        "name": database_url.database or "",
+        "user": database_url.username or "",
+        "password": "********" if database_url.password else "",
+        "connection_string": database_url.render_as_string(hide_password=True),
     }
 
 @app.post("/k1/lex/configuracoes/database")

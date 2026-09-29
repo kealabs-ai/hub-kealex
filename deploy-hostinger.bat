@@ -20,7 +20,7 @@ if not exist ".env" (
     echo Arquivo .env não encontrado!
     echo Copiando .env.example...
     copy .env.example .env
-    echo ATENÇÃO: Configure SECRET_KEY no arquivo .env
+    echo ATENÇÃO: Configure KEALEX_SECRET_KEY no arquivo .env
 )
 
 REM Parar containers antigos

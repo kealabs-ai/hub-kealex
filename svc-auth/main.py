@@ -8,24 +8,27 @@ import bcrypt
 from jose import jwt, JWTError
 from sqlalchemy import create_engine, Column, String, Boolean, DateTime, Enum as SAEnum
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-def _get_database_url(default: str) -> str:
-    raw = os.getenv("DATABASE_URL")
+def _get_database_url() -> str:
+    raw = os.getenv("KEALEX_DATABASE_URL")
     if raw is None or raw.strip().lower() in ("", "null", "none"):
-        return default
+        raise RuntimeError("KEALEX_DATABASE_URL precisa estar configurada no ambiente")
     return raw.strip()
 
-DATABASE_URL         = _get_database_url(
-    "mysql+pymysql://u549746795_kealex:Sally2026%40%21%40@srv1078.hstgr.io:3306/u549746795_kealex"
-)
-SECRET_KEY           = os.getenv("SECRET_KEY", "changeme-secret-key")
+KEALEX_DATABASE_URL         = _get_database_url()
+KEALEX_SECRET_KEY           = os.getenv("KEALEX_SECRET_KEY") or os.getenv("KEALEX_JWT_SECRET")
+if not KEALEX_SECRET_KEY:
+    raise RuntimeError("KEALEX_SECRET_KEY ou KEALEX_JWT_SECRET precisa estar configurada no ambiente")
 ALGORITHM            = "HS256"
 TOKEN_EXPIRE_MINUTES = 60 * 8
 TRIAL_DAYS           = 7
 
-engine       = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=280, pool_size=5, max_overflow=10)
+engine       = create_engine(KEALEX_DATABASE_URL, pool_pre_ping=True, pool_recycle=280, pool_size=5, max_overflow=10)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 bearer       = HTTPBearer()
 
@@ -146,12 +149,12 @@ def _make_token(user: Usuario) -> str:
     exp = datetime.utcnow() + timedelta(minutes=TOKEN_EXPIRE_MINUTES)
     return jwt.encode(
         {"sub": user.id, "role": user.role, "tenant_id": user.tenant_id, "exp": exp},
-        SECRET_KEY, ALGORITHM,
+        KEALEX_SECRET_KEY, ALGORITHM,
     )
 
 def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
     try:
-        return jwt.decode(creds.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        return jwt.decode(creds.credentials, KEALEX_SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
         raise HTTPException(401, "Token inválido")
 
@@ -354,7 +357,7 @@ def pre_register(body: PreRegisterIn, db: Session = Depends(get_db)):
     token = jwt.encode(
         {"sub": user.id, "role": user.role, "tenant_id": tenant.id,
          "exp": datetime.utcnow() + timedelta(hours=2), "pre": True},
-        SECRET_KEY, ALGORITHM,
+        KEALEX_SECRET_KEY, ALGORITHM,
     )
     print(f"[PRE-REGISTER] usuario inativo criado: {body.email} | tenant={tenant.id}")
     return PreRegisterOut(userId=user.id, tenantId=tenant.id, token=token)
@@ -370,8 +373,10 @@ def ativar_usuario(db: Session = Depends(get_db), payload=Depends(verify_token))
 
 import httpx
 
-ASAAS_API_KEY = os.getenv("ASAAS_API_KEY", "")
-ASAAS_BASE    = os.getenv("ASAAS_BASE_URL", "https://api-sandbox.asaas.com/v3")
+KEALEX_ASAAS_API_KEY = os.getenv("KEALEX_ASAAS_API_KEY", "")
+ASAAS_BASE    = os.getenv("KEALEX_ASAAS_BASE_URL", "").rstrip("/")
+if not ASAAS_BASE:
+    raise RuntimeError("KEALEX_ASAAS_BASE_URL precisa estar configurada no ambiente")
 
 PLANOS = {
     "starter":      {"value": 197.00, "description": "Plano Starter"},
@@ -471,7 +476,7 @@ def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(veri
         resp = httpx.post(
             f"{ASAAS_BASE}/subscriptions",
             json=payload_asaas,
-            headers={"access_token": ASAAS_API_KEY, "Content-Type": "application/json"},
+            headers={"access_token": KEALEX_ASAAS_API_KEY, "Content-Type": "application/json"},
             timeout=20,
         )
         if resp.status_code not in (200, 201):
@@ -520,14 +525,14 @@ def criar_cliente_asaas(body: HolderInfoIn, db: Session = Depends(get_db), paylo
             resp = httpx.put(
                 f"{ASAAS_BASE}/customers/{tenant.asaas_customer_id}",
                 json=customer_data,
-                headers={"access_token": ASAAS_API_KEY, "Content-Type": "application/json"},
+                headers={"access_token": KEALEX_ASAAS_API_KEY, "Content-Type": "application/json"},
                 timeout=15,
             )
         else:
             resp = httpx.post(
                 f"{ASAAS_BASE}/customers",
                 json=customer_data,
-                headers={"access_token": ASAAS_API_KEY, "Content-Type": "application/json"},
+                headers={"access_token": KEALEX_ASAAS_API_KEY, "Content-Type": "application/json"},
                 timeout=15,
             )
         if resp.status_code not in (200, 201):
@@ -557,7 +562,7 @@ def billing_profile(db: Session = Depends(get_db), payload=Depends(verify_token)
         try:
             response = httpx.get(
                 f"{ASAAS_BASE}/customers/{tenant.asaas_customer_id}",
-                headers={"access_token": ASAAS_API_KEY},
+                headers={"access_token": KEALEX_ASAAS_API_KEY},
                 timeout=10,
             )
             if response.status_code == 200:
@@ -585,7 +590,7 @@ async def asaas_webhook(
     db: Session = Depends(get_db),
     access_token: str | None = Header(default=None, alias="asaas-access-token"),
 ):
-    expected = os.getenv("ASAAS_WEBHOOK_TOKEN", "")
+    expected = os.getenv("KEALEX_ASAAS_WEBHOOK_TOKEN", "")
     if not expected or not access_token or not hmac.compare_digest(access_token, expected):
         raise HTTPException(401, "Webhook nao autenticado")
 

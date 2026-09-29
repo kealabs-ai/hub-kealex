@@ -23,7 +23,7 @@ if [ ! -f ".env" ]; then
     echo "Arquivo .env não encontrado!"
     echo "Copiando .env.example..."
     cp .env.example .env
-    echo "ATENÇÃO: Configure SECRET_KEY no arquivo .env"
+    echo "ATENÇÃO: Configure KEALEX_SECRET_KEY no arquivo .env"
 fi
 
 # Parar containers antigos
