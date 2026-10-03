@@ -1,4 +1,5 @@
 import os, uuid, json
+from urllib.parse import unquote
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Depends
@@ -26,7 +27,7 @@ def _get_database_url():
         return URL.create(
             drivername="mysql+pymysql",
             username=username,
-            password=password,
+            password=unquote(password),
             host=host,
             port=int(os.getenv("KEALEX_DB_PORT", "3306")),
             database=database,
