@@ -1,5 +1,4 @@
 import os, uuid, enum, hmac
-from urllib.parse import unquote
 from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,7 +24,7 @@ def _get_database_url():
         return URL.create(
             drivername="mysql+pymysql",
             username=username,
-            password=unquote(password),
+            password=password,
             host=host,
             port=int(os.getenv("KEALEX_DB_PORT", "3306")),
             database=database,
