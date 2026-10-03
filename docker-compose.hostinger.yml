@@ -38,7 +38,12 @@ services:
     container_name: kealex-svc-auth
     environment:
       - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
-      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
+      - KEALEX_DB_HOST=${KEALEX_DB_HOST:-}
+      - KEALEX_DB_PORT=${KEALEX_DB_PORT:-3306}
+      - KEALEX_DB_NAME=${KEALEX_DB_NAME:-}
+      - KEALEX_DB_USER=${KEALEX_DB_USER:-}
+      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD:-}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
       - KEALEX_ASAAS_API_KEY=${KEALEX_ASAAS_API_KEY:-}
       - KEALEX_ASAAS_BASE_URL=${KEALEX_ASAAS_BASE_URL}
       - KEALEX_ASAAS_WEBHOOK_TOKEN=${KEALEX_ASAAS_WEBHOOK_TOKEN:-}
@@ -57,7 +62,12 @@ services:
     container_name: kealex-svc-processos
     environment:
       - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
-      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
+      - KEALEX_DB_HOST=${KEALEX_DB_HOST:-}
+      - KEALEX_DB_PORT=${KEALEX_DB_PORT:-3306}
+      - KEALEX_DB_NAME=${KEALEX_DB_NAME:-}
+      - KEALEX_DB_USER=${KEALEX_DB_USER:-}
+      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD:-}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
     networks:
       - kealex-network
     restart: unless-stopped
@@ -73,7 +83,12 @@ services:
     container_name: kealex-svc-documentos
     environment:
       - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
-      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
+      - KEALEX_DB_HOST=${KEALEX_DB_HOST:-}
+      - KEALEX_DB_PORT=${KEALEX_DB_PORT:-3306}
+      - KEALEX_DB_NAME=${KEALEX_DB_NAME:-}
+      - KEALEX_DB_USER=${KEALEX_DB_USER:-}
+      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD:-}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
     networks:
       - kealex-network
     restart: unless-stopped
@@ -89,7 +104,12 @@ services:
     container_name: kealex-svc-financeiro
     environment:
       - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
-      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
+      - KEALEX_DB_HOST=${KEALEX_DB_HOST:-}
+      - KEALEX_DB_PORT=${KEALEX_DB_PORT:-3306}
+      - KEALEX_DB_NAME=${KEALEX_DB_NAME:-}
+      - KEALEX_DB_USER=${KEALEX_DB_USER:-}
+      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD:-}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
     networks:
       - kealex-network
     restart: unless-stopped
@@ -105,7 +125,12 @@ services:
     container_name: kealex-svc-prazos
     environment:
       - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
-      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
+      - KEALEX_DB_HOST=${KEALEX_DB_HOST:-}
+      - KEALEX_DB_PORT=${KEALEX_DB_PORT:-3306}
+      - KEALEX_DB_NAME=${KEALEX_DB_NAME:-}
+      - KEALEX_DB_USER=${KEALEX_DB_USER:-}
+      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD:-}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
     networks:
       - kealex-network
     restart: unless-stopped
@@ -121,7 +146,12 @@ services:
     container_name: kealex-svc-usuarios
     environment:
       - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
-      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
+      - KEALEX_DB_HOST=${KEALEX_DB_HOST:-}
+      - KEALEX_DB_PORT=${KEALEX_DB_PORT:-3306}
+      - KEALEX_DB_NAME=${KEALEX_DB_NAME:-}
+      - KEALEX_DB_USER=${KEALEX_DB_USER:-}
+      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD:-}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
     networks:
       - kealex-network
     restart: unless-stopped
@@ -137,7 +167,12 @@ services:
     container_name: kealex-svc-configuracoes
     environment:
       - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
-      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
+      - KEALEX_DB_HOST=${KEALEX_DB_HOST:-}
+      - KEALEX_DB_PORT=${KEALEX_DB_PORT:-3306}
+      - KEALEX_DB_NAME=${KEALEX_DB_NAME:-}
+      - KEALEX_DB_USER=${KEALEX_DB_USER:-}
+      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD:-}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
     networks:
       - kealex-network
     restart: unless-stopped
@@ -153,7 +188,12 @@ services:
     container_name: kealex-svc-escritorios
     environment:
       - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
-      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
+      - KEALEX_DB_HOST=${KEALEX_DB_HOST:-}
+      - KEALEX_DB_PORT=${KEALEX_DB_PORT:-3306}
+      - KEALEX_DB_NAME=${KEALEX_DB_NAME:-}
+      - KEALEX_DB_USER=${KEALEX_DB_USER:-}
+      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD:-}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
     networks:
       - kealex-network
     restart: unless-stopped
@@ -169,7 +209,12 @@ services:
     container_name: kealex-svc-cobrancas
     environment:
       - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
-      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
+      - KEALEX_DB_HOST=${KEALEX_DB_HOST:-}
+      - KEALEX_DB_PORT=${KEALEX_DB_PORT:-3306}
+      - KEALEX_DB_NAME=${KEALEX_DB_NAME:-}
+      - KEALEX_DB_USER=${KEALEX_DB_USER:-}
+      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD:-}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
     networks:
       - kealex-network
     restart: unless-stopped
