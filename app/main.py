@@ -8,7 +8,7 @@ from pydantic import BaseModel, EmailStr
 import bcrypt
 from jose import jwt, JWTError
 from sqlalchemy import create_engine, Column, String, Boolean, DateTime, Enum as SAEnum, Text, Integer, Numeric
-from sqlalchemy.engine import make_url
+from sqlalchemy.engine import URL, make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 # Carregar variáveis de ambiente
@@ -16,9 +16,32 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Configurações do Banco de Dados
-KEALEX_DATABASE_URL = os.getenv("KEALEX_DATABASE_URL")
-if not KEALEX_DATABASE_URL:
-    raise RuntimeError("KEALEX_DATABASE_URL precisa estar configurada no ambiente")
+def _get_database_url():
+    """Monta a URL com credenciais separadas para escapar caracteres especiais."""
+    host = os.getenv("KEALEX_DB_HOST")
+    database = os.getenv("KEALEX_DB_NAME")
+    username = os.getenv("KEALEX_DB_USER")
+    password = os.getenv("KEALEX_DB_PASSWORD")
+
+    if host and database and username and password is not None:
+        return URL.create(
+            drivername="mysql+pymysql",
+            username=username,
+            password=password,
+            host=host,
+            port=int(os.getenv("KEALEX_DB_PORT", "3306")),
+            database=database,
+        )
+
+    legacy_url = os.getenv("KEALEX_DATABASE_URL")
+    if legacy_url:
+        return make_url(legacy_url)
+    raise RuntimeError(
+        "Configure KEALEX_DB_HOST, KEALEX_DB_NAME, KEALEX_DB_USER e KEALEX_DB_PASSWORD "
+        "(ou KEALEX_DATABASE_URL para compatibilidade)"
+    )
+
+KEALEX_DATABASE_URL = _get_database_url()
 DATABASE_CONFIG = make_url(KEALEX_DATABASE_URL)
 DB_HOST = DATABASE_CONFIG.host or ""
 DB_PORT = str(DATABASE_CONFIG.port or "")

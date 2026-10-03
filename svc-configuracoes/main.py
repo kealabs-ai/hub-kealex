@@ -7,7 +7,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from jose import jwt, JWTError
 from sqlalchemy import create_engine, Column, String, Text, Integer, Boolean, DateTime
-from sqlalchemy.engine import make_url
+from sqlalchemy.engine import URL, make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from google.oauth2.service_account import Credentials
 from google.auth.transport.requests import Request
@@ -17,11 +17,24 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-def _get_database_url() -> str:
+def _get_database_url():
+    host = os.getenv("KEALEX_DB_HOST")
+    database = os.getenv("KEALEX_DB_NAME")
+    username = os.getenv("KEALEX_DB_USER")
+    password = os.getenv("KEALEX_DB_PASSWORD")
+    if host and database and username and password is not None:
+        return URL.create(
+            drivername="mysql+pymysql",
+            username=username,
+            password=password,
+            host=host,
+            port=int(os.getenv("KEALEX_DB_PORT", "3306")),
+            database=database,
+        )
     raw = os.getenv("KEALEX_DATABASE_URL")
     if raw is None or raw.strip().lower() in ("", "null", "none"):
-        raise RuntimeError("KEALEX_DATABASE_URL precisa estar configurada no ambiente")
-    return raw.strip()
+        raise RuntimeError("Configure KEALEX_DB_HOST, KEALEX_DB_NAME, KEALEX_DB_USER e KEALEX_DB_PASSWORD (ou KEALEX_DATABASE_URL)")
+    return make_url(raw.strip())
 
 KEALEX_DATABASE_URL = _get_database_url()
 KEALEX_SECRET_KEY = os.getenv("KEALEX_SECRET_KEY") or os.getenv("KEALEX_JWT_SECRET")

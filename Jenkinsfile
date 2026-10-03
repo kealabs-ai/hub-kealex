@@ -20,8 +20,17 @@ pipeline {
                     cd $DEPLOY_PATH
 
                     if [ -d ".git" ]; then
+                        ENV_BACKUP=""
+                        if [ -f .env ]; then
+                            ENV_BACKUP=$(mktemp)
+                            cp .env "$ENV_BACKUP"
+                        fi
                         git fetch origin
                         git reset --hard origin/$GIT_BRANCH
+                        if [ -n "$ENV_BACKUP" ]; then
+                            cp "$ENV_BACKUP" .env
+                            rm -f "$ENV_BACKUP"
+                        fi
                     else
                         git clone -b $GIT_BRANCH $GIT_REPO .
                     fi

@@ -9,7 +9,12 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
+      - KEALEX_DB_HOST=${KEALEX_DB_HOST:-}
+      - KEALEX_DB_PORT=${KEALEX_DB_PORT:-3306}
+      - KEALEX_DB_NAME=${KEALEX_DB_NAME:-}
+      - KEALEX_DB_USER=${KEALEX_DB_USER:-}
+      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD:-}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
       - KEALEX_JWT_SECRET=${KEALEX_JWT_SECRET}
       - KEALEX_CORS_ALLOWED_ORIGINS=${KEALEX_CORS_ALLOWED_ORIGINS}
       - KEALEX_GEMINI_API_KEY=${KEALEX_GEMINI_API_KEY:-}
@@ -52,7 +57,12 @@ services:
     image: kealex/svc-auth:latest
     environment:
       - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY:-${KEALEX_JWT_SECRET}}
-      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
+      - KEALEX_DB_HOST=${KEALEX_DB_HOST:-}
+      - KEALEX_DB_PORT=${KEALEX_DB_PORT:-3306}
+      - KEALEX_DB_NAME=${KEALEX_DB_NAME:-}
+      - KEALEX_DB_USER=${KEALEX_DB_USER:-}
+      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD:-}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
       - KEALEX_ASAAS_API_KEY=${KEALEX_ASAAS_API_KEY:-}
       - KEALEX_ASAAS_BASE_URL=${KEALEX_ASAAS_BASE_URL}
       - KEALEX_ASAAS_WEBHOOK_TOKEN=${KEALEX_ASAAS_WEBHOOK_TOKEN:-}
@@ -93,7 +103,12 @@ services:
     image: kealex/svc-usuarios:latest
     environment:
       - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY:-${KEALEX_JWT_SECRET}}
-      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
+      - KEALEX_DB_HOST=${KEALEX_DB_HOST:-}
+      - KEALEX_DB_PORT=${KEALEX_DB_PORT:-3306}
+      - KEALEX_DB_NAME=${KEALEX_DB_NAME:-}
+      - KEALEX_DB_USER=${KEALEX_DB_USER:-}
+      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD:-}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
@@ -124,7 +139,12 @@ services:
     image: kealex/svc-escritorios:latest
     environment:
       - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY:-${KEALEX_JWT_SECRET}}
-      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
+      - KEALEX_DB_HOST=${KEALEX_DB_HOST:-}
+      - KEALEX_DB_PORT=${KEALEX_DB_PORT:-3306}
+      - KEALEX_DB_NAME=${KEALEX_DB_NAME:-}
+      - KEALEX_DB_USER=${KEALEX_DB_USER:-}
+      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD:-}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
@@ -156,7 +176,12 @@ services:
     ports:
       - "8001:8000"
     environment:
-      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL}
+      - KEALEX_DB_HOST=${KEALEX_DB_HOST:-}
+      - KEALEX_DB_PORT=${KEALEX_DB_PORT:-3306}
+      - KEALEX_DB_NAME=${KEALEX_DB_NAME:-}
+      - KEALEX_DB_USER=${KEALEX_DB_USER:-}
+      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD:-}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
       - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY:-${KEALEX_JWT_SECRET}}
     labels:
       - "traefik.enable=true"
