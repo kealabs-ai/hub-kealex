@@ -9,11 +9,11 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - KEALEX_DB_HOST=${KEALEX_DB_HOST:-}
-      - KEALEX_DB_PORT=${KEALEX_DB_PORT:-3306}
-      - KEALEX_DB_NAME=${KEALEX_DB_NAME:-}
-      - KEALEX_DB_USER=${KEALEX_DB_USER:-}
-      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD:-}
+      - KEALEX_DB_HOST=${KEALEX_DB_HOST}
+      - KEALEX_DB_PORT=${KEALEX_DB_PORT}
+      - KEALEX_DB_NAME=${KEALEX_DB_NAME}
+      - KEALEX_DB_USER=${KEALEX_DB_USER}
+      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
       - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
       - KEALEX_JWT_SECRET=${KEALEX_JWT_SECRET}
       - KEALEX_CORS_ALLOWED_ORIGINS=${KEALEX_CORS_ALLOWED_ORIGINS}
@@ -50,18 +50,18 @@ services:
       - kealabs-net
       - easypanel
 
-  # â”€â”€ SVC-COBRANCAS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # ── SVC-COBRANCAS ──────────────────────────────────────────────────────
   # Authentication and billing API
   kealex-svc-auth:
     build: ./svc-auth
     image: kealex/svc-auth:latest
     environment:
       - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY:-${KEALEX_JWT_SECRET}}
-      - KEALEX_DB_HOST=${KEALEX_DB_HOST:-}
-      - KEALEX_DB_PORT=${KEALEX_DB_PORT:-3306}
-      - KEALEX_DB_NAME=${KEALEX_DB_NAME:-}
-      - KEALEX_DB_USER=${KEALEX_DB_USER:-}
-      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD:-}
+      - KEALEX_DB_HOST=${KEALEX_DB_HOST}
+      - KEALEX_DB_PORT=${KEALEX_DB_PORT}
+      - KEALEX_DB_NAME=${KEALEX_DB_NAME}
+      - KEALEX_DB_USER=${KEALEX_DB_USER}
+      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
       - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
       - KEALEX_ASAAS_API_KEY=${KEALEX_ASAAS_API_KEY:-}
       - KEALEX_ASAAS_BASE_URL=${KEALEX_ASAAS_BASE_URL}
@@ -103,11 +103,11 @@ services:
     image: kealex/svc-usuarios:latest
     environment:
       - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY:-${KEALEX_JWT_SECRET}}
-      - KEALEX_DB_HOST=${KEALEX_DB_HOST:-}
-      - KEALEX_DB_PORT=${KEALEX_DB_PORT:-3306}
-      - KEALEX_DB_NAME=${KEALEX_DB_NAME:-}
-      - KEALEX_DB_USER=${KEALEX_DB_USER:-}
-      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD:-}
+      - KEALEX_DB_HOST=${KEALEX_DB_HOST}
+      - KEALEX_DB_PORT=${KEALEX_DB_PORT}
+      - KEALEX_DB_NAME=${KEALEX_DB_NAME}
+      - KEALEX_DB_USER=${KEALEX_DB_USER}
+      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
       - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
     labels:
       - "traefik.enable=true"
@@ -139,11 +139,11 @@ services:
     image: kealex/svc-escritorios:latest
     environment:
       - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY:-${KEALEX_JWT_SECRET}}
-      - KEALEX_DB_HOST=${KEALEX_DB_HOST:-}
-      - KEALEX_DB_PORT=${KEALEX_DB_PORT:-3306}
-      - KEALEX_DB_NAME=${KEALEX_DB_NAME:-}
-      - KEALEX_DB_USER=${KEALEX_DB_USER:-}
-      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD:-}
+      - KEALEX_DB_HOST=${KEALEX_DB_HOST}
+      - KEALEX_DB_PORT=${KEALEX_DB_PORT}
+      - KEALEX_DB_NAME=${KEALEX_DB_NAME}
+      - KEALEX_DB_USER=${KEALEX_DB_USER}
+      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
       - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
     labels:
       - "traefik.enable=true"
@@ -176,11 +176,11 @@ services:
     ports:
       - "8001:8000"
     environment:
-      - KEALEX_DB_HOST=${KEALEX_DB_HOST:-}
-      - KEALEX_DB_PORT=${KEALEX_DB_PORT:-3306}
-      - KEALEX_DB_NAME=${KEALEX_DB_NAME:-}
-      - KEALEX_DB_USER=${KEALEX_DB_USER:-}
-      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD:-}
+      - KEALEX_DB_HOST=${KEALEX_DB_HOST}
+      - KEALEX_DB_PORT=${KEALEX_DB_PORT}
+      - KEALEX_DB_NAME=${KEALEX_DB_NAME}
+      - KEALEX_DB_USER=${KEALEX_DB_USER}
+      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
       - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
       - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY:-${KEALEX_JWT_SECRET}}
     labels:
