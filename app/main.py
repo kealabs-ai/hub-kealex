@@ -1,6 +1,7 @@
 import os, uuid, enum
 from datetime import datetime, timedelta
 from typing import Optional, List
+from urllib.parse import quote_plus
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -8,7 +9,7 @@ from pydantic import BaseModel, EmailStr
 import bcrypt
 from jose import jwt, JWTError
 from sqlalchemy import create_engine, Column, String, Boolean, DateTime, Enum as SAEnum, Text, Integer, Numeric
-from sqlalchemy.engine import URL, make_url
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 # Carregar variáveis de ambiente
@@ -24,13 +25,11 @@ def _get_database_url():
     password = os.getenv("KEALEX_DB_PASSWORD")
 
     if host and database and username and password is not None:
-        return URL.create(
-            drivername="mysql+pymysql",
-            username=username,
-            password=password,
-            host=host,
-            port=int(os.getenv("KEALEX_DB_PORT", "3306")),
-            database=database,
+        # Escapar caracteres especiais na senha usando quote_plus
+        escaped_password = quote_plus(password)
+        return make_url(
+            f"mysql+pymysql://{username}:{escaped_password}@"
+            f"{host}:{os.getenv('KEALEX_DB_PORT', '3306')}/{database}"
         )
 
     legacy_url = os.getenv("KEALEX_DATABASE_URL")
@@ -288,7 +287,7 @@ class Honorario(Base):
 
 def _init_db():
     try:
-        print(f"[INIT] Conectando ao banco: {DB_HOST}:{DB_PORT}/{DB_NAME}")
+        print(f"[INIT] Conectando ao banco: {DB_HOST}:{DB_PORT}/{DB_NAME} (usuário: {DB_USER})")
         Base.metadata.create_all(engine)
         print("[INIT] Tabelas criadas com sucesso")
         
@@ -332,6 +331,7 @@ def _init_db():
         print("[INIT] Banco de dados inicializado com sucesso")
     except Exception as e:
         print(f"[ERRO] Database init falhou: {type(e).__name__}: {str(e)}")
+        print(f"[ERRO] Verifique as credenciais: {DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
         import traceback
         traceback.print_exc()
         raise
