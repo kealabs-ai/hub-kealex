@@ -1,4 +1,4 @@
-import os, uuid, enum
+import os, uuid, enum, logging
 from datetime import datetime, timedelta
 from typing import Optional, List
 from urllib.parse import quote_plus
@@ -16,6 +16,9 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from dotenv import load_dotenv
 load_dotenv()
 
+# Configurar logging
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
 # Configurações do Banco de Dados
 def _get_database_url():
     """Monta a URL com credenciais separadas para escapar caracteres especiais."""
@@ -25,10 +28,11 @@ def _get_database_url():
     password = os.getenv("KEALEX_DB_PASSWORD")
 
     if host and database and username and password is not None:
-        # Escapar caracteres especiais na senha usando quote_plus
+        # Escapar caracteres especiais na senha e username usando quote_plus
         escaped_password = quote_plus(password)
+        escaped_username = quote_plus(username)
         return make_url(
-            f"mysql+pymysql://{username}:{escaped_password}@"
+            f"mysql+pymysql://{escaped_username}:{escaped_password}@"
             f"{host}:{os.getenv('KEALEX_DB_PORT', '3306')}/{database}"
         )
 
