@@ -1,4 +1,4 @@
-import os, uuid, enum
+import os, uuid, enum, logging
 from datetime import datetime, timedelta
 from typing import Optional, List
 from urllib.parse import quote_plus
@@ -15,6 +15,9 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 # Carregar variáveis de ambiente
 from dotenv import load_dotenv
 load_dotenv()
+
+# Configurar logging
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 # Configurações do Banco de Dados
 def _get_database_url():
