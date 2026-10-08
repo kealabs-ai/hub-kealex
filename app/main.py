@@ -115,11 +115,16 @@ class Tenant(Base):
     trial_expires_at = Column(DateTime, nullable=True)
     email            = Column(String(255), nullable=True)
     whatsapp         = Column(String(20), nullable=True)
-    billing_cpf_cnpj = Column(String(20), nullable=True)
-    billing_phone = Column(String(30), nullable=True)
-    billing_mobile_phone = Column(String(30), nullable=True)
-    perfil           = Column(String(50), nullable=True)
-    ativo            = Column(Boolean, default=True)
+    billing_cpf_cnpj      = Column(String(20),  nullable=True)
+    billing_phone         = Column(String(30),  nullable=True)
+    billing_mobile_phone  = Column(String(30),  nullable=True)
+    perfil                = Column(String(50),  nullable=True)
+    asaas_customer_id     = Column(String(80),  nullable=True)
+    asaas_subscription_id = Column(String(80),  nullable=True)
+    subscription_plan     = Column(String(20),  nullable=True)
+    subscription_status   = Column(String(20),  nullable=False, default="trialing")
+    next_due_date         = Column(String(10),  nullable=True)
+    ativo                 = Column(Boolean, default=True)
     created_at       = Column(DateTime, default=datetime.utcnow)
     updated_at       = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -513,6 +518,250 @@ app.add_middleware(
 def startup_event():
     _init_db()
 
+# ── Assinatura (Asaas) ───────────────────────────────────────────────────────
+
+import httpx
+
+KEALEX_ASAAS_API_KEY = os.getenv("KEALEX_ASAAS_API_KEY", "")
+ASAAS_BASE = os.getenv("KEALEX_ASAAS_BASE_URL", "").rstrip("/")
+
+PLANOS = {
+    "starter":      {"value": 197.00, "description": "Plano Starter"},
+    "professional": {"value": 397.00, "description": "Plano Professional"},
+}
+
+def _digits(value: str | None) -> str | None:
+    if value is None: return None
+    return "".join(c for c in value if c.isdigit())
+
+class CreditCardIn(BaseModel):
+    holderName: str; number: str; expiryMonth: str; expiryYear: str; ccv: str
+
+class HolderInfoIn(BaseModel):
+    name: str; email: str; cpfCnpj: str; postalCode: str; addressNumber: str
+    addressComplement: str | None = None; phone: str | None = None; mobilePhone: str | None = None
+
+class AssinarIn(BaseModel):
+    plano: str; asaasCustomerId: str
+    creditCard: CreditCardIn; holderInfo: HolderInfoIn; remoteIp: str = "127.0.0.1"
+
+class AssinarOut(BaseModel):
+    subscriptionId: str; plano: str; status: str; nextDueDate: str; value: float
+
+class AssinarPixIn(BaseModel):
+    plano: str; asaasCustomerId: str
+
+class AssinarPixOut(BaseModel):
+    subscriptionId: str; plano: str; status: str; nextDueDate: str; value: float
+    pixQrCode: str; pixKey: str; pixExpiresAt: str
+
+class PreRegisterIn(BaseModel):
+    nome: str; email: EmailStr; senha: str
+
+class PreRegisterOut(BaseModel):
+    userId: str; tenantId: str; token: str
+
+@app.post("/k1/lex/auth/pre-register", response_model=PreRegisterOut, status_code=201)
+def pre_register(body: PreRegisterIn, db: Session = Depends(get_db)):
+    if len(body.senha) < 6:
+        raise HTTPException(400, "Senha deve ter no minimo 6 caracteres")
+    if db.query(Usuario).filter_by(email=body.email).first():
+        raise HTTPException(409, "E-mail ja cadastrado.")
+    slug = body.email.split("@")[0].lower().replace(".", "-")[:80]
+    base_slug, counter = slug, 1
+    while db.query(Tenant).filter_by(slug=slug).first():
+        slug = f"{base_slug}-{counter}"; counter += 1
+    now = datetime.utcnow()
+    tenant = Tenant(nome=body.nome, slug=slug, plano="trial",
+                    trial_started_at=now, trial_expires_at=now + timedelta(days=TRIAL_DAYS), ativo=True)
+    db.add(tenant); db.flush()
+    user = Usuario(tenant_id=tenant.id, nome=body.nome, email=body.email,
+                   senha_hash=_hash(body.senha), role=RoleEnum.advogado, ativo=True)
+    db.add(user); db.commit(); db.refresh(user)
+    token = jwt.encode(
+        {"sub": user.id, "role": user.role, "tenant_id": tenant.id,
+         "exp": datetime.utcnow() + timedelta(hours=2), "pre": True},
+        KEALEX_SECRET_KEY, ALGORITHM)
+    return PreRegisterOut(userId=user.id, tenantId=tenant.id, token=token)
+
+@app.post("/k1/lex/auth/criar-cliente-asaas")
+def criar_cliente_asaas(body: HolderInfoIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    if not ASAAS_BASE:
+        raise HTTPException(503, "Integracao Asaas nao configurada")
+    tenant = db.query(Tenant).filter_by(id=payload.get("tenant_id")).first()
+    if not tenant: raise HTTPException(404, "Tenant nao encontrado")
+    customer_data = {k: v for k, v in {
+        "name": body.name, "email": body.email, "cpfCnpj": _digits(body.cpfCnpj),
+        "phone": _digits(body.phone), "mobilePhone": _digits(body.mobilePhone),
+        "postalCode": body.postalCode, "addressNumber": body.addressNumber,
+        "complement": body.addressComplement,
+    }.items() if v not in (None, "")}
+    headers = {"access_token": KEALEX_ASAAS_API_KEY, "Content-Type": "application/json", "User-Agent": "Kealex/1.0.0"}
+    try:
+        if tenant.asaas_customer_id:
+            resp = httpx.put(f"{ASAAS_BASE}/customers/{tenant.asaas_customer_id}", json=customer_data, headers=headers, timeout=15)
+        else:
+            resp = httpx.post(f"{ASAAS_BASE}/customers", json=customer_data, headers=headers, timeout=15)
+        if resp.status_code not in (200, 201):
+            raise HTTPException(422, f"Asaas recusou: {resp.json().get('errors', resp.text)}")
+        customer_id = tenant.asaas_customer_id or resp.json().get("id")
+        tenant.asaas_customer_id = customer_id
+        tenant.billing_cpf_cnpj = _digits(body.cpfCnpj)
+        tenant.billing_phone = _digits(body.phone)
+        tenant.billing_mobile_phone = _digits(body.mobilePhone)
+        db.commit()
+        return {"customerId": customer_id}
+    except httpx.TimeoutException:
+        raise HTTPException(504, "Timeout ao conectar com Asaas")
+
+@app.post("/k1/lex/auth/assinar", response_model=AssinarOut)
+def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    if not ASAAS_BASE:
+        raise HTTPException(503, "Integracao Asaas nao configurada")
+    plano_cfg = PLANOS.get(body.plano)
+    if not plano_cfg: raise HTTPException(400, f"Plano invalido: {body.plano}")
+    tenant = db.query(Tenant).filter_by(id=payload.get("tenant_id")).first()
+    if not tenant: raise HTTPException(404, "Tenant nao encontrado")
+    if tenant.asaas_customer_id != body.asaasCustomerId:
+        raise HTTPException(403, "Cliente Asaas nao vinculado a esta conta")
+    if tenant.asaas_subscription_id and tenant.subscription_status in ("pending", "active", "past_due"):
+        raise HTTPException(409, "Ja existe uma assinatura vinculada a esta conta")
+    now = datetime.utcnow()
+    next_due = tenant.trial_expires_at.strftime("%Y-%m-%d") if tenant.plano == "trial" and tenant.trial_expires_at and tenant.trial_expires_at > now else (now + timedelta(days=1)).strftime("%Y-%m-%d")
+    headers = {"access_token": KEALEX_ASAAS_API_KEY, "Content-Type": "application/json", "User-Agent": "Kealex/1.0.0"}
+    try:
+        resp = httpx.post(f"{ASAAS_BASE}/subscriptions", headers=headers, timeout=20, json={
+            "customer": body.asaasCustomerId, "billingType": "CREDIT_CARD",
+            "nextDueDate": next_due, "value": plano_cfg["value"], "cycle": "MONTHLY",
+            "description": plano_cfg["description"],
+            "creditCard": {"holderName": body.creditCard.holderName, "number": body.creditCard.number,
+                           "expiryMonth": body.creditCard.expiryMonth, "expiryYear": body.creditCard.expiryYear, "ccv": body.creditCard.ccv},
+            "creditCardHolderInfo": {"name": body.holderInfo.name, "email": body.holderInfo.email,
+                                     "cpfCnpj": _digits(body.holderInfo.cpfCnpj), "postalCode": body.holderInfo.postalCode,
+                                     "addressNumber": body.holderInfo.addressNumber, "phone": _digits(body.holderInfo.phone),
+                                     "mobilePhone": _digits(body.holderInfo.mobilePhone)},
+            "remoteIp": body.remoteIp,
+        })
+        if resp.status_code not in (200, 201):
+            raise HTTPException(422, f"Asaas recusou: {resp.json().get('errors', resp.text)}")
+        data = resp.json()
+    except httpx.TimeoutException:
+        raise HTTPException(504, "Timeout ao conectar com Asaas")
+    tenant.asaas_subscription_id = data.get("id")
+    tenant.subscription_plan = body.plano
+    tenant.subscription_status = "pending"
+    tenant.next_due_date = data.get("nextDueDate", next_due)
+    tenant.updated_at = datetime.utcnow()
+    db.commit()
+    return AssinarOut(subscriptionId=data.get("id", ""), plano=body.plano,
+                      status="PENDING_PAYMENT", nextDueDate=data.get("nextDueDate", next_due), value=plano_cfg["value"])
+
+@app.post("/k1/lex/auth/assinar-pix", response_model=AssinarPixOut)
+def assinar_pix(body: AssinarPixIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    if not ASAAS_BASE:
+        raise HTTPException(503, "Integracao Asaas nao configurada")
+    plano_cfg = PLANOS.get(body.plano)
+    if not plano_cfg: raise HTTPException(400, f"Plano invalido: {body.plano}")
+    tenant = db.query(Tenant).filter_by(id=payload.get("tenant_id")).first()
+    if not tenant: raise HTTPException(404, "Tenant nao encontrado")
+    if tenant.asaas_customer_id != body.asaasCustomerId:
+        raise HTTPException(403, "Cliente Asaas nao vinculado a esta conta")
+    if tenant.asaas_subscription_id and tenant.subscription_status in ("pending", "active", "past_due"):
+        raise HTTPException(409, "Ja existe uma assinatura vinculada a esta conta")
+    now = datetime.utcnow()
+    next_due = tenant.trial_expires_at.strftime("%Y-%m-%d") if tenant.plano == "trial" and tenant.trial_expires_at and tenant.trial_expires_at > now else (now + timedelta(days=1)).strftime("%Y-%m-%d")
+    headers = {"access_token": KEALEX_ASAAS_API_KEY, "Content-Type": "application/json", "User-Agent": "Kealex/1.0.0"}
+    try:
+        # 1. Criar assinatura PIX
+        resp = httpx.post(f"{ASAAS_BASE}/subscriptions", headers=headers, timeout=20, json={
+            "customer": body.asaasCustomerId, "billingType": "PIX",
+            "nextDueDate": next_due, "value": plano_cfg["value"],
+            "cycle": "MONTHLY", "description": plano_cfg["description"],
+        })
+        if resp.status_code not in (200, 201):
+            raise HTTPException(422, f"Asaas recusou: {resp.json().get('errors', resp.text)}")
+        subscription_id = resp.json()["id"]
+        # 2. Buscar pagamento gerado
+        resp = httpx.get(f"{ASAAS_BASE}/payments", headers=headers, timeout=15,
+                         params={"subscription": subscription_id, "limit": 1})
+        payments = resp.json().get("data", [])
+        if not payments: raise HTTPException(422, "Nenhum pagamento gerado para a assinatura PIX")
+        payment_id = payments[0]["id"]
+        due_date = payments[0].get("dueDate", next_due)
+        # 3. Buscar QR Code
+        resp = httpx.get(f"{ASAAS_BASE}/payments/{payment_id}/pixQrCode", headers=headers, timeout=15)
+        if resp.status_code != 200:
+            raise HTTPException(422, f"Erro ao obter QR Code PIX: {resp.text}")
+        qr_data = resp.json()
+    except httpx.TimeoutException:
+        raise HTTPException(504, "Timeout ao conectar com Asaas")
+    tenant.asaas_subscription_id = subscription_id
+    tenant.subscription_plan = body.plano
+    tenant.subscription_status = "pending"
+    tenant.next_due_date = due_date
+    tenant.updated_at = datetime.utcnow()
+    db.commit()
+    return AssinarPixOut(
+        subscriptionId=subscription_id, plano=body.plano, status="PENDING",
+        nextDueDate=due_date, value=plano_cfg["value"],
+        pixQrCode=qr_data.get("encodedImage", ""),
+        pixKey=qr_data.get("payload", ""),
+        pixExpiresAt=qr_data.get("expirationDate") or (now + timedelta(hours=24)).isoformat(),
+    )
+
+@app.post("/k1/lex/auth/asaas-webhook")
+async def asaas_webhook(request: Request, db: Session = Depends(get_db),
+                        access_token: str | None = Header(default=None, alias="asaas-access-token")):
+    from fastapi import Header as FastAPIHeader
+    import hmac
+    expected = os.getenv("KEALEX_ASAAS_WEBHOOK_TOKEN", "")
+    if not expected or not access_token or not hmac.compare_digest(access_token, expected):
+        raise HTTPException(401, "Webhook nao autenticado")
+    event = await request.json()
+    event_name = event.get("event", "")
+    payment = event.get("payment") or {}
+    subscription_id = payment.get("subscription") or (event.get("subscription") or {}).get("id")
+    if not subscription_id: return {"ok": True, "ignored": True}
+    tenant = db.query(Tenant).filter_by(asaas_subscription_id=subscription_id).first()
+    if tenant:
+        if event_name in ("PAYMENT_CONFIRMED", "PAYMENT_RECEIVED"):
+            tenant.subscription_status = "active"
+            tenant.plano = tenant.subscription_plan or tenant.plano
+            tenant.ativo = True
+            db.query(Usuario).filter_by(tenant_id=tenant.id).update({"ativo": True})
+        elif event_name == "PAYMENT_OVERDUE":
+            tenant.subscription_status = "past_due"
+        elif event_name == "SUBSCRIPTION_DELETED":
+            tenant.subscription_status = "canceled"
+        tenant.updated_at = datetime.utcnow()
+    db.commit()
+    return {"ok": True}
+
+@app.get("/k1/lex/auth/billing-status")
+def billing_status(db: Session = Depends(get_db), payload=Depends(verify_token)):
+    tenant = db.query(Tenant).filter_by(id=payload.get("tenant_id")).first()
+    if not tenant: raise HTTPException(404, "Tenant nao encontrado")
+    now = datetime.utcnow()
+    if not tenant.ativo:
+        status = "inactive"
+    elif tenant.plano == "trial":
+        status = "trial_expired" if tenant.trial_expires_at and tenant.trial_expires_at <= now else "trial"
+    elif tenant.plano in ("starter", "professional", "enterprise"):
+        status = tenant.subscription_status or "inactive"
+    else:
+        status = "inactive"
+    return {"plano": tenant.plano, "status": status, "subscriptionStatus": tenant.subscription_status,
+            "nextDueDate": tenant.next_due_date,
+            "trialExpiresAt": tenant.trial_expires_at.isoformat() if tenant.trial_expires_at else None}
+
+@app.get("/k1/lex/auth/billing-profile")
+def billing_profile_v2(db: Session = Depends(get_db), payload=Depends(verify_token)):
+    tenant = db.query(Tenant).filter_by(id=payload.get("tenant_id")).first()
+    if not tenant: raise HTTPException(404, "Tenant nao encontrado")
+    return {"cpfCnpj": tenant.billing_cpf_cnpj or "", "phone": tenant.billing_phone or "",
+            "mobilePhone": tenant.billing_mobile_phone or ""}
+
+
 # Health endpoints
 @app.get("/health")
 def health_simple():
@@ -636,18 +885,7 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
 def me(payload=Depends(verify_token)):
     return payload
 
-@app.get("/k1/lex/auth/billing-profile")
-def billing_profile(db: Session = Depends(get_db), payload=Depends(verify_token)):
-    tenant = db.query(Tenant).filter_by(id=payload.get("tenant_id")).first()
-    if not tenant:
-        raise HTTPException(404, "Tenant não encontrado")
-    return {
-        "cpfCnpj": tenant.billing_cpf_cnpj or "",
-        "phone": tenant.billing_phone or "",
-        "mobilePhone": tenant.billing_mobile_phone or "",
-    }
 
-# Processos endpoints
 @app.get("/k1/lex/processos")
 def list_processos(db: Session = Depends(get_db), payload=Depends(verify_token)):
     role, uid, tid = payload.get("role"), payload.get("sub"), payload.get("tenant_id")
