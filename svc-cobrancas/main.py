@@ -19,7 +19,7 @@ try:
 except ImportError:
     require_active_trial = None
 
-logging.basicConfig(level=logging.KEALEX_DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 def _get_database_url():
