@@ -517,6 +517,116 @@ def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(veri
     )
 
 
+class AssinarPixIn(BaseModel):
+    plano:           str
+    asaasCustomerId: str
+
+class AssinarPixOut(BaseModel):
+    subscriptionId: str
+    plano:          str
+    status:         str
+    nextDueDate:    str
+    value:          float
+    pixQrCode:      str   # base64 PNG do QR Code
+    pixKey:         str   # payload copia-e-cola
+    pixExpiresAt:   str   # ISO datetime de expiração
+
+@app.post("/k1/lex/auth/assinar-pix", response_model=AssinarPixOut)
+def assinar_pix(body: AssinarPixIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    plano_cfg = PLANOS.get(body.plano)
+    if not plano_cfg:
+        raise HTTPException(400, f"Plano invalido: {body.plano}")
+
+    tenant_id = payload.get("tenant_id")
+    tenant = db.query(Tenant).filter_by(id=tenant_id).first()
+    if not tenant:
+        raise HTTPException(404, "Tenant nao encontrado")
+    if tenant.asaas_customer_id != body.asaasCustomerId:
+        raise HTTPException(403, "Cliente Asaas nao vinculado a esta conta")
+    if tenant.asaas_subscription_id and tenant.subscription_status in ("pending", "active", "past_due"):
+        raise HTTPException(409, "Ja existe uma assinatura vinculada a esta conta")
+
+    now = datetime.utcnow()
+    if tenant.plano == "trial" and tenant.trial_expires_at and tenant.trial_expires_at > now:
+        next_due = tenant.trial_expires_at.strftime("%Y-%m-%d")
+    else:
+        next_due = (now + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    headers = {"access_token": KEALEX_ASAAS_API_KEY, "Content-Type": "application/json", "User-Agent": "Kealex/1.0.0"}
+
+    # 1. Criar assinatura PIX
+    try:
+        resp = httpx.post(
+            f"{ASAAS_BASE}/subscriptions",
+            json={
+                "customer":    body.asaasCustomerId,
+                "billingType": "PIX",
+                "nextDueDate": next_due,
+                "value":       plano_cfg["value"],
+                "cycle":       "MONTHLY",
+                "description": plano_cfg["description"],
+            },
+            headers=headers,
+            timeout=20,
+        )
+        if resp.status_code not in (200, 201):
+            raise HTTPException(422, f"Asaas recusou: {resp.json().get('errors', resp.text)}")
+        sub = resp.json()
+        subscription_id = sub["id"]
+    except httpx.TimeoutException:
+        raise HTTPException(504, "Timeout ao conectar com Asaas")
+
+    # 2. Buscar o pagamento gerado para a assinatura
+    try:
+        resp = httpx.get(
+            f"{ASAAS_BASE}/payments",
+            params={"subscription": subscription_id, "limit": 1},
+            headers=headers,
+            timeout=15,
+        )
+        payments = resp.json().get("data", [])
+        if not payments:
+            raise HTTPException(422, "Nenhum pagamento gerado para a assinatura PIX")
+        payment_id = payments[0]["id"]
+        due_date = payments[0].get("dueDate", next_due)
+    except httpx.TimeoutException:
+        raise HTTPException(504, "Timeout ao buscar pagamento")
+
+    # 3. Buscar QR Code PIX do pagamento
+    try:
+        resp = httpx.get(
+            f"{ASAAS_BASE}/payments/{payment_id}/pixQrCode",
+            headers=headers,
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            raise HTTPException(422, f"Erro ao obter QR Code PIX: {resp.text}")
+        qr_data = resp.json()
+    except httpx.TimeoutException:
+        raise HTTPException(504, "Timeout ao obter QR Code PIX")
+
+    # Persiste assinatura como pending
+    tenant.asaas_subscription_id = subscription_id
+    tenant.subscription_plan = body.plano
+    tenant.subscription_status = "pending"
+    tenant.next_due_date = due_date
+    tenant.updated_at = datetime.utcnow()
+    db.commit()
+
+    expires_at = (now + timedelta(hours=24)).isoformat()
+
+    return AssinarPixOut(
+        subscriptionId=subscription_id,
+        plano=body.plano,
+        status="PENDING",
+        nextDueDate=due_date,
+        value=plano_cfg["value"],
+        pixQrCode=qr_data.get("encodedImage", ""),
+        pixKey=qr_data.get("payload", ""),
+        pixExpiresAt=qr_data.get("expirationDate") or expires_at,
+    )
+
+
 @app.post("/k1/lex/auth/criar-cliente-asaas")
 def criar_cliente_asaas(body: HolderInfoIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
     """Cria ou recupera um customer no Asaas para o usuario autenticado."""
