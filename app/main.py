@@ -2,7 +2,7 @@ import os, uuid, enum, logging
 from datetime import datetime, timedelta
 from typing import Optional, List
 from urllib.parse import quote_plus
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
@@ -712,7 +712,6 @@ def assinar_pix(body: AssinarPixIn, db: Session = Depends(get_db), payload=Depen
 @app.post("/k1/lex/auth/asaas-webhook")
 async def asaas_webhook(request: Request, db: Session = Depends(get_db),
                         access_token: str | None = Header(default=None, alias="asaas-access-token")):
-    from fastapi import Header as FastAPIHeader
     import hmac
     expected = os.getenv("KEALEX_ASAAS_WEBHOOK_TOKEN", "")
     if not expected or not access_token or not hmac.compare_digest(access_token, expected):
