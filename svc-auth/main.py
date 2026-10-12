@@ -980,8 +980,8 @@ def billing_status(db: Session = Depends(get_db), payload=Depends(verify_token))
 
 
 @app.post("/k1/lex/auth/assinatura/reativar", response_model=AssinarOut)
-def reativar_assinatura(db: Session = Depends(get_db), payload=Depends(verify_token)):
-    """Tenta cobrar novamente o pagamento pendente/recusado da assinatura existente."""
+def reativar_assinatura(body: dict = {}, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    """Verifica o status do pagamento pendente no Asaas e atualiza o tenant."""
     tenant = db.query(Tenant).filter_by(id=payload.get("tenant_id")).first()
     if not tenant or not tenant.asaas_subscription_id:
         raise HTTPException(404, "Nenhuma assinatura encontrada")
@@ -990,7 +990,6 @@ def reativar_assinatura(db: Session = Depends(get_db), payload=Depends(verify_to
 
     headers = {"access_token": KEALEX_ASAAS_API_KEY, "Content-Type": "application/json", "User-Agent": "Kealex/1.0.0"}
     try:
-        # Busca o pagamento mais recente da assinatura
         resp = httpx.get(
             f"{ASAAS_BASE}/payments",
             params={"subscription": tenant.asaas_subscription_id, "limit": 1},
