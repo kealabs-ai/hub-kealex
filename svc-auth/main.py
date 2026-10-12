@@ -979,6 +979,51 @@ def billing_status(db: Session = Depends(get_db), payload=Depends(verify_token))
     }
 
 
+@app.post("/k1/lex/auth/assinatura/reativar", response_model=AssinarOut)
+def reativar_assinatura(db: Session = Depends(get_db), payload=Depends(verify_token)):
+    """Tenta cobrar novamente o pagamento pendente/recusado da assinatura existente."""
+    tenant = db.query(Tenant).filter_by(id=payload.get("tenant_id")).first()
+    if not tenant or not tenant.asaas_subscription_id:
+        raise HTTPException(404, "Nenhuma assinatura encontrada")
+    if tenant.subscription_status == "active":
+        raise HTTPException(409, "Assinatura ja esta ativa")
+
+    headers = {"access_token": KEALEX_ASAAS_API_KEY, "Content-Type": "application/json", "User-Agent": "Kealex/1.0.0"}
+    try:
+        # Busca o pagamento mais recente da assinatura
+        resp = httpx.get(
+            f"{ASAAS_BASE}/payments",
+            params={"subscription": tenant.asaas_subscription_id, "limit": 1},
+            headers=headers,
+            timeout=15,
+        )
+        payments = resp.json().get("data", []) if resp.status_code == 200 else []
+        if not payments:
+            raise HTTPException(422, "Nenhum pagamento encontrado para reativar")
+        payment = payments[0]
+        payment_status = (payment.get("status") or "").upper()
+        plano_cfg = PLANOS.get(tenant.subscription_plan or tenant.plano, {})
+        now = datetime.utcnow()
+        if payment_status in ("CONFIRMED", "RECEIVED"):
+            tenant.subscription_status = "active"
+            tenant.plano = tenant.subscription_plan or tenant.plano
+            tenant.ativo = True
+            db.query(Usuario).filter_by(tenant_id=tenant.id).update({"ativo": True})
+            db.commit()
+        return AssinarOut(
+            subscriptionId=tenant.asaas_subscription_id,
+            plano=tenant.subscription_plan or tenant.plano,
+            periodicidade="mensal",
+            status=payment_status or "PENDING",
+            nextDueDate=payment.get("dueDate") or now.strftime("%Y-%m-%d"),
+            value=payment.get("value") or plano_cfg.get("value", 0),
+            valorMensal=plano_cfg.get("value", 0),
+            desconto=0.0,
+        )
+    except httpx.TimeoutException:
+        raise HTTPException(504, "Timeout ao conectar com Asaas")
+
+
 @app.get("/k1/lex/auth/assinatura")
 def get_assinatura(db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant = db.query(Tenant).filter_by(id=payload.get("tenant_id")).first()
