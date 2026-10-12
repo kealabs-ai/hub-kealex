@@ -1525,6 +1525,74 @@ def cobranca_timeline(body: dict, db: Session = Depends(get_db), payload=Depends
         "proximas_acoes": proximas_acoes,
     }
 
+class PagamentoIn(BaseModel):
+    cobrancaId: str
+    billingType: str
+    customer: str
+    value: float
+    dueDate: str
+    description: Optional[str] = None
+
+@app.post("/v1/lex/cobrancas/pagamento")
+@app.post("/k1/lex/cobrancas/pagamento")
+def criar_pagamento(body: PagamentoIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    if body.billingType not in ("CREDIT_CARD", "PIX"):
+        raise HTTPException(400, "billingType invalido. Use 'CREDIT_CARD' ou 'PIX'")
+
+    tenant_id = payload.get("tenant_id")
+    c = db.query(Cobranca).filter_by(id=body.cobrancaId, tenant_id=tenant_id).first()
+    if not c:
+        raise HTTPException(404, "Cobranca nao encontrada")
+    if c.status in ("pago", "cancelado"):
+        raise HTTPException(400, f"Cobranca com status '{c.status}' nao pode ser paga")
+
+    if not KEALEX_ASAAS_API_KEY:
+        raise HTTPException(500, "KEALEX_ASAAS_API_KEY nao configurada")
+
+    try:
+        with httpx.Client(timeout=15) as client:
+            resp = client.post(
+                f"{ASAAS_BASE}/payments",
+                json={
+                    "billingType": body.billingType,
+                    "customer": body.customer,
+                    "value": body.value,
+                    "dueDate": body.dueDate,
+                    "description": body.description or f"Cobranca {body.cobrancaId}",
+                },
+                headers={
+                    "accept": "application/json",
+                    "content-type": "application/json",
+                    "access_token": KEALEX_ASAAS_API_KEY,
+                    "User-Agent": "HubKealex/1.0.0",
+                },
+            )
+    except httpx.RequestError as e:
+        raise HTTPException(502, f"Erro ao conectar com gateway de pagamento: {str(e)}")
+
+    if resp.status_code not in (200, 201):
+        raise HTTPException(resp.status_code, f"Erro no gateway de pagamento: {resp.text}")
+
+    asaas_data = resp.json()
+    status_ant = c.status
+    c.status = "aguardando_pagamento"
+    c.updated_at = datetime.utcnow()
+    db.add(HistoricoCobranca(
+        id=str(uuid.uuid4()), cobranca_id=c.id, acao="pagamento_iniciado",
+        status_anterior=status_ant, status_novo="aguardando_pagamento",
+        observacao=f"billingType={body.billingType}, asaas_id={asaas_data.get('id')}",
+    ))
+    db.commit()
+    return {
+        "cobrancaId": c.id,
+        "asaasId": asaas_data.get("id"),
+        "billingType": asaas_data.get("billingType"),
+        "status": asaas_data.get("status"),
+        "invoiceUrl": asaas_data.get("invoiceUrl"),
+        "pixQrCodeUrl": asaas_data.get("pixQrCodeUrl"),
+        "bankSlipUrl": asaas_data.get("bankSlipUrl"),
+    }
+
 # Configuration Models
 class CfgDatabase(Base):
     __tablename__ = "cfg_database"
