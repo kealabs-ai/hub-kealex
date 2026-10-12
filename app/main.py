@@ -624,8 +624,8 @@ def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(veri
     if not tenant: raise HTTPException(404, "Tenant nao encontrado")
     if tenant.asaas_customer_id != body.asaasCustomerId:
         raise HTTPException(403, "Cliente Asaas nao vinculado a esta conta")
-    if tenant.asaas_subscription_id and tenant.subscription_status in ("pending", "active", "past_due"):
-        raise HTTPException(409, "Ja existe uma assinatura vinculada a esta conta")
+    if tenant.asaas_subscription_id and tenant.subscription_status in ("active", "past_due"):
+        raise HTTPException(409, "Ja existe uma assinatura ativa vinculada a esta conta")
     now = datetime.utcnow()
     next_due = tenant.trial_expires_at.strftime("%Y-%m-%d") if tenant.plano == "trial" and tenant.trial_expires_at and tenant.trial_expires_at > now else (now + timedelta(days=1)).strftime("%Y-%m-%d")
     headers = {"access_token": KEALEX_ASAAS_API_KEY, "Content-Type": "application/json", "User-Agent": "Kealex/1.0.0"}
@@ -666,8 +666,8 @@ def assinar_pix(body: AssinarPixIn, db: Session = Depends(get_db), payload=Depen
     if not tenant: raise HTTPException(404, "Tenant nao encontrado")
     if tenant.asaas_customer_id != body.asaasCustomerId:
         raise HTTPException(403, "Cliente Asaas nao vinculado a esta conta")
-    if tenant.asaas_subscription_id and tenant.subscription_status in ("pending", "active", "past_due"):
-        raise HTTPException(409, "Ja existe uma assinatura vinculada a esta conta")
+    if tenant.asaas_subscription_id and tenant.subscription_status in ("active", "past_due"):
+        raise HTTPException(409, "Ja existe uma assinatura ativa vinculada a esta conta")
     now = datetime.utcnow()
     next_due = tenant.trial_expires_at.strftime("%Y-%m-%d") if tenant.plano == "trial" and tenant.trial_expires_at and tenant.trial_expires_at > now else (now + timedelta(days=1)).strftime("%Y-%m-%d")
     headers = {"access_token": KEALEX_ASAAS_API_KEY, "Content-Type": "application/json", "User-Agent": "Kealex/1.0.0"}
