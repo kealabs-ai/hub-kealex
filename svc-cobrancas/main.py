@@ -1,5 +1,5 @@
-import os, uuid, enum, sys
-from datetime import datetime
+import os, uuid, enum, sys, re
+from datetime import datetime, timezone
 from typing import Optional
 import logging
 import httpx
@@ -109,6 +109,26 @@ _guard = require_active_trial if require_active_trial else verify_token
 KEALEX_ASAAS_API_KEY = os.getenv("KEALEX_ASAAS_API_KEY", "")
 ASAAS_BASE = os.getenv("KEALEX_ASAAS_BASE_URL", "https://api-sandbox.asaas.com/v3").rstrip("/")
 
+def _now():
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+def _build_asaas_payload(body, cobranca):
+    p = {
+        "billingType": body.billingType,
+        "customer": body.customer.strip(),
+        "value": round(cobranca.valor_centavos / 100, 2),
+        "dueDate": cobranca.data_vencimento.date().isoformat() if cobranca.data_vencimento else _now().date().isoformat(),
+        "description": body.description or f"Cobranca {cobranca.id}",
+        "externalReference": cobranca.id,
+    }
+    if body.billingType == "CREDIT_CARD":
+        if body.creditCardToken:
+            p["creditCardToken"] = body.creditCardToken
+        else:
+            p["creditCard"] = body.creditCard.model_dump()
+            p["creditCardHolderInfo"] = body.creditCardHolderInfo.model_dump()
+    return p
+
 app = FastAPI(title="svc-cobrancas")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
@@ -134,12 +154,29 @@ class CobrancaIn(BaseModel):
     valorCentavos: int
     dataVencimento: Optional[str] = None
 
+class CreditCardIn(BaseModel):
+    holderName: str
+    number: str
+    expiryMonth: str
+    expiryYear: str
+    ccv: str
+
+class CreditCardHolderInfoIn(BaseModel):
+    name: str
+    email: str
+    cpfCnpj: str
+    postalCode: str
+    addressNumber: str
+    phone: str
+
 class PagamentoIn(BaseModel):
     cobrancaId: str
     customer: str
     billingType: str
     description: Optional[str] = None
     creditCardToken: Optional[str] = None
+    creditCard: Optional[CreditCardIn] = None
+    creditCardHolderInfo: Optional[CreditCardHolderInfoIn] = None
 
 def _cobranca_to_dict(cobranca: Cobranca):
     fases_cobranca = ["Pendente", "Aguardando Pagamento", "Vencida", "Em Cobranca", "Pago"]
@@ -172,7 +209,8 @@ def _get_proximas_acoes(cobranca: Cobranca):
 @app.post(PREFIX, status_code=201, include_in_schema=False)
 def criar_cobranca(body: CobrancaIn, db: Session = Depends(get_db), payload=Depends(_guard)):
     try:
-        logger.info(f"[CREATE_COBRANCA] Iniciando criacao de cobranca para processo: {body.processoId}")
+        safe_id = re.sub(r'[^a-zA-Z0-9\-]', '', body.processoId)
+        logger.info(f"[CREATE_COBRANCA] Iniciando criacao de cobranca para processo: {safe_id}")
         tenant_id = payload.get("tenant_id")
         
         cobranca = Cobranca(
@@ -216,8 +254,10 @@ def criar_pagamento(body: PagamentoIn, db: Session = Depends(get_db), payload=De
         raise HTTPException(400, "billingType invalido. Use 'PIX' ou 'CREDIT_CARD'")
     if not body.customer.strip():
         raise HTTPException(400, "customer (ID do cliente no ASAAS) e obrigatorio")
-    if body.billingType == "CREDIT_CARD" and not body.creditCardToken:
-        raise HTTPException(400, "creditCardToken e obrigatorio para pagamento com cartao")
+    if body.billingType == "CREDIT_CARD" and not body.creditCardToken and not body.creditCard:
+        raise HTTPException(400, "Informe creditCardToken ou creditCard para pagamento com cartao")
+    if body.billingType == "CREDIT_CARD" and body.creditCard and not body.creditCardHolderInfo:
+        raise HTTPException(400, "creditCardHolderInfo e obrigatorio quando creditCard e informado")
     if not KEALEX_ASAAS_API_KEY:
         raise HTTPException(500, "KEALEX_ASAAS_API_KEY nao configurada")
 
@@ -229,16 +269,7 @@ def criar_pagamento(body: PagamentoIn, db: Session = Depends(get_db), payload=De
     if cobranca.status in ("pago", "cancelado"):
         raise HTTPException(400, f"Cobranca com status '{cobranca.status}' nao pode ser paga")
 
-    payload_asaas = {
-        "billingType": body.billingType,
-        "customer": body.customer.strip(),
-        "value": round(cobranca.valor_centavos / 100, 2),
-        "dueDate": cobranca.data_vencimento.date().isoformat() if cobranca.data_vencimento else datetime.utcnow().date().isoformat(),
-        "description": body.description or f"Cobranca {cobranca.id}",
-        "externalReference": cobranca.id,
-    }
-    if body.billingType == "CREDIT_CARD":
-        payload_asaas["creditCardToken"] = body.creditCardToken
+    payload_asaas = _build_asaas_payload(body, cobranca)
     try:
         response = httpx.post(
             f"{ASAAS_BASE}/payments",
@@ -263,7 +294,7 @@ def criar_pagamento(body: PagamentoIn, db: Session = Depends(get_db), payload=De
     status_anterior = cobranca.status
     cobranca.status = "aguardando_pagamento"
     cobranca.fase_atual = max(cobranca.fase_atual, 1)
-    cobranca.updated_at = datetime.utcnow()
+    cobranca.updated_at = _now()
     db.add(HistoricoCobranca(
         id=str(uuid.uuid4()), cobranca_id=cobranca.id, acao="pagamento_iniciado",
         status_anterior=status_anterior, status_novo=cobranca.status,
@@ -339,7 +370,7 @@ def proxima_fase_cobranca(body: dict, db: Session = Depends(get_db), payload=Dep
         nova_fase = min(cobranca.fase_atual + 1, len(fases_cobranca) - 1)
         
         cobranca.fase_atual = nova_fase
-        cobranca.updated_at = datetime.utcnow()
+        cobranca.updated_at = _now()
         db.add(cobranca)
         
         historico = HistoricoCobranca(
@@ -382,8 +413,8 @@ def marcar_pago(body: dict, db: Session = Depends(get_db), payload=Depends(_guar
         status_anterior = cobranca.status
         cobranca.status = "pago"
         cobranca.fase_atual = 4
-        cobranca.data_pagamento = datetime.utcnow()
-        cobranca.updated_at = datetime.utcnow()
+        cobranca.data_pagamento = _now()
+        cobranca.updated_at = _now()
         db.add(cobranca)
         
         historico = HistoricoCobranca(
@@ -428,7 +459,7 @@ def cancelar_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends
         
         cobranca.status = "cancelado"
         cobranca.motivo_cancelamento = motivo
-        cobranca.updated_at = datetime.utcnow()
+        cobranca.updated_at = _now()
         db.add(cobranca)
         
         historico = HistoricoCobranca(
@@ -475,18 +506,12 @@ def timeline_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends
         
         historico = db.query(HistoricoCobranca).filter_by(cobranca_id=cobranca_id).order_by(HistoricoCobranca.created_at).all()
         
-        timeline = []
-        for h in historico:
-            timeline.append({
-                "id": h.id,
-                "acao": h.acao,
-                "fase_anterior": h.fase_anterior,
-                "fase_nova": h.fase_nova,
-                "status_anterior": h.status_anterior,
-                "status_novo": h.status_novo,
-                "observacao": h.observacao,
-                "data": h.created_at.isoformat()
-            })
+        timeline = [
+            {"id": h.id, "acao": h.acao, "fase_anterior": h.fase_anterior, "fase_nova": h.fase_nova,
+             "status_anterior": h.status_anterior, "status_novo": h.status_novo,
+             "observacao": h.observacao, "data": h.created_at.isoformat()}
+            for h in historico
+        ]
         
         logger.info(f"[TIMELINE] Timeline recuperada: {len(timeline)} eventos")
         return {

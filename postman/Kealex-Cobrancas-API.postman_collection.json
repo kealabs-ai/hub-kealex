@@ -1,0 +1,203 @@
+{
+  "info": {
+    "name": "Kealex - Cobranças API",
+    "description": "Collection para testar endpoints do svc-cobrancas (integração ASAAS)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Criar Cobrança",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 201) {",
+              "    const response = pm.response.json();",
+              "    pm.environment.set('cobranca_id', response.id);",
+              "    pm.test('Cobrança criada com sucesso', () => {",
+              "        pm.expect(response.status).to.eql('pendente');",
+              "    });",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{access_token}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"processoId\": \"{{processo_id}}\",\n  \"clienteId\": \"{{cliente_id}}\",\n  \"valorCentavos\": 150000,\n  \"dataVencimento\": \"2025-12-31T23:59:59\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/v1/lex/cobrancas",
+          "host": ["{{base_url}}"],
+          "path": ["v1", "lex", "cobrancas"]
+        }
+      }
+    },
+    {
+      "name": "2. Criar Pagamento (PIX)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{access_token}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"cobrancaId\": \"{{cobranca_id}}\",\n  \"customer\": \"{{asaas_customer_id}}\",\n  \"billingType\": \"PIX\",\n  \"description\": \"Honorários advocatícios - Processo {{processo_id}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/v1/lex/cobrancas/pagamento",
+          "host": ["{{base_url}}"],
+          "path": ["v1", "lex", "cobrancas", "pagamento"]
+        }
+      }
+    },
+    {
+      "name": "3. Criar Pagamento (Cartão de Crédito)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{access_token}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"cobrancaId\": \"{{cobranca_id}}\",\n  \"customer\": \"{{asaas_customer_id}}\",\n  \"billingType\": \"CREDIT_CARD\",\n  \"description\": \"Honorários advocatícios - Processo {{processo_id}}\",\n  \"creditCard\": {\n    \"holderName\": \"João Silva\",\n    \"number\": \"4111111111111111\",\n    \"expiryMonth\": \"12\",\n    \"expiryYear\": \"2028\",\n    \"ccv\": \"123\"\n  },\n  \"creditCardHolderInfo\": {\n    \"name\": \"João Silva\",\n    \"email\": \"joao@email.com\",\n    \"cpfCnpj\": \"12345678901\",\n    \"postalCode\": \"01310-100\",\n    \"addressNumber\": \"123\",\n    \"phone\": \"11999999999\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/v1/lex/cobrancas/pagamento",
+          "host": ["{{base_url}}"],
+          "path": ["v1", "lex", "cobrancas", "pagamento"]
+        }
+      }
+    },
+    {
+      "name": "4. Listar Cobranças",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{access_token}}", "type": "text" }
+        ],
+        "url": {
+          "raw": "{{base_url}}/v1/lex/cobrancas",
+          "host": ["{{base_url}}"],
+          "path": ["v1", "lex", "cobrancas"]
+        }
+      }
+    },
+    {
+      "name": "5. Obter Cobrança",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{access_token}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"{{cobranca_id}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/v1/lex/cobrancas/get",
+          "host": ["{{base_url}}"],
+          "path": ["v1", "lex", "cobrancas", "get"]
+        }
+      }
+    },
+    {
+      "name": "6. Próxima Fase",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{access_token}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"{{cobranca_id}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/v1/lex/cobrancas/proxima-fase",
+          "host": ["{{base_url}}"],
+          "path": ["v1", "lex", "cobrancas", "proxima-fase"]
+        }
+      }
+    },
+    {
+      "name": "7. Marcar como Pago",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{access_token}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"{{cobranca_id}}\",\n  \"observacao\": \"Pagamento confirmado pelo cliente\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/v1/lex/cobrancas/marcar-pago",
+          "host": ["{{base_url}}"],
+          "path": ["v1", "lex", "cobrancas", "marcar-pago"]
+        }
+      }
+    },
+    {
+      "name": "8. Cancelar Cobrança",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{access_token}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"{{cobranca_id}}\",\n  \"motivo\": \"Cliente solicitou cancelamento\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/v1/lex/cobrancas/cancelar",
+          "host": ["{{base_url}}"],
+          "path": ["v1", "lex", "cobrancas", "cancelar"]
+        }
+      }
+    },
+    {
+      "name": "9. Timeline da Cobrança",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{access_token}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"{{cobranca_id}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/v1/lex/cobrancas/timeline",
+          "host": ["{{base_url}}"],
+          "path": ["v1", "lex", "cobrancas", "timeline"]
+        }
+      }
+    },
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": ["{{base_url}}"],
+          "path": ["health"]
+        }
+      }
+    }
+  ]
+}
