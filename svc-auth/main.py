@@ -217,17 +217,18 @@ class RegisterIn(BaseModel):
     senha:    str | None = None  # opcional; se omitida, gera senha temporária
 
 class AuthUser(BaseModel):
-    id:             str
-    nome:           str
-    email:          str
-    role:           str
-    tenantId:       str
-    accessToken:    str
-    plano:          str
-    trialStartedAt: str | None = None
-    trialExpiresAt: str | None = None
-    escritorioId:   str | None = None
-    modalidade:     str | None = None  # autonomo | escritorio
+    id:                 str
+    nome:               str
+    email:              str
+    role:               str
+    tenantId:           str
+    accessToken:        str
+    plano:              str
+    subscriptionStatus: str | None = None
+    trialStartedAt:     str | None = None
+    trialExpiresAt:     str | None = None
+    escritorioId:       str | None = None
+    modalidade:         str | None = None  # autonomo | escritorio
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
@@ -285,6 +286,7 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
         tenantId=tenant.id,
         accessToken=_make_token(user),
         plano=tenant.plano,
+        subscriptionStatus=tenant.subscription_status,
         trialStartedAt=tenant.trial_started_at.isoformat(),
         trialExpiresAt=tenant.trial_expires_at.isoformat(),
         escritorioId=getattr(user, 'escritorio_id', None),
@@ -310,6 +312,7 @@ def login(body: LoginIn, db: Session = Depends(get_db)):
         tenantId=user.tenant_id,
         accessToken=_make_token(user),
         plano=tenant.plano if tenant else "trial",
+        subscriptionStatus=tenant.subscription_status if tenant else None,
         trialStartedAt=tenant.trial_started_at.isoformat() if tenant and tenant.trial_started_at else None,
         trialExpiresAt=tenant.trial_expires_at.isoformat() if tenant and tenant.trial_expires_at else None,
         escritorioId=getattr(user, 'escritorio_id', None),
