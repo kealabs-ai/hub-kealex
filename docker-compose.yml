@@ -183,6 +183,8 @@ services:
       - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
       - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
       - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY:-${KEALEX_JWT_SECRET}}
+      - KEALEX_ASAAS_API_KEY=${KEALEX_ASAAS_API_KEY:-}
+      - KEALEX_ASAAS_BASE_URL=${KEALEX_ASAAS_BASE_URL:-https://api-sandbox.asaas.com/v3}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.svc-cobrancas.rule=(Host(`${KEALEX_PUBLIC_API_HOST}`) || Host(`${KEALEX_PUBLIC_LEGACY_DOMAIN}`) || Host(`${KEALEX_PUBLIC_LEGACY_WWW_DOMAIN}`)) && (PathPrefix(`/v1/lex/cobrancas`) || PathPrefix(`/k1/lex/cobrancas`))"

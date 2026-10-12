@@ -2,6 +2,7 @@ import os, uuid, enum, sys
 from datetime import datetime
 from typing import Optional
 import logging
+import httpx
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -105,6 +106,9 @@ def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
 
 _guard = require_active_trial if require_active_trial else verify_token
 
+KEALEX_ASAAS_API_KEY = os.getenv("KEALEX_ASAAS_API_KEY", "")
+ASAAS_BASE = os.getenv("KEALEX_ASAAS_BASE_URL", "https://api-sandbox.asaas.com/v3").rstrip("/")
+
 app = FastAPI(title="svc-cobrancas")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
@@ -129,6 +133,13 @@ class CobrancaIn(BaseModel):
     clienteId: str
     valorCentavos: int
     dataVencimento: Optional[str] = None
+
+class PagamentoIn(BaseModel):
+    cobrancaId: str
+    customer: str
+    billingType: str
+    description: Optional[str] = None
+    creditCardToken: Optional[str] = None
 
 def _cobranca_to_dict(cobranca: Cobranca):
     fases_cobranca = ["Pendente", "Aguardando Pagamento", "Vencida", "Em Cobranca", "Pago"]
@@ -196,6 +207,79 @@ def criar_cobranca(body: CobrancaIn, db: Session = Depends(get_db), payload=Depe
         logger.error(f"[CREATE_COBRANCA] ERRO: {str(e)}", exc_info=True)
         db.rollback()
         raise HTTPException(500, f"Erro ao criar cobranca: {str(e)}")
+
+@app.post("/v1/lex/cobrancas/pagamento")
+@app.post("/k1/lex/cobrancas/pagamento")
+@app.post(f"{PREFIX}/pagamento", include_in_schema=False)
+def criar_pagamento(body: PagamentoIn, db: Session = Depends(get_db), payload=Depends(_guard)):
+    if body.billingType not in ("PIX", "CREDIT_CARD"):
+        raise HTTPException(400, "billingType invalido. Use 'PIX' ou 'CREDIT_CARD'")
+    if not body.customer.strip():
+        raise HTTPException(400, "customer (ID do cliente no ASAAS) e obrigatorio")
+    if body.billingType == "CREDIT_CARD" and not body.creditCardToken:
+        raise HTTPException(400, "creditCardToken e obrigatorio para pagamento com cartao")
+    if not KEALEX_ASAAS_API_KEY:
+        raise HTTPException(500, "KEALEX_ASAAS_API_KEY nao configurada")
+
+    cobranca = db.query(Cobranca).filter_by(
+        id=body.cobrancaId, tenant_id=payload.get("tenant_id")
+    ).first()
+    if not cobranca:
+        raise HTTPException(404, "Cobranca nao encontrada")
+    if cobranca.status in ("pago", "cancelado"):
+        raise HTTPException(400, f"Cobranca com status '{cobranca.status}' nao pode ser paga")
+
+    payload_asaas = {
+        "billingType": body.billingType,
+        "customer": body.customer.strip(),
+        "value": round(cobranca.valor_centavos / 100, 2),
+        "dueDate": cobranca.data_vencimento.date().isoformat() if cobranca.data_vencimento else datetime.utcnow().date().isoformat(),
+        "description": body.description or f"Cobranca {cobranca.id}",
+        "externalReference": cobranca.id,
+    }
+    if body.billingType == "CREDIT_CARD":
+        payload_asaas["creditCardToken"] = body.creditCardToken
+    try:
+        response = httpx.post(
+            f"{ASAAS_BASE}/payments",
+            json=payload_asaas,
+            headers={
+                "accept": "application/json",
+                "content-type": "application/json",
+                "access_token": KEALEX_ASAAS_API_KEY,
+                "User-Agent": "Kealex/1.0.0",
+            },
+            timeout=15,
+        )
+    except httpx.RequestError as exc:
+        logger.error("Falha de conexao com ASAAS: %s", exc)
+        raise HTTPException(502, "Erro ao conectar com gateway de pagamento")
+
+    if response.status_code not in (200, 201):
+        logger.error("ASAAS recusou pagamento: status=%s body=%s", response.status_code, response.text)
+        raise HTTPException(502, "ASAAS nao conseguiu criar o pagamento")
+
+    asaas_data = response.json()
+    status_anterior = cobranca.status
+    cobranca.status = "aguardando_pagamento"
+    cobranca.fase_atual = max(cobranca.fase_atual, 1)
+    cobranca.updated_at = datetime.utcnow()
+    db.add(HistoricoCobranca(
+        id=str(uuid.uuid4()), cobranca_id=cobranca.id, acao="pagamento_iniciado",
+        status_anterior=status_anterior, status_novo=cobranca.status,
+        observacao=f"billingType={body.billingType}, asaas_id={asaas_data.get('id')}",
+    ))
+    db.commit()
+    return {
+        "cobrancaId": cobranca.id,
+        "asaasId": asaas_data.get("id"),
+        "billingType": asaas_data.get("billingType"),
+        "status": asaas_data.get("status"),
+        "value": asaas_data.get("value"),
+        "dueDate": asaas_data.get("dueDate"),
+        "invoiceUrl": asaas_data.get("invoiceUrl"),
+        "pixQrCodeUrl": asaas_data.get("pixQrCodeUrl"),
+    }
 
 @app.get("/v1/lex/cobrancas")
 @app.get("/k1/lex/cobrancas")
