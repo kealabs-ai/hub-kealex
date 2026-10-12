@@ -530,6 +530,12 @@ PLANOS = {
     "professional": {"value": 397.00, "description": "Plano Professional"},
 }
 
+def _calcular_valor(valor_mensal: float, periodicidade: str) -> tuple[float, int]:
+    """Retorna (valor_total, installmentCount). Trimestral = 3x com 5% de desconto."""
+    if periodicidade == "trimestral":
+        return round(valor_mensal * 3 * 0.95, 2), 3
+    return valor_mensal, 1
+
 def _digits(value: str | None) -> str | None:
     if value is None: return None
     return "".join(c for c in value if c.isdigit())
@@ -542,17 +548,19 @@ class HolderInfoIn(BaseModel):
     addressComplement: str | None = None; phone: str | None = None; mobilePhone: str | None = None
 
 class AssinarIn(BaseModel):
-    plano: str; asaasCustomerId: str
+    plano: str; asaasCustomerId: str; periodicidade: str = "mensal"
     creditCard: CreditCardIn; holderInfo: HolderInfoIn; remoteIp: str = "127.0.0.1"
 
 class AssinarOut(BaseModel):
-    subscriptionId: str; plano: str; status: str; nextDueDate: str; value: float
+    subscriptionId: str; plano: str; periodicidade: str; status: str
+    nextDueDate: str; value: float; valorMensal: float; desconto: float
 
 class AssinarPixIn(BaseModel):
-    plano: str; asaasCustomerId: str
+    plano: str; asaasCustomerId: str; periodicidade: str = "mensal"
 
 class AssinarPixOut(BaseModel):
-    subscriptionId: str; plano: str; status: str; nextDueDate: str; value: float
+    subscriptionId: str; plano: str; periodicidade: str; status: str
+    nextDueDate: str; value: float; valorMensal: float; desconto: float
     pixQrCode: str; pixKey: str; pixExpiresAt: str
 
 class PreRegisterIn(BaseModel):
@@ -626,22 +634,29 @@ def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(veri
         raise HTTPException(403, "Cliente Asaas nao vinculado a esta conta")
     if tenant.asaas_subscription_id and tenant.subscription_status in ("active", "past_due"):
         raise HTTPException(409, "Ja existe uma assinatura ativa vinculada a esta conta")
+    valor_mensal = plano_cfg["value"]
+    valor_total, installment_count = _calcular_valor(valor_mensal, body.periodicidade)
+    desconto = round(valor_mensal * (3 if body.periodicidade == "trimestral" else 1) - valor_total, 2)
     now = datetime.utcnow()
     next_due = tenant.trial_expires_at.strftime("%Y-%m-%d") if tenant.plano == "trial" and tenant.trial_expires_at and tenant.trial_expires_at > now else (now + timedelta(days=1)).strftime("%Y-%m-%d")
     headers = {"access_token": KEALEX_ASAAS_API_KEY, "Content-Type": "application/json", "User-Agent": "Kealex/1.0.0"}
+    subscription_payload = {
+        "customer": body.asaasCustomerId, "billingType": "CREDIT_CARD",
+        "nextDueDate": next_due, "value": valor_total, "cycle": "MONTHLY",
+        "description": f"{plano_cfg['description']} ({'Trimestral' if body.periodicidade == 'trimestral' else 'Mensal'})",
+        "creditCard": {"holderName": body.creditCard.holderName, "number": body.creditCard.number,
+                       "expiryMonth": body.creditCard.expiryMonth, "expiryYear": body.creditCard.expiryYear, "ccv": body.creditCard.ccv},
+        "creditCardHolderInfo": {"name": body.holderInfo.name, "email": body.holderInfo.email,
+                                 "cpfCnpj": _digits(body.holderInfo.cpfCnpj), "postalCode": body.holderInfo.postalCode,
+                                 "addressNumber": body.holderInfo.addressNumber, "phone": _digits(body.holderInfo.phone),
+                                 "mobilePhone": _digits(body.holderInfo.mobilePhone)},
+        "remoteIp": body.remoteIp,
+    }
+    if body.periodicidade == "trimestral":
+        subscription_payload["installmentCount"] = 3
+        subscription_payload["installmentValue"] = round(valor_total / 3, 2)
     try:
-        resp = httpx.post(f"{ASAAS_BASE}/subscriptions", headers=headers, timeout=20, json={
-            "customer": body.asaasCustomerId, "billingType": "CREDIT_CARD",
-            "nextDueDate": next_due, "value": plano_cfg["value"], "cycle": "MONTHLY",
-            "description": plano_cfg["description"],
-            "creditCard": {"holderName": body.creditCard.holderName, "number": body.creditCard.number,
-                           "expiryMonth": body.creditCard.expiryMonth, "expiryYear": body.creditCard.expiryYear, "ccv": body.creditCard.ccv},
-            "creditCardHolderInfo": {"name": body.holderInfo.name, "email": body.holderInfo.email,
-                                     "cpfCnpj": _digits(body.holderInfo.cpfCnpj), "postalCode": body.holderInfo.postalCode,
-                                     "addressNumber": body.holderInfo.addressNumber, "phone": _digits(body.holderInfo.phone),
-                                     "mobilePhone": _digits(body.holderInfo.mobilePhone)},
-            "remoteIp": body.remoteIp,
-        })
+        resp = httpx.post(f"{ASAAS_BASE}/subscriptions", headers=headers, timeout=20, json=subscription_payload)
         if resp.status_code not in (200, 201):
             raise HTTPException(422, f"Asaas recusou: {resp.json().get('errors', resp.text)}")
         data = resp.json()
@@ -659,8 +674,10 @@ def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(veri
         tenant.ativo = True
         db.query(Usuario).filter_by(tenant_id=tenant.id).update({"ativo": True})
     db.commit()
-    return AssinarOut(subscriptionId=data.get("id", ""), plano=body.plano,
-                      status="ACTIVE" if is_confirmed else "PENDING_PAYMENT", nextDueDate=data.get("nextDueDate", next_due), value=plano_cfg["value"])
+    return AssinarOut(subscriptionId=data.get("id", ""), plano=body.plano, periodicidade=body.periodicidade,
+                      status="ACTIVE" if is_confirmed else "PENDING_PAYMENT",
+                      nextDueDate=data.get("nextDueDate", next_due),
+                      value=valor_total, valorMensal=valor_mensal, desconto=desconto)
 
 @app.post("/k1/lex/auth/assinar-pix", response_model=AssinarPixOut)
 def assinar_pix(body: AssinarPixIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
@@ -674,16 +691,23 @@ def assinar_pix(body: AssinarPixIn, db: Session = Depends(get_db), payload=Depen
         raise HTTPException(403, "Cliente Asaas nao vinculado a esta conta")
     if tenant.asaas_subscription_id and tenant.subscription_status in ("active", "past_due"):
         raise HTTPException(409, "Ja existe uma assinatura ativa vinculada a esta conta")
+    valor_mensal = plano_cfg["value"]
+    valor_total, installment_count = _calcular_valor(valor_mensal, body.periodicidade)
+    desconto = round(valor_mensal * (3 if body.periodicidade == "trimestral" else 1) - valor_total, 2)
     now = datetime.utcnow()
     next_due = tenant.trial_expires_at.strftime("%Y-%m-%d") if tenant.plano == "trial" and tenant.trial_expires_at and tenant.trial_expires_at > now else (now + timedelta(days=1)).strftime("%Y-%m-%d")
     headers = {"access_token": KEALEX_ASAAS_API_KEY, "Content-Type": "application/json", "User-Agent": "Kealex/1.0.0"}
+    pix_payload = {
+        "customer": body.asaasCustomerId, "billingType": "PIX",
+        "nextDueDate": next_due, "value": valor_total, "cycle": "MONTHLY",
+        "description": f"{plano_cfg['description']} ({'Trimestral' if body.periodicidade == 'trimestral' else 'Mensal'})",
+    }
+    if body.periodicidade == "trimestral":
+        pix_payload["installmentCount"] = 3
+        pix_payload["installmentValue"] = round(valor_total / 3, 2)
     try:
         # 1. Criar assinatura PIX
-        resp = httpx.post(f"{ASAAS_BASE}/subscriptions", headers=headers, timeout=20, json={
-            "customer": body.asaasCustomerId, "billingType": "PIX",
-            "nextDueDate": next_due, "value": plano_cfg["value"],
-            "cycle": "MONTHLY", "description": plano_cfg["description"],
-        })
+        resp = httpx.post(f"{ASAAS_BASE}/subscriptions", headers=headers, timeout=20, json=pix_payload)
         if resp.status_code not in (200, 201):
             raise HTTPException(422, f"Asaas recusou: {resp.json().get('errors', resp.text)}")
         subscription_id = resp.json()["id"]
@@ -711,8 +735,9 @@ def assinar_pix(body: AssinarPixIn, db: Session = Depends(get_db), payload=Depen
         db.query(Usuario).filter_by(tenant_id=tenant.id).update({"ativo": True})
     db.commit()
     return AssinarPixOut(
-        subscriptionId=subscription_id, plano=body.plano, status="PENDING",
-        nextDueDate=due_date, value=plano_cfg["value"],
+        subscriptionId=subscription_id, plano=body.plano, periodicidade=body.periodicidade,
+        status="PENDING", nextDueDate=due_date,
+        value=valor_total, valorMensal=valor_mensal, desconto=desconto,
         pixQrCode=qr_data.get("encodedImage", ""),
         pixKey=qr_data.get("payload", ""),
         pixExpiresAt=qr_data.get("expirationDate") or (now + timedelta(hours=24)).isoformat(),
@@ -739,8 +764,10 @@ async def asaas_webhook(request: Request, db: Session = Depends(get_db),
             db.query(Usuario).filter_by(tenant_id=tenant.id).update({"ativo": True})
         elif event_name == "PAYMENT_OVERDUE":
             tenant.subscription_status = "past_due"
-        elif event_name == "SUBSCRIPTION_DELETED":
+        elif event_name in ("SUBSCRIPTION_DELETED", "PAYMENT_DELETED"):
             tenant.subscription_status = "canceled"
+        elif event_name == "PAYMENT_REFUNDED":
+            tenant.subscription_status = "inactive"
         tenant.updated_at = datetime.utcnow()
     db.commit()
     return {"ok": True}
@@ -1534,19 +1561,34 @@ def cobranca_timeline(body: dict, db: Session = Depends(get_db), payload=Depends
         "proximas_acoes": proximas_acoes,
     }
 
+class _CreditCardIn(BaseModel):
+    holderName: str; number: str; expiryMonth: str; expiryYear: str; ccv: str
+
+class _CreditCardHolderInfoIn(BaseModel):
+    name: str; email: str; cpfCnpj: str; postalCode: str; addressNumber: str
+    phone: Optional[str] = None; mobilePhone: Optional[str] = None
+
 class PagamentoIn(BaseModel):
     cobrancaId: str
     billingType: str
     customer: str
-    value: float
-    dueDate: str
     description: Optional[str] = None
+    creditCardToken: Optional[str] = None
+    creditCard: Optional[_CreditCardIn] = None
+    creditCardHolderInfo: Optional[_CreditCardHolderInfoIn] = None
+    remoteIp: str = "127.0.0.1"
 
 @app.post("/v1/lex/cobrancas/pagamento")
 @app.post("/k1/lex/cobrancas/pagamento")
 def criar_pagamento(body: PagamentoIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
     if body.billingType not in ("CREDIT_CARD", "PIX"):
         raise HTTPException(400, "billingType invalido. Use 'CREDIT_CARD' ou 'PIX'")
+    if body.billingType == "CREDIT_CARD" and not body.creditCardToken and not body.creditCard:
+        raise HTTPException(400, "Informe creditCardToken ou creditCard para pagamento com cartao")
+    if body.billingType == "CREDIT_CARD" and body.creditCard and not body.creditCardHolderInfo:
+        raise HTTPException(400, "creditCardHolderInfo e obrigatorio quando creditCard e informado")
+    if not KEALEX_ASAAS_API_KEY:
+        raise HTTPException(500, "KEALEX_ASAAS_API_KEY nao configurada")
 
     tenant_id = payload.get("tenant_id")
     c = db.query(Cobranca).filter_by(id=body.cobrancaId, tenant_id=tenant_id).first()
@@ -1555,36 +1597,46 @@ def criar_pagamento(body: PagamentoIn, db: Session = Depends(get_db), payload=De
     if c.status in ("pago", "cancelado"):
         raise HTTPException(400, f"Cobranca com status '{c.status}' nao pode ser paga")
 
-    if not KEALEX_ASAAS_API_KEY:
-        raise HTTPException(500, "KEALEX_ASAAS_API_KEY nao configurada")
+    due_date = c.data_vencimento.date().isoformat() if c.data_vencimento else datetime.utcnow().date().isoformat()
+    payload_asaas = {
+        "billingType": body.billingType,
+        "customer": body.customer,
+        "value": round(c.valor_centavos / 100, 2),
+        "dueDate": due_date,
+        "description": body.description or f"Cobranca {c.id}",
+        "externalReference": c.id,
+    }
+    if body.billingType == "CREDIT_CARD":
+        if body.creditCardToken:
+            payload_asaas["creditCardToken"] = body.creditCardToken
+        else:
+            payload_asaas["creditCard"] = body.creditCard.model_dump()
+            payload_asaas["creditCardHolderInfo"] = {
+                **body.creditCardHolderInfo.model_dump(exclude_none=True),
+                "cpfCnpj": _digits(body.creditCardHolderInfo.cpfCnpj),
+                "phone": _digits(body.creditCardHolderInfo.phone),
+                "mobilePhone": _digits(body.creditCardHolderInfo.mobilePhone),
+            }
+            payload_asaas["remoteIp"] = body.remoteIp
 
     try:
-        with httpx.Client(timeout=15) as client:
-            resp = client.post(
-                f"{ASAAS_BASE}/payments",
-                json={
-                    "billingType": body.billingType,
-                    "customer": body.customer,
-                    "value": body.value,
-                    "dueDate": body.dueDate,
-                    "description": body.description or f"Cobranca {body.cobrancaId}",
-                },
-                headers={
-                    "accept": "application/json",
-                    "content-type": "application/json",
-                    "access_token": KEALEX_ASAAS_API_KEY,
-                    "User-Agent": "HubKealex/1.0.0",
-                },
-            )
+        resp = httpx.post(
+            f"{ASAAS_BASE}/payments",
+            json=payload_asaas,
+            headers={"accept": "application/json", "content-type": "application/json",
+                     "access_token": KEALEX_ASAAS_API_KEY, "User-Agent": "HubKealex/1.0.0"},
+            timeout=15,
+        )
     except httpx.RequestError as e:
         raise HTTPException(502, f"Erro ao conectar com gateway de pagamento: {str(e)}")
 
     if resp.status_code not in (200, 201):
-        raise HTTPException(resp.status_code, f"Erro no gateway de pagamento: {resp.text}")
+        raise HTTPException(502, f"Asaas recusou: {resp.json().get('errors', resp.text)}")
 
     asaas_data = resp.json()
     status_ant = c.status
     c.status = "aguardando_pagamento"
+    c.fase_atual = max(c.fase_atual, 1)
     c.updated_at = datetime.utcnow()
     db.add(HistoricoCobranca(
         id=str(uuid.uuid4()), cobranca_id=c.id, acao="pagamento_iniciado",
@@ -1597,6 +1649,8 @@ def criar_pagamento(body: PagamentoIn, db: Session = Depends(get_db), payload=De
         "asaasId": asaas_data.get("id"),
         "billingType": asaas_data.get("billingType"),
         "status": asaas_data.get("status"),
+        "value": asaas_data.get("value"),
+        "dueDate": asaas_data.get("dueDate"),
         "invoiceUrl": asaas_data.get("invoiceUrl"),
         "pixQrCodeUrl": asaas_data.get("pixQrCodeUrl"),
         "bankSlipUrl": asaas_data.get("bankSlipUrl"),
