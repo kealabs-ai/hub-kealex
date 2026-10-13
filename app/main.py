@@ -685,10 +685,13 @@ def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(veri
         "description": f"{plano_cfg['description']} ({'Trimestral' if body.periodicidade == 'trimestral' else 'Mensal'})",
         "creditCard": {"holderName": body.creditCard.holderName, "number": body.creditCard.number,
                        "expiryMonth": body.creditCard.expiryMonth, "expiryYear": body.creditCard.expiryYear, "ccv": body.creditCard.ccv},
-        "creditCardHolderInfo": {"name": body.holderInfo.name, "email": body.holderInfo.email,
-                                 "cpfCnpj": _digits(body.holderInfo.cpfCnpj), "postalCode": body.holderInfo.postalCode,
-                                 "addressNumber": body.holderInfo.addressNumber, "phone": _digits(body.holderInfo.phone),
-                                 "mobilePhone": _digits(body.holderInfo.mobilePhone)},
+        "creditCardHolderInfo": {k: v for k, v in {
+            "name": body.holderInfo.name, "email": body.holderInfo.email,
+            "cpfCnpj": _digits(body.holderInfo.cpfCnpj), "postalCode": _digits(body.holderInfo.postalCode),
+            "addressNumber": body.holderInfo.addressNumber,
+            "addressComplement": body.holderInfo.addressComplement,
+            "phone": _digits(body.holderInfo.phone) or _digits(body.holderInfo.mobilePhone),
+        }.items() if v not in (None, "")},
         "remoteIp": body.remoteIp,
     }
     if body.periodicidade == "trimestral":
