@@ -1,9 +1,9 @@
-import os, uuid, enum, sys, re
+import os, uuid, enum, sys, re, hmac
 from datetime import datetime, timezone
 from typing import Optional
 import logging
 import httpx
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
@@ -88,6 +88,13 @@ class HistoricoCobranca(Base):
     observacao = Column(String(500), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class AsaasWebhookEvent(Base):
+    __tablename__ = "asaas_webhook_events"
+    id = Column(String(100), primary_key=True)  # event id vindo do Asaas
+    event = Column(String(100), nullable=False)
+    payload = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 def get_db():
     db = SessionLocal()
     try:
@@ -108,6 +115,7 @@ _guard = require_active_trial if require_active_trial else verify_token
 
 KEALEX_ASAAS_API_KEY = os.getenv("KEALEX_ASAAS_API_KEY", "")
 ASAAS_BASE = os.getenv("KEALEX_ASAAS_BASE_URL", "https://api-sandbox.asaas.com/v3").rstrip("/")
+KEALEX_ASAAS_WEBHOOK_TOKEN = os.getenv("KEALEX_ASAAS_WEBHOOK_TOKEN", "")
 
 def _now():
     return datetime.now(timezone.utc).replace(tzinfo=None)
@@ -530,3 +538,93 @@ def timeline_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends
     except Exception as e:
         logger.error(f"[TIMELINE] ERRO: {str(e)}", exc_info=True)
         raise HTTPException(500, f"Erro ao obter timeline: {str(e)}")
+
+# ── Webhook ───────────────────────────────────────────────────────────────────
+
+# Mapeamento evento Asaas → (status_interno, fase, acao_historico)
+_EVENTO_MAP = {
+    "PAYMENT_CONFIRMED":    ("pago",                4, "webhook_pago"),
+    "PAYMENT_RECEIVED":     ("pago",                4, "webhook_pago"),
+    "PAYMENT_OVERDUE":      ("vencida",             2, "webhook_vencida"),
+    "PAYMENT_DELETED":      ("cancelado",           None, "webhook_cancelado"),
+    "PAYMENT_REFUNDED":     ("cancelado",           None, "webhook_estornado"),
+    "PAYMENT_CHARGEBACK_REQUESTED": ("cancelado",   None, "webhook_chargeback"),
+}
+
+def _verify_webhook_token(token: str | None) -> bool:
+    if not KEALEX_ASAAS_WEBHOOK_TOKEN or not token:
+        return False
+    return hmac.compare_digest(
+        token.encode("utf-8"),
+        KEALEX_ASAAS_WEBHOOK_TOKEN.encode("utf-8"),
+    )
+
+@app.post("/v1/lex/cobrancas/webhook")
+@app.post("/k1/lex/cobrancas/webhook")
+@app.post(f"{PREFIX}/webhook", include_in_schema=False)
+async def webhook_asaas(request: Request, db: Session = Depends(get_db)):
+    import json as _json
+
+    token = request.headers.get("asaas-access-token")
+    if not _verify_webhook_token(token):
+        logging.warning("[WEBHOOK] Token invalido ou ausente")
+        raise HTTPException(401, "Token de webhook invalido")
+
+    raw = await request.body()
+    try:
+        data = _json.loads(raw)
+    except Exception:
+        raise HTTPException(400, "Payload invalido")
+
+    event_id = data.get("id")
+    event_name = data.get("event", "")
+
+    if not event_id:
+        raise HTTPException(400, "Campo 'id' ausente no payload")
+
+    # Idempotência
+    if db.get(AsaasWebhookEvent, event_id):
+        logging.info("[WEBHOOK] Evento duplicado ignorado event_id=%s", event_id)
+        return {"ok": True, "duplicated": True}
+
+    # Persiste o evento
+    db.add(AsaasWebhookEvent(
+        id=event_id,
+        event=event_name,
+        payload=raw.decode("utf-8"),
+    ))
+
+    # Atualiza a cobrança se o evento for mapeado
+    payment = data.get("payment", {})
+    external_ref = payment.get("externalReference")  # cobranca.id
+
+    if event_name in _EVENTO_MAP and external_ref:
+        novo_status, nova_fase, acao = _EVENTO_MAP[event_name]
+        cobranca = db.query(Cobranca).filter_by(id=external_ref).first()
+        if cobranca:
+            status_anterior = cobranca.status
+            cobranca.status = novo_status
+            if nova_fase is not None:
+                cobranca.fase_atual = nova_fase
+            if novo_status == "pago":
+                cobranca.data_pagamento = _now()
+            cobranca.updated_at = _now()
+            db.add(HistoricoCobranca(
+                id=str(uuid.uuid4()),
+                cobranca_id=cobranca.id,
+                acao=acao,
+                status_anterior=status_anterior,
+                status_novo=novo_status,
+                observacao=f"event_id={event_id} event={event_name}",
+            ))
+            logging.info(
+                "[WEBHOOK] Cobranca atualizada cobranca_id=%s event=%s status=%s",
+                cobranca.id, event_name, novo_status,
+            )
+        else:
+            logging.warning("[WEBHOOK] Cobranca nao encontrada externalReference=%s", external_ref)
+    else:
+        logging.info("[WEBHOOK] Evento nao mapeado ignorado event=%s", event_name)
+
+    db.commit()
+    return {"ok": True}
