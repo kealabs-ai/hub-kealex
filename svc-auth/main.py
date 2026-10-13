@@ -75,9 +75,18 @@ class Tenant(Base):
     trial_started_at = Column(DateTime,    nullable=True)
     trial_expires_at = Column(DateTime,    nullable=True)
     asaas_customer_id = Column(String(80), nullable=True)
+    billing_name = Column(String(255), nullable=True)
+    billing_email = Column(String(255), nullable=True)
     billing_cpf_cnpj = Column(String(20), nullable=True)
     billing_phone = Column(String(30), nullable=True)
     billing_mobile_phone = Column(String(30), nullable=True)
+    billing_postal_code = Column(String(10), nullable=True)
+    billing_address = Column(String(255), nullable=True)
+    billing_address_number = Column(String(20), nullable=True)
+    billing_complement = Column(String(100), nullable=True)
+    billing_neighborhood = Column(String(100), nullable=True)
+    billing_city = Column(String(100), nullable=True)
+    billing_state = Column(String(2), nullable=True)
     asaas_subscription_id = Column(String(80), nullable=True)
     subscription_plan = Column(String(20), nullable=True)
     subscription_status = Column(String(20), nullable=False, default="trialing")
@@ -426,6 +435,10 @@ class HolderInfoIn(BaseModel):
     addressComplement: str | None = None
     phone:             str | None = None
     mobilePhone:       str | None = None
+    address:           str | None = None
+    neighborhood:      str | None = None
+    city:              str | None = None
+    state:             str | None = None
 
 
 def _digits(value: str | None) -> str | None:
@@ -838,9 +851,12 @@ def criar_cliente_asaas(body: HolderInfoIn, db: Session = Depends(get_db), paylo
         "cpfCnpj": _digits(body.cpfCnpj),
         "phone": _digits(body.phone),
         "mobilePhone": _digits(body.mobilePhone),
-        "postalCode": body.postalCode,
+        "postalCode": _digits(body.postalCode),
         "addressNumber": body.addressNumber,
         "complement": body.addressComplement,
+        "address": body.address,
+        "province": body.neighborhood,
+        "city": body.city,
     }
     customer_data = {key: value for key, value in customer_data.items() if value not in (None, "")}
     try:
@@ -863,9 +879,18 @@ def criar_cliente_asaas(body: HolderInfoIn, db: Session = Depends(get_db), paylo
             raise HTTPException(422, f"Asaas recusou os dados do titular: {detail}")
         customer_id = tenant.asaas_customer_id or resp.json().get("id")
         tenant.asaas_customer_id = customer_id
+        tenant.billing_name = body.name
+        tenant.billing_email = body.email
         tenant.billing_cpf_cnpj = _digits(body.cpfCnpj)
         tenant.billing_phone = _digits(body.phone)
         tenant.billing_mobile_phone = _digits(body.mobilePhone)
+        tenant.billing_postal_code = _digits(body.postalCode)
+        tenant.billing_address = body.address
+        tenant.billing_address_number = body.addressNumber
+        tenant.billing_complement = body.addressComplement
+        tenant.billing_neighborhood = body.neighborhood
+        tenant.billing_city = body.city
+        tenant.billing_state = body.state
         db.commit()
         return {"customerId": customer_id}
     except httpx.TimeoutException:
@@ -901,9 +926,18 @@ def billing_profile(db: Session = Depends(get_db), payload=Depends(verify_token)
             pass
 
     return {
+        "name": tenant.billing_name or "",
+        "email": tenant.billing_email or "",
         "cpfCnpj": cpf_cnpj or "",
         "phone": phone or "",
         "mobilePhone": mobile_phone or "",
+        "postalCode": tenant.billing_postal_code or "",
+        "address": tenant.billing_address or "",
+        "addressNumber": tenant.billing_address_number or "",
+        "addressComplement": tenant.billing_complement or "",
+        "neighborhood": tenant.billing_neighborhood or "",
+        "city": tenant.billing_city or "",
+        "state": tenant.billing_state or "",
     }
 
 

@@ -269,7 +269,14 @@ class HistoricoCobranca(Base):
     observacao = Column(String(500), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-def _cobranca_to_dict(c: Cobranca):
+class AsaasWebhookEvent(Base):
+    __tablename__ = "asaas_webhook_events"
+    id          = Column(String(100), primary_key=True)   # event id do ASAAS
+    event       = Column(String(80),  nullable=False)
+    payload     = Column(Text,        nullable=True)
+    received_at = Column(DateTime,    default=datetime.utcnow)
+
+
     fases_labels = ["Pendente", "Aguardando Pagamento", "Vencida", "Em Cobrança", "Pago"]
     return {
         "id": c.id, "tenantId": c.tenant_id, "processoId": c.processo_id, "clienteId": c.cliente_id,
@@ -520,10 +527,21 @@ def startup_event():
 
 # ── Assinatura (Asaas) ───────────────────────────────────────────────────────
 
-import httpx
+import hmac as _hmac
+import json as _json
 
 KEALEX_ASAAS_API_KEY = os.getenv("KEALEX_ASAAS_API_KEY", "")
 ASAAS_BASE = os.getenv("KEALEX_ASAAS_BASE_URL", "").rstrip("/")
+KEALEX_ASAAS_WEBHOOK_TOKEN = os.getenv("KEALEX_ASAAS_WEBHOOK_TOKEN", "")
+
+def _verify_webhook_token(token: str | None) -> bool:
+    """Valida o token do webhook usando comparação segura contra timing attacks."""
+    if not KEALEX_ASAAS_WEBHOOK_TOKEN or not token:
+        return False
+    return _hmac.compare_digest(
+        token.encode("utf-8"),
+        KEALEX_ASAAS_WEBHOOK_TOKEN.encode("utf-8"),
+    )
 
 PLANOS = {
     "starter":      {"value": 197.00, "description": "Plano Starter"},
@@ -744,32 +762,86 @@ def assinar_pix(body: AssinarPixIn, db: Session = Depends(get_db), payload=Depen
     )
 
 @app.post("/k1/lex/auth/asaas-webhook")
-async def asaas_webhook(request: Request, db: Session = Depends(get_db),
-                        access_token: str | None = Header(default=None, alias="asaas-access-token")):
-    import hmac
-    expected = os.getenv("KEALEX_ASAAS_WEBHOOK_TOKEN", "")
-    if not expected or not access_token or not hmac.compare_digest(access_token, expected):
+async def asaas_webhook(
+    request: Request,
+    db: Session = Depends(get_db),
+    access_token: str | None = Header(default=None, alias="asaas-access-token"),
+):
+    if not _verify_webhook_token(access_token):
+        logging.warning("[WEBHOOK] Token invalido recebido: %s", access_token)
         raise HTTPException(401, "Webhook nao autenticado")
-    event = await request.json()
+
+    raw_body = await request.body()
+    try:
+        event = _json.loads(raw_body)
+    except _json.JSONDecodeError:
+        raise HTTPException(400, "Payload invalido")
+
+    event_id   = event.get("id") or str(uuid.uuid4())
     event_name = event.get("event", "")
-    payment = event.get("payment") or {}
-    subscription_id = payment.get("subscription") or (event.get("subscription") or {}).get("id")
-    if not subscription_id: return {"ok": True, "ignored": True}
+
+    # ── Idempotência: ignora eventos já processados ──────────────────────────
+    if db.get(AsaasWebhookEvent, event_id):
+        logging.info("[WEBHOOK] Evento duplicado ignorado: %s", event_id)
+        return {"ok": True, "duplicated": True}
+
+    db.add(AsaasWebhookEvent(
+        id=event_id,
+        event=event_name,
+        payload=raw_body.decode("utf-8")[:4000],
+    ))
+
+    # ── Extrai subscription_id ───────────────────────────────────────────────
+    payment      = event.get("payment") or {}
+    subscription = event.get("subscription") or {}
+    subscription_id = (
+        payment.get("subscription")
+        or subscription.get("id")
+        or payment.get("subscriptionId")
+    )
+
+    if not subscription_id:
+        logging.info("[WEBHOOK] Evento sem subscription_id ignorado: %s", event_name)
+        db.commit()
+        return {"ok": True, "ignored": True}
+
     tenant = db.query(Tenant).filter_by(asaas_subscription_id=subscription_id).first()
-    if tenant:
-        if event_name in ("PAYMENT_CONFIRMED", "PAYMENT_RECEIVED"):
-            tenant.subscription_status = "active"
-            tenant.plano = tenant.subscription_plan or tenant.plano
-            tenant.ativo = True
-            db.query(Usuario).filter_by(tenant_id=tenant.id).update({"ativo": True})
-        elif event_name == "PAYMENT_OVERDUE":
-            tenant.subscription_status = "past_due"
-        elif event_name in ("SUBSCRIPTION_DELETED", "PAYMENT_DELETED"):
-            tenant.subscription_status = "canceled"
-        elif event_name == "PAYMENT_REFUNDED":
-            tenant.subscription_status = "inactive"
-        tenant.updated_at = datetime.utcnow()
+    if not tenant:
+        logging.warning("[WEBHOOK] Tenant nao encontrado para subscription: %s", subscription_id)
+        db.commit()
+        return {"ok": True, "tenant_not_found": True}
+
+    logging.info("[WEBHOOK] Processando evento=%s subscription=%s tenant=%s",
+                 event_name, subscription_id, tenant.id)
+
+    # ── Transições de estado ─────────────────────────────────────────────────
+    if event_name in ("PAYMENT_CONFIRMED", "PAYMENT_RECEIVED"):
+        tenant.subscription_status = "active"
+        tenant.plano = tenant.subscription_plan or tenant.plano
+        tenant.ativo = True
+        if payment.get("dueDate"):
+            tenant.next_due_date = payment["dueDate"]
+        db.query(Usuario).filter_by(tenant_id=tenant.id).update({"ativo": True})
+
+    elif event_name == "PAYMENT_OVERDUE":
+        tenant.subscription_status = "past_due"
+
+    elif event_name in ("SUBSCRIPTION_DELETED", "PAYMENT_DELETED"):
+        tenant.subscription_status = "canceled"
+        tenant.ativo = False
+        db.query(Usuario).filter_by(tenant_id=tenant.id).update({"ativo": False})
+
+    elif event_name == "PAYMENT_REFUNDED":
+        tenant.subscription_status = "inactive"
+
+    elif event_name == "SUBSCRIPTION_UPDATED":
+        if subscription.get("nextDueDate"):
+            tenant.next_due_date = subscription["nextDueDate"]
+
+    tenant.updated_at = datetime.utcnow()
     db.commit()
+    logging.info("[WEBHOOK] Tenant %s atualizado: status=%s plano=%s",
+                 tenant.id, tenant.subscription_status, tenant.plano)
     return {"ok": True}
 
 @app.get("/k1/lex/auth/billing-status")
