@@ -610,42 +610,11 @@ def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(veri
     if not subscription_id:
         raise HTTPException(502, "Asaas criou uma resposta sem identificador de assinatura.")
 
+    # Salva como pending e aguarda webhook para ativar — não polling de status
     tenant.asaas_subscription_id = subscription_id
     tenant.subscription_plan = body.plano
     tenant.subscription_status = "pending"
-    tenant.ativo = True
-    tenant.updated_at = datetime.utcnow()
-    db.commit()
-
-    payment_status = "PENDING"
-    payment_due_date = next_due
-    try:
-        payments_resp = httpx.get(
-            f"{ASAAS_BASE}/payments",
-            params={"subscription": subscription_id, "limit": 1},
-            headers=headers,
-            timeout=15,
-        )
-        if payments_resp.status_code == 200:
-            payments = payments_resp.json().get("data", [])
-            if payments:
-                first_payment = payments[0]
-                payment_status = (first_payment.get("status") or "PENDING").upper()
-                payment_due_date = first_payment.get("dueDate") or next_due
-        else:
-            raise HTTPException(502, "A assinatura foi criada, mas nao foi possivel consultar o primeiro pagamento no Asaas.")
-    except httpx.TimeoutException:
-        raise HTTPException(504, "A assinatura foi criada, mas a consulta do primeiro pagamento expirou.")
-
-    if payment_status in ("CONFIRMED", "RECEIVED"):
-        tenant.subscription_status = "active"
-        tenant.plano = body.plano
-        tenant.ativo = True
-        db.query(Usuario).filter_by(tenant_id=tenant.id).update({"ativo": True})
-    elif payment_status == "OVERDUE":
-        tenant.subscription_status = "past_due"
-        tenant.ativo = False
-    tenant.next_due_date = payment_due_date
+    tenant.next_due_date = subscription.get("nextDueDate") or next_due
     tenant.updated_at = datetime.utcnow()
     db.commit()
 
@@ -653,8 +622,8 @@ def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(veri
         subscriptionId=subscription_id,
         plano=body.plano,
         periodicidade=periodicidade,
-        status=payment_status,
-        nextDueDate=payment_due_date,
+        status="PENDING",
+        nextDueDate=tenant.next_due_date,
         value=valor_total,
         valorMensal=plano_cfg["value"],
         desconto=desconto,
