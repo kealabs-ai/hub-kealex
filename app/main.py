@@ -701,20 +701,15 @@ def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(veri
         data = resp.json()
     except httpx.TimeoutException:
         raise HTTPException(504, "Timeout ao conectar com Asaas")
-    asaas_status = data.get("status", "")
-    is_confirmed = asaas_status in ("ACTIVE", "CONFIRMED", "RECEIVED")
+    # Salva como pending e aguarda webhook para ativar — não polling de status
     tenant.asaas_subscription_id = data.get("id")
     tenant.subscription_plan = body.plano
-    tenant.subscription_status = "active" if is_confirmed else "pending"
+    tenant.subscription_status = "pending"
     tenant.next_due_date = data.get("nextDueDate", next_due)
     tenant.updated_at = datetime.utcnow()
-    if is_confirmed:
-        tenant.plano = body.plano
-        tenant.ativo = True
-        db.query(Usuario).filter_by(tenant_id=tenant.id).update({"ativo": True})
     db.commit()
     return AssinarOut(subscriptionId=data.get("id", ""), plano=body.plano, periodicidade=body.periodicidade,
-                      status="ACTIVE" if is_confirmed else "PENDING_PAYMENT",
+                      status="PENDING",
                       nextDueDate=data.get("nextDueDate", next_due),
                       value=valor_total, valorMensal=valor_mensal, desconto=desconto)
 
