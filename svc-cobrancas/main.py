@@ -134,7 +134,7 @@ def _build_asaas_payload(body, cobranca):
             p["creditCardToken"] = body.creditCardToken
         else:
             p["creditCard"] = body.creditCard.model_dump()
-            p["creditCardHolderInfo"] = body.creditCardHolderInfo.model_dump()
+            p["creditCardHolderInfo"] = body.creditCardHolderInfo.model_dump(exclude_none=True)
     return p
 
 app = FastAPI(title="svc-cobrancas")
@@ -175,6 +175,7 @@ class CreditCardHolderInfoIn(BaseModel):
     cpfCnpj: str
     postalCode: str
     addressNumber: str
+    addressComplement: Optional[str] = None
     phone: str
 
 class PagamentoIn(BaseModel):
