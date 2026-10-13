@@ -901,6 +901,27 @@ def billing_profile_v2(db: Session = Depends(get_db), payload=Depends(verify_tok
         "state": tenant.billing_state or "",
     }
 
+@app.patch("/k1/lex/auth/billing-profile")
+def update_billing_profile(body: HolderInfoIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    """Atualiza dados do titular sem criar novo registro."""
+    tenant = db.query(Tenant).filter_by(id=payload.get("tenant_id")).first()
+    if not tenant: raise HTTPException(404, "Tenant nao encontrado")
+    if body.name: tenant.billing_name = body.name
+    if body.email: tenant.billing_email = body.email
+    if body.cpfCnpj: tenant.billing_cpf_cnpj = _digits(body.cpfCnpj)
+    if body.phone: tenant.billing_phone = _digits(body.phone)
+    if body.mobilePhone: tenant.billing_mobile_phone = _digits(body.mobilePhone)
+    if body.postalCode: tenant.billing_postal_code = _digits(body.postalCode)
+    if body.address: tenant.billing_address = body.address
+    if body.addressNumber: tenant.billing_address_number = body.addressNumber
+    if body.addressComplement is not None: tenant.billing_complement = body.addressComplement
+    if body.neighborhood: tenant.billing_neighborhood = body.neighborhood
+    if body.city: tenant.billing_city = body.city
+    if body.state: tenant.billing_state = body.state
+    tenant.updated_at = datetime.utcnow()
+    db.commit()
+    return {"ok": True}
+
 
 # Health endpoints
 @app.get("/health")
