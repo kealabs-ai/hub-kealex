@@ -118,6 +118,15 @@ class Tenant(Base):
     billing_cpf_cnpj      = Column(String(20),  nullable=True)
     billing_phone         = Column(String(30),  nullable=True)
     billing_mobile_phone  = Column(String(30),  nullable=True)
+    billing_name          = Column(String(255), nullable=True)
+    billing_email         = Column(String(255), nullable=True)
+    billing_postal_code   = Column(String(10),  nullable=True)
+    billing_address       = Column(String(255), nullable=True)
+    billing_address_number = Column(String(20), nullable=True)
+    billing_complement    = Column(String(100), nullable=True)
+    billing_neighborhood  = Column(String(100), nullable=True)
+    billing_city          = Column(String(100), nullable=True)
+    billing_state         = Column(String(2),   nullable=True)
     perfil                = Column(String(50),  nullable=True)
     asaas_customer_id     = Column(String(80),  nullable=True)
     asaas_subscription_id = Column(String(80),  nullable=True)
@@ -277,6 +286,7 @@ class AsaasWebhookEvent(Base):
     received_at = Column(DateTime,    default=datetime.utcnow)
 
 
+def _cobranca_to_dict(c: Cobranca) -> dict:
     fases_labels = ["Pendente", "Aguardando Pagamento", "Vencida", "Em Cobrança", "Pago"]
     return {
         "id": c.id, "tenantId": c.tenant_id, "processoId": c.processo_id, "clienteId": c.cliente_id,
@@ -564,6 +574,7 @@ class CreditCardIn(BaseModel):
 class HolderInfoIn(BaseModel):
     name: str; email: str; cpfCnpj: str; postalCode: str; addressNumber: str
     addressComplement: str | None = None; phone: str | None = None; mobilePhone: str | None = None
+    address: str | None = None; neighborhood: str | None = None; city: str | None = None; state: str | None = None
 
 class AssinarIn(BaseModel):
     plano: str; asaasCustomerId: str; periodicidade: str = "mensal"
@@ -619,8 +630,9 @@ def criar_cliente_asaas(body: HolderInfoIn, db: Session = Depends(get_db), paylo
     customer_data = {k: v for k, v in {
         "name": body.name, "email": body.email, "cpfCnpj": _digits(body.cpfCnpj),
         "phone": _digits(body.phone), "mobilePhone": _digits(body.mobilePhone),
-        "postalCode": body.postalCode, "addressNumber": body.addressNumber,
-        "complement": body.addressComplement,
+        "postalCode": _digits(body.postalCode), "addressNumber": body.addressNumber,
+        "complement": body.addressComplement, "address": body.address,
+        "province": body.neighborhood, "city": body.city,
     }.items() if v not in (None, "")}
     headers = {"access_token": KEALEX_ASAAS_API_KEY, "Content-Type": "application/json", "User-Agent": "Kealex/1.0.0"}
     try:
@@ -632,9 +644,18 @@ def criar_cliente_asaas(body: HolderInfoIn, db: Session = Depends(get_db), paylo
             raise HTTPException(422, f"Asaas recusou: {resp.json().get('errors', resp.text)}")
         customer_id = tenant.asaas_customer_id or resp.json().get("id")
         tenant.asaas_customer_id = customer_id
+        tenant.billing_name = body.name
+        tenant.billing_email = body.email
         tenant.billing_cpf_cnpj = _digits(body.cpfCnpj)
         tenant.billing_phone = _digits(body.phone)
         tenant.billing_mobile_phone = _digits(body.mobilePhone)
+        tenant.billing_postal_code = _digits(body.postalCode)
+        tenant.billing_address = body.address
+        tenant.billing_address_number = body.addressNumber
+        tenant.billing_complement = body.addressComplement
+        tenant.billing_neighborhood = body.neighborhood
+        tenant.billing_city = body.city
+        tenant.billing_state = body.state
         db.commit()
         return {"customerId": customer_id}
     except httpx.TimeoutException:
@@ -865,8 +886,20 @@ def billing_status(db: Session = Depends(get_db), payload=Depends(verify_token))
 def billing_profile_v2(db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant = db.query(Tenant).filter_by(id=payload.get("tenant_id")).first()
     if not tenant: raise HTTPException(404, "Tenant nao encontrado")
-    return {"cpfCnpj": tenant.billing_cpf_cnpj or "", "phone": tenant.billing_phone or "",
-            "mobilePhone": tenant.billing_mobile_phone or ""}
+    return {
+        "name": tenant.billing_name or "",
+        "email": tenant.billing_email or "",
+        "cpfCnpj": tenant.billing_cpf_cnpj or "",
+        "phone": tenant.billing_phone or "",
+        "mobilePhone": tenant.billing_mobile_phone or "",
+        "postalCode": tenant.billing_postal_code or "",
+        "address": tenant.billing_address or "",
+        "addressNumber": tenant.billing_address_number or "",
+        "addressComplement": tenant.billing_complement or "",
+        "neighborhood": tenant.billing_neighborhood or "",
+        "city": tenant.billing_city or "",
+        "state": tenant.billing_state or "",
+    }
 
 
 # Health endpoints
