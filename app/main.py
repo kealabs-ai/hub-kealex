@@ -672,7 +672,19 @@ def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(veri
     if tenant.asaas_customer_id != body.asaasCustomerId:
         raise HTTPException(403, "Cliente Asaas nao vinculado a esta conta")
     if tenant.asaas_subscription_id and tenant.subscription_status in ("active", "past_due"):
-        raise HTTPException(409, "Ja existe uma assinatura ativa vinculada a esta conta")
+        try:
+            _h = {"access_token": KEALEX_ASAAS_API_KEY, "Content-Type": "application/json", "User-Agent": "Kealex/1.0.0"}
+            _r = httpx.get(f"{ASAAS_BASE}/subscriptions/{tenant.asaas_subscription_id}", headers=_h, timeout=10)
+            asaas_status = _r.json().get("status", "") if _r.status_code == 200 else ""
+        except Exception:
+            asaas_status = ""
+        if asaas_status == "ACTIVE":
+            raise HTTPException(409, "Ja existe uma assinatura ativa vinculada a esta conta")
+        logging.warning("[ASSINAR] Status local=%s Asaas=%s — resetando tenant=%s",
+                        tenant.subscription_status, asaas_status, tenant.id)
+        tenant.asaas_subscription_id = None
+        tenant.subscription_status = "trialing"
+        db.commit()
     valor_mensal = plano_cfg["value"]
     valor_total, installment_count = _calcular_valor(valor_mensal, body.periodicidade)
     desconto = round(valor_mensal * (3 if body.periodicidade == "trimestral" else 1) - valor_total, 2)
