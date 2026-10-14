@@ -446,13 +446,25 @@ def _digits(value: str | None) -> str | None:
         return None
     return "".join(character for character in value if character.isdigit())
 
+def _is_luhn_valid(number: str) -> bool:
+    checksum = 0
+    parity = len(number) % 2
+    for index, character in enumerate(number):
+        digit = int(character)
+        if index % 2 == parity:
+            digit *= 2
+            if digit > 9:
+                digit -= 9
+        checksum += digit
+    return checksum % 10 == 0
+
 class AssinarIn(BaseModel):
     plano:           str
     periodicidade:   str = "mensal"   # mensal | trimestral
     asaasCustomerId: str
     creditCard:      CreditCardIn
     holderInfo:      HolderInfoIn
-    remoteIp:        str = "127.0.0.1"
+    remoteIp:        str
 
 class AssinarOut(BaseModel):
     subscriptionId: str
@@ -463,6 +475,54 @@ class AssinarOut(BaseModel):
     value:          float
     valorMensal:    float
     desconto:       float
+
+def _build_asaas_card_payload(body: AssinarIn) -> dict:
+    """Normaliza os dados de cartão e titular aceitos pelo Asaas."""
+    holder = body.holderInfo
+    card_number = _digits(body.creditCard.number) or ""
+    if not 13 <= len(card_number) <= 19 or not _is_luhn_valid(card_number):
+        raise HTTPException(400, "Número do cartão inválido. Confira os dígitos informados.")
+
+    mobile_phone = _digits(holder.mobilePhone)
+    holder_info = {
+        "name": holder.name,
+        "email": holder.email,
+        "cpfCnpj": _digits(holder.cpfCnpj),
+        "postalCode": _digits(holder.postalCode),
+        "addressNumber": holder.addressNumber,
+        "addressComplement": holder.addressComplement,
+        "phone": _digits(holder.phone) or mobile_phone,
+        # mobilePhone é aceito pelo endpoint de assinatura do Asaas.
+        "mobilePhone": mobile_phone,
+    }
+
+    return {
+        "creditCard": {
+            "holderName": body.creditCard.holderName,
+            "number": card_number,
+            "expiryMonth": body.creditCard.expiryMonth,
+            "expiryYear": body.creditCard.expiryYear,
+            "ccv": body.creditCard.ccv,
+        },
+        "creditCardHolderInfo": {
+            key: value for key, value in holder_info.items()
+            if value not in (None, "")
+        },
+        "remoteIp": body.remoteIp,
+    }
+
+def _build_asaas_subscription_payload(body: AssinarIn, plan_cfg: dict, next_due: str,
+                                      value: float, cycle: str) -> dict:
+    """Converte o payload interno para o formato de POST /v3/subscriptions."""
+    return {
+        "customer": body.asaasCustomerId,
+        "billingType": "CREDIT_CARD",
+        "value": value,
+        "nextDueDate": next_due,
+        "cycle": cycle,
+        "description": plan_cfg["description"],
+        **_build_asaas_card_payload(body),
+    }
 
 @app.post("/k1/lex/auth/assinar", response_model=AssinarOut)
 def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
@@ -502,24 +562,6 @@ def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(veri
         "User-Agent": "Kealex/1.0.0",
     }
 
-    credit_card = {
-        "holderName": body.creditCard.holderName,
-        "number": _digits(body.creditCard.number),
-        "expiryMonth": body.creditCard.expiryMonth,
-        "expiryYear": body.creditCard.expiryYear,
-        "ccv": body.creditCard.ccv,
-    }
-    holder_info = {
-        "name": body.holderInfo.name,
-        "email": body.holderInfo.email,
-        "cpfCnpj": _digits(body.holderInfo.cpfCnpj),
-        "postalCode": _digits(body.holderInfo.postalCode),
-        "addressNumber": body.holderInfo.addressNumber,
-        "addressComplement": body.holderInfo.addressComplement,
-        "phone": _digits(body.holderInfo.phone),
-        "mobilePhone": _digits(body.holderInfo.mobilePhone),
-    }
-
     # Retry the existing overdue invoice instead of creating a second subscription.
     if tenant.subscription_status == "past_due" and tenant.asaas_subscription_id:
         if body.plano != tenant.subscription_plan:
@@ -543,13 +585,9 @@ def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(veri
             payment = overdue_payments[0]
             payment_resp = httpx.post(
                 f"{ASAAS_BASE}/payments/{payment['id']}/payWithCreditCard",
-                json={
-                    "creditCard": credit_card,
-                    "creditCardHolderInfo": holder_info,
-                    "remoteIp": body.remoteIp,
-                },
+                json=_build_asaas_card_payload(body),
                 headers=headers,
-                timeout=30,
+                timeout=60,
             )
             if payment_resp.status_code != 200:
                 detail = payment_resp.json().get("errors", payment_resp.text)
@@ -585,19 +623,9 @@ def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(veri
     try:
         sub_resp = httpx.post(
             f"{ASAAS_BASE}/subscriptions",
-            json={
-                "customer": body.asaasCustomerId,
-                "billingType": "CREDIT_CARD",
-                "nextDueDate": next_due,
-                "value": valor_total,
-                "cycle": cycle,
-                "description": plano_cfg["description"],
-                "creditCard": credit_card,
-                "creditCardHolderInfo": holder_info,
-                "remoteIp": body.remoteIp,
-            },
+            json=_build_asaas_subscription_payload(body, plano_cfg, next_due, valor_total, cycle),
             headers=headers,
-            timeout=30,
+            timeout=60,
         )
         if sub_resp.status_code not in (200, 201):
             detail = sub_resp.json().get("errors", sub_resp.text)
