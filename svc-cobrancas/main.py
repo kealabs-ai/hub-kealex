@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from jose import jwt, JWTError
-from sqlalchemy import create_engine, Column, String, DateTime, Text, Integer
+from sqlalchemy import create_engine, Column, String, DateTime, Integer
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from dotenv import load_dotenv
@@ -91,9 +91,8 @@ class HistoricoCobranca(Base):
 class AsaasWebhookEvent(Base):
     __tablename__ = "asaas_webhook_events"
     id = Column(String(100), primary_key=True)  # event id vindo do Asaas
-    event = Column(String(100), nullable=False)
-    payload = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    event = Column(String(80), nullable=False)
+    received_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 def get_db():
     db = SessionLocal()
@@ -588,12 +587,8 @@ async def webhook_asaas(request: Request, db: Session = Depends(get_db)):
         logging.info("[WEBHOOK] Evento duplicado ignorado event_id=%s", event_id)
         return {"ok": True, "duplicated": True}
 
-    # Persiste o evento
-    db.add(AsaasWebhookEvent(
-        id=event_id,
-        event=event_name,
-        payload=raw.decode("utf-8"),
-    ))
+    # Persiste o evento no schema compartilhado com svc-auth.
+    db.add(AsaasWebhookEvent(id=event_id, event=event_name))
 
     # Atualiza a cobrança se o evento for mapeado
     payment = data.get("payment", {})

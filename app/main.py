@@ -282,8 +282,7 @@ class AsaasWebhookEvent(Base):
     __tablename__ = "asaas_webhook_events"
     id          = Column(String(100), primary_key=True)   # event id do ASAAS
     event       = Column(String(80),  nullable=False)
-    payload     = Column(Text,        nullable=True)
-    received_at = Column(DateTime,    default=datetime.utcnow)
+    received_at = Column(DateTime,    default=datetime.utcnow, nullable=False)
 
 
 def _cobranca_to_dict(c: Cobranca) -> dict:
@@ -860,7 +859,6 @@ async def asaas_webhook(
     db.add(AsaasWebhookEvent(
         id=event_id,
         event=event_name,
-        payload=raw_body.decode("utf-8")[:4000],
     ))
 
     # ── Extrai subscription_id ───────────────────────────────────────────────

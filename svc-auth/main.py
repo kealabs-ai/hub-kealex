@@ -1034,12 +1034,16 @@ async def asaas_webhook(
     if db.get(AsaasWebhookEvent, event_id):
         return {"ok": True, "duplicate": True}
 
+    # Registra todo evento válido, mesmo quando não estiver associado a uma
+    # assinatura (por exemplo, eventos de pagamentos avulsos).
+    db.add(AsaasWebhookEvent(id=event_id, event=event_name))
+
     payment = event.get("payment") or {}
     subscription_id = payment.get("subscription") or (event.get("subscription") or {}).get("id")
     if not subscription_id:
+        db.commit()
         return {"ok": True, "ignored": True}
     tenant = db.query(Tenant).filter_by(asaas_subscription_id=subscription_id).with_for_update().first()
-    db.add(AsaasWebhookEvent(id=event_id, event=event_name))
     if tenant:
         if event_name in ("PAYMENT_CONFIRMED", "PAYMENT_RECEIVED"):
             tenant.subscription_status = "active"
