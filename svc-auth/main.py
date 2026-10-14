@@ -542,7 +542,7 @@ def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(veri
     periodicidade = body.periodicidade or "mensal"
     if periodicidade not in ("mensal", "trimestral"):
         raise HTTPException(400, "Periodicidade invalida. Use mensal ou trimestral.")
-    if tenant.asaas_subscription_id and tenant.subscription_status in ("pending", "active"):
+    if tenant.asaas_subscription_id and tenant.subscription_status == "active":
         raise HTTPException(409, "Ja existe uma assinatura vinculada a esta conta")
 
     meses = 3 if periodicidade == "trimestral" else 1
@@ -561,6 +561,46 @@ def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(veri
         "Content-Type": "application/json",
         "User-Agent": "Kealex/1.0.0",
     }
+
+    # Se já existe uma assinatura pendente, substitui-a antes de criar outra.
+    # A remoção pelo Asaas também remove cobranças pendentes e vencidas ligadas a ela.
+    if tenant.asaas_subscription_id and tenant.subscription_status == "pending":
+        previous_subscription_id = tenant.asaas_subscription_id
+        try:
+            payments_resp = httpx.get(
+                f"{ASAAS_BASE}/payments",
+                params={"subscription": previous_subscription_id, "limit": 100},
+                headers=headers,
+                timeout=15,
+            )
+            if payments_resp.status_code != 200:
+                raise HTTPException(502, "Nao foi possivel verificar a assinatura pendente no Asaas.")
+
+            payments = payments_resp.json().get("data", [])
+            if any((payment.get("status") or "").upper() in {"CONFIRMED", "RECEIVED"} for payment in payments):
+                tenant.subscription_status = "active"
+                tenant.plano = tenant.subscription_plan or tenant.plano
+                tenant.ativo = True
+                tenant.updated_at = datetime.utcnow()
+                db.query(Usuario).filter_by(tenant_id=tenant.id).update({"ativo": True})
+                db.commit()
+                raise HTTPException(409, "A assinatura anterior ja possui pagamento confirmado.")
+
+            remove_resp = httpx.delete(
+                f"{ASAAS_BASE}/subscriptions/{previous_subscription_id}",
+                headers=headers,
+                timeout=60,
+            )
+            if remove_resp.status_code not in (200, 204, 404):
+                detail = remove_resp.json().get("errors", remove_resp.text)
+                raise HTTPException(502, f"Nao foi possivel substituir a assinatura pendente: {detail}")
+            logging.info(
+                "[ASSINAR] Assinatura pendente removida para substituicao tenant=%s subscription=%s",
+                tenant.id,
+                previous_subscription_id,
+            )
+        except httpx.TimeoutException:
+            raise HTTPException(504, "Timeout ao substituir a assinatura pendente no Asaas.")
 
     # Retry the existing overdue invoice instead of creating a second subscription.
     if tenant.subscription_status == "past_due" and tenant.asaas_subscription_id:
