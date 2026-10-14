@@ -446,18 +446,6 @@ def _digits(value: str | None) -> str | None:
         return None
     return "".join(character for character in value if character.isdigit())
 
-def _is_luhn_valid(number: str) -> bool:
-    checksum = 0
-    parity = len(number) % 2
-    for index, character in enumerate(number):
-        digit = int(character)
-        if index % 2 == parity:
-            digit *= 2
-            if digit > 9:
-                digit -= 9
-        checksum += digit
-    return checksum % 10 == 0
-
 class AssinarIn(BaseModel):
     plano:           str
     periodicidade:   str = "mensal"   # mensal | trimestral
@@ -480,7 +468,10 @@ def _build_asaas_card_payload(body: AssinarIn) -> dict:
     """Normaliza os dados de cartão e titular aceitos pelo Asaas."""
     holder = body.holderInfo
     card_number = _digits(body.creditCard.number) or ""
-    if not 13 <= len(card_number) <= 19 or not _is_luhn_valid(card_number):
+    # O Sandbox do Asaas disponibiliza cartões de teste que podem não passar
+    # na validação Luhn (ex.: 4444 4444 4444 4444). A validação final deve
+    # ser feita pelo Asaas; aqui só rejeitamos comprimentos impossíveis.
+    if not 13 <= len(card_number) <= 19:
         raise HTTPException(400, "Número do cartão inválido. Confira os dígitos informados.")
 
     mobile_phone = _digits(holder.mobilePhone)
@@ -550,11 +541,11 @@ def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(veri
     valor_total = round(plano_cfg["value"] * meses - desconto, 2)
     cycle = "QUARTERLY" if periodicidade == "trimestral" else "MONTHLY"
 
+    # No checkout, a primeira cobrança deve ser tentada imediatamente pelo Asaas.
+    # Para assinaturas com cartão, nextDueDate igual à data atual solicita o
+    # processamento da primeira cobrança no momento da criação.
     now = datetime.utcnow()
-    if tenant.plano == "trial" and tenant.trial_expires_at and tenant.trial_expires_at > now:
-        next_due = tenant.trial_expires_at.strftime("%Y-%m-%d")
-    else:
-        next_due = (now + timedelta(days=1)).strftime("%Y-%m-%d")
+    next_due = now.strftime("%Y-%m-%d")
 
     headers = {
         "access_token": KEALEX_ASAAS_API_KEY,
@@ -678,7 +669,8 @@ def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(veri
     if not subscription_id:
         raise HTTPException(502, "Asaas criou uma resposta sem identificador de assinatura.")
 
-    # Salva como pending e aguarda webhook para ativar — não polling de status
+    # Persiste o ID antes de consultar a cobrança para que um webhook imediato
+    # já encontre a assinatura vinculada ao tenant.
     tenant.asaas_subscription_id = subscription_id
     tenant.subscription_plan = body.plano
     tenant.subscription_status = "pending"
@@ -686,13 +678,59 @@ def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(veri
     tenant.updated_at = datetime.utcnow()
     db.commit()
 
+    # A resposta de /subscriptions representa a recorrência, não o pagamento.
+    # Busca a primeira cobrança para retornar ao front o resultado conhecido.
+    payment_status = "PENDING"
+    payment_value = valor_total
+    payment_due_date = tenant.next_due_date
+    try:
+        payments_resp = httpx.get(
+            f"{ASAAS_BASE}/payments",
+            params={"subscription": subscription_id, "limit": 100},
+            headers=headers,
+            timeout=15,
+        )
+        if payments_resp.status_code == 200:
+            payments = payments_resp.json().get("data", [])
+            if payments:
+                payments.sort(key=lambda payment: payment.get("dueDate", ""), reverse=True)
+                payment = payments[0]
+                payment_status = (payment.get("status") or "PENDING").upper()
+                payment_value = float(payment.get("value") or valor_total)
+                payment_due_date = payment.get("dueDate") or payment_due_date
+                if payment_status in ("CONFIRMED", "RECEIVED"):
+                    tenant.subscription_status = "active"
+                    tenant.plano = body.plano
+                    tenant.ativo = True
+                    db.query(Usuario).filter_by(tenant_id=tenant.id).update({"ativo": True})
+                elif payment_status == "OVERDUE":
+                    tenant.subscription_status = "past_due"
+                    tenant.ativo = False
+                tenant.next_due_date = payment_due_date
+                tenant.updated_at = datetime.utcnow()
+                db.commit()
+        else:
+            logging.warning(
+                "[ASSINAR] Asaas criou subscription=%s, mas consulta inicial da cobrança retornou HTTP %s",
+                subscription_id,
+                payments_resp.status_code,
+            )
+    except (httpx.TimeoutException, ValueError) as exc:
+        # A assinatura já foi criada; não repetir nem falhar a contratação por
+        # uma consulta de status. O webhook atualizará o estado posteriormente.
+        logging.warning(
+            "[ASSINAR] Asaas criou subscription=%s, mas não foi possível consultar o pagamento: %s",
+            subscription_id,
+            type(exc).__name__,
+        )
+
     return AssinarOut(
         subscriptionId=subscription_id,
         plano=body.plano,
         periodicidade=periodicidade,
-        status="PENDING",
-        nextDueDate=tenant.next_due_date,
-        value=valor_total,
+        status=payment_status,
+        nextDueDate=payment_due_date,
+        value=payment_value,
         valorMensal=plano_cfg["value"],
         desconto=desconto,
     )
