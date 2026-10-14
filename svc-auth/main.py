@@ -269,6 +269,7 @@ class AuthUser(BaseModel):
     tenantAtivo:        bool = True
     trialStartedAt:     str | None = None
     trialExpiresAt:     str | None = None
+    subscriptionExpiresAt: str | None = None
     escritorioId:       str | None = None
     modalidade:         str | None = None  # autonomo | escritorio
 
@@ -332,6 +333,7 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
         tenantAtivo=tenant.ativo,
         trialStartedAt=tenant.trial_started_at.isoformat(),
         trialExpiresAt=tenant.trial_expires_at.isoformat(),
+        subscriptionExpiresAt=tenant.subscription_expires_at.isoformat() + "Z" if tenant.subscription_expires_at else None,
         escritorioId=getattr(user, 'escritorio_id', None),
         modalidade="escritorio" if getattr(user, 'escritorio_id', None) else "autonomo",
     )
@@ -359,6 +361,7 @@ def login(body: LoginIn, db: Session = Depends(get_db)):
         tenantAtivo=tenant.ativo if tenant else False,
         trialStartedAt=tenant.trial_started_at.isoformat() if tenant and tenant.trial_started_at else None,
         trialExpiresAt=tenant.trial_expires_at.isoformat() if tenant and tenant.trial_expires_at else None,
+        subscriptionExpiresAt=tenant.subscription_expires_at.isoformat() + "Z" if tenant and tenant.subscription_expires_at else None,
         escritorioId=getattr(user, 'escritorio_id', None),
         modalidade="escritorio" if getattr(user, 'escritorio_id', None) else "autonomo",
     )

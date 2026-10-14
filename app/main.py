@@ -427,8 +427,10 @@ class AuthUser(BaseModel):
     tenantId:       str
     accessToken:    str
     plano:          str           = "trial"
+    subscriptionStatus: str | None = None
     trialStartedAt: str | None    = None
     trialExpiresAt: str | None    = None
+    subscriptionExpiresAt: str | None = None
 
 class ProcessoIn(BaseModel):
     numero: str
@@ -1021,8 +1023,10 @@ def login(body: LoginIn, db: Session = Depends(get_db)):
             tenantId=user.tenant_id,
             accessToken=_make_token(user),
             plano=tenant.plano if tenant else "trial",
+            subscriptionStatus=tenant.subscription_status if tenant else None,
             trialStartedAt=tenant.trial_started_at.isoformat() if tenant and tenant.trial_started_at else None,
             trialExpiresAt=tenant.trial_expires_at.isoformat() if tenant and tenant.trial_expires_at else None,
+            subscriptionExpiresAt=tenant.subscription_expires_at.isoformat() + "Z" if tenant and tenant.subscription_expires_at else None,
         )
     except HTTPException:
         raise
@@ -1086,8 +1090,10 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
         tenantId=tenant.id,
         accessToken=_make_token(user),
         plano=tenant.plano,
+        subscriptionStatus=tenant.subscription_status,
         trialStartedAt=tenant.trial_started_at.isoformat(),
         trialExpiresAt=tenant.trial_expires_at.isoformat(),
+        subscriptionExpiresAt=tenant.subscription_expires_at.isoformat() + "Z" if tenant.subscription_expires_at else None,
     )
 
 @app.get("/auth/me")
