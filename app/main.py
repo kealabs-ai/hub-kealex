@@ -584,6 +584,14 @@ class AssinarOut(BaseModel):
     subscriptionId: str; plano: str; periodicidade: str; status: str
     nextDueDate: str; value: float; valorMensal: float; desconto: float
 
+class AssinarPreviewOut(BaseModel):
+    plano: str; descricaoPlano: str; periodicidade: str
+    valorMensal: float; valorTotal: float; desconto: float
+    nextDueDate: str
+    titular: str; email: str; cpfCnpj: str
+    cartaoFinal: str  # últimos 4 dígitos
+    mensagem: str
+
 class AssinarPixIn(BaseModel):
     plano: str; asaasCustomerId: str; periodicidade: str = "mensal"
 
@@ -661,6 +669,34 @@ def criar_cliente_asaas(body: HolderInfoIn, db: Session = Depends(get_db), paylo
     except httpx.TimeoutException:
         raise HTTPException(504, "Timeout ao conectar com Asaas")
 
+@app.post("/k1/lex/auth/assinar/preview", response_model=AssinarPreviewOut)
+def assinar_preview(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    plano_cfg = PLANOS.get(body.plano)
+    if not plano_cfg: raise HTTPException(400, f"Plano invalido: {body.plano}")
+    tenant = db.query(Tenant).filter_by(id=payload.get("tenant_id")).first()
+    if not tenant: raise HTTPException(404, "Tenant nao encontrado")
+    if tenant.asaas_customer_id != body.asaasCustomerId:
+        raise HTTPException(403, "Cliente Asaas nao vinculado a esta conta")
+    valor_mensal = plano_cfg["value"]
+    valor_total, _ = _calcular_valor(valor_mensal, body.periodicidade)
+    desconto = round(valor_mensal * (3 if body.periodicidade == "trimestral" else 1) - valor_total, 2)
+    now = datetime.utcnow()
+    next_due = tenant.trial_expires_at.strftime("%Y-%m-%d") if tenant.plano == "trial" and tenant.trial_expires_at and tenant.trial_expires_at > now else (now + timedelta(days=1)).strftime("%Y-%m-%d")
+    cartao_final = body.creditCard.number[-4:] if body.creditCard.number else "****"
+    mensagem = (
+        f"Voce esta contratando o {plano_cfg['description']} no ciclo {'trimestral com 5% de desconto' if body.periodicidade == 'trimestral' else 'mensal'}. "
+        f"O valor de R$ {valor_total:.2f} sera cobrado em {next_due} no cartao terminado em {cartao_final}. "
+        f"Clique em Confirmar para finalizar a contratacao."
+    )
+    return AssinarPreviewOut(
+        plano=body.plano, descricaoPlano=plano_cfg["description"],
+        periodicidade=body.periodicidade, valorMensal=valor_mensal,
+        valorTotal=valor_total, desconto=desconto, nextDueDate=next_due,
+        titular=body.holderInfo.name, email=body.holderInfo.email,
+        cpfCnpj=body.holderInfo.cpfCnpj[-4:].rjust(len(body.holderInfo.cpfCnpj), "*"),
+        cartaoFinal=cartao_final, mensagem=mensagem,
+    )
+
 @app.post("/k1/lex/auth/assinar", response_model=AssinarOut)
 def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
     if not ASAAS_BASE:
@@ -671,17 +707,22 @@ def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(veri
     if not tenant: raise HTTPException(404, "Tenant nao encontrado")
     if tenant.asaas_customer_id != body.asaasCustomerId:
         raise HTTPException(403, "Cliente Asaas nao vinculado a esta conta")
-    if tenant.asaas_subscription_id and tenant.subscription_status in ("active", "past_due"):
+    if tenant.asaas_subscription_id:
+        _h = {"access_token": KEALEX_ASAAS_API_KEY, "Content-Type": "application/json", "User-Agent": "Kealex/1.0.0"}
         try:
-            _h = {"access_token": KEALEX_ASAAS_API_KEY, "Content-Type": "application/json", "User-Agent": "Kealex/1.0.0"}
             _r = httpx.get(f"{ASAAS_BASE}/subscriptions/{tenant.asaas_subscription_id}", headers=_h, timeout=10)
             asaas_status = _r.json().get("status", "") if _r.status_code == 200 else ""
         except Exception:
             asaas_status = ""
         if asaas_status == "ACTIVE":
             raise HTTPException(409, "Ja existe uma assinatura ativa vinculada a esta conta")
-        logging.warning("[ASSINAR] Status local=%s Asaas=%s — resetando tenant=%s",
-                        tenant.subscription_status, asaas_status, tenant.id)
+        # Cancela assinatura pendente/inativa no Asaas antes de criar nova
+        try:
+            httpx.delete(f"{ASAAS_BASE}/subscriptions/{tenant.asaas_subscription_id}", headers=_h, timeout=10)
+        except Exception:
+            pass
+        logging.warning("[ASSINAR] Assinatura anterior cancelada asaas_status=%s tenant=%s",
+                        asaas_status, tenant.id)
         tenant.asaas_subscription_id = None
         tenant.subscription_status = "trialing"
         db.commit()
