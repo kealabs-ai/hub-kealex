@@ -89,6 +89,9 @@ class Tenant(Base):
     billing_state = Column(String(2), nullable=True)
     asaas_subscription_id = Column(String(80), nullable=True)
     subscription_plan = Column(String(20), nullable=True)
+    subscription_cycle = Column(String(20), nullable=True)
+    subscription_expires_at = Column(DateTime, nullable=True)
+    last_paid_payment_id = Column(String(80), nullable=True)
     subscription_status = Column(String(20), nullable=False, default="trialing")
     next_due_date = Column(String(10), nullable=True)
     ativo            = Column(Boolean,     default=True)
@@ -183,6 +186,26 @@ def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
 
 # ── Trial guard ───────────────────────────────────────────────────────────────
 
+def _grant_subscription_period(tenant: Tenant, payment_id: str | None, plan: str | None = None) -> bool:
+    """Ativa/renova o acesso uma única vez para cada pagamento confirmado."""
+    if not payment_id or tenant.last_paid_payment_id == payment_id:
+        return False
+
+    now = datetime.utcnow()
+    current_expiration = tenant.subscription_expires_at
+    base = current_expiration if current_expiration and current_expiration > now else now
+    cycle = (tenant.subscription_cycle or "MONTHLY").upper()
+    period_days = 90 if cycle in ("QUARTERLY", "TRIMESTRAL") else 30
+
+    tenant.subscription_expires_at = base + timedelta(days=period_days)
+    tenant.last_paid_payment_id = payment_id
+    tenant.subscription_status = "active"
+    tenant.plano = plan or tenant.subscription_plan or tenant.plano
+    tenant.ativo = True
+    tenant.updated_at = now
+    return True
+
+
 def _check_tenant_access(tenant: Tenant | None, role: str) -> None:
     """Bloqueia rotas da plataforma sem bloquear o login ou a regularização."""
     if role == "admin":
@@ -198,6 +221,8 @@ def _check_tenant_access(tenant: Tenant | None, role: str) -> None:
             raise HTTPException(403, "Trial expirado. Assine um plano para continuar.")
         return
     if tenant.plano in ("starter", "professional", "enterprise") and tenant.subscription_status == "active":
+        if tenant.subscription_expires_at and datetime.utcnow() >= tenant.subscription_expires_at:
+            raise HTTPException(403, "Sua assinatura expirou. Renove o plano para continuar.")
         return
     raise HTTPException(403, "Assinatura pendente ou vencida. Regularize o pagamento para continuar.")
 
@@ -629,9 +654,8 @@ def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(veri
 
         payment_status = (payment_data.get("status") or "").upper()
         if payment_status in ("CONFIRMED", "RECEIVED"):
-            tenant.subscription_status = "active"
-            tenant.plano = tenant.subscription_plan or body.plano
-            tenant.ativo = True
+            tenant.subscription_cycle = tenant.subscription_cycle or cycle
+            _grant_subscription_period(tenant, payment_data.get("id"), body.plano)
             db.query(Usuario).filter_by(tenant_id=tenant.id).update({"ativo": True})
         elif payment_status in ("PENDING", "AWAITING_RISK_ANALYSIS"):
             tenant.subscription_status = "pending"
@@ -673,6 +697,7 @@ def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(veri
     # já encontre a assinatura vinculada ao tenant.
     tenant.asaas_subscription_id = subscription_id
     tenant.subscription_plan = body.plano
+    tenant.subscription_cycle = cycle
     tenant.subscription_status = "pending"
     tenant.next_due_date = subscription.get("nextDueDate") or next_due
     tenant.updated_at = datetime.utcnow()
@@ -699,9 +724,7 @@ def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(veri
                 payment_value = float(payment.get("value") or valor_total)
                 payment_due_date = payment.get("dueDate") or payment_due_date
                 if payment_status in ("CONFIRMED", "RECEIVED"):
-                    tenant.subscription_status = "active"
-                    tenant.plano = body.plano
-                    tenant.ativo = True
+                    _grant_subscription_period(tenant, payment.get("id"), body.plano)
                     db.query(Usuario).filter_by(tenant_id=tenant.id).update({"ativo": True})
                 elif payment_status == "OVERDUE":
                     tenant.subscription_status = "past_due"
@@ -856,6 +879,7 @@ def assinar_pix(body: AssinarPixIn, db: Session = Depends(get_db), payload=Depen
 
     tenant.asaas_subscription_id = subscription_id
     tenant.subscription_plan = body.plano
+    tenant.subscription_cycle = cycle
     tenant.subscription_status = "pending"
     tenant.next_due_date = next_due
     tenant.ativo = True
@@ -1046,9 +1070,7 @@ async def asaas_webhook(
     tenant = db.query(Tenant).filter_by(asaas_subscription_id=subscription_id).with_for_update().first()
     if tenant:
         if event_name in ("PAYMENT_CONFIRMED", "PAYMENT_RECEIVED"):
-            tenant.subscription_status = "active"
-            tenant.plano = tenant.subscription_plan or tenant.plano
-            tenant.ativo = True
+            _grant_subscription_period(tenant, payment.get("id"))
             tenant.next_due_date = payment.get("dueDate") or tenant.next_due_date
             db.query(Usuario).filter_by(tenant_id=tenant.id).update({"ativo": True})
         elif event_name == "PAYMENT_OVERDUE":
@@ -1077,6 +1099,8 @@ def billing_status(db: Session = Depends(get_db), payload=Depends(verify_token))
         subscription_status = (tenant.subscription_status or "").lower()
         if subscription_status in ("pending", "past_due", "canceled"):
             status = subscription_status
+        elif (tenant.subscription_expires_at and now >= tenant.subscription_expires_at):
+            status = "past_due"
         elif tenant.ativo and subscription_status == "active":
             status = "active"
         else:
@@ -1089,6 +1113,7 @@ def billing_status(db: Session = Depends(get_db), payload=Depends(verify_token))
         "subscriptionStatus": tenant.subscription_status,
         "nextDueDate": tenant.next_due_date,
         "trialExpiresAt": tenant.trial_expires_at.isoformat() if tenant.trial_expires_at else None,
+        "subscriptionExpiresAt": tenant.subscription_expires_at.isoformat() + "Z" if tenant.subscription_expires_at else None,
     }
 
 
@@ -1117,9 +1142,7 @@ def reativar_assinatura(body: dict = {}, db: Session = Depends(get_db), payload=
         plano_cfg = PLANOS.get(tenant.subscription_plan or tenant.plano, {})
         now = datetime.utcnow()
         if payment_status in ("CONFIRMED", "RECEIVED"):
-            tenant.subscription_status = "active"
-            tenant.plano = tenant.subscription_plan or tenant.plano
-            tenant.ativo = True
+            _grant_subscription_period(tenant, payment.get("id"))
             db.query(Usuario).filter_by(tenant_id=tenant.id).update({"ativo": True})
             db.commit()
         return AssinarOut(
