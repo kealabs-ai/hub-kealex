@@ -164,6 +164,7 @@ def _activity_owner(token: dict):
 @app.get("/activities")
 @app.get("/api/activities")
 @app.get("/k1/lex/activities")
+@app.get("/v1/lex/activities")
 def list_activities(status: Optional[str] = None, token: dict = Depends(verify_token), db: Session = Depends(get_db)):
     user_id, tenant_id = _activity_owner(token)
     if status is not None and status not in _ACTIVITY_STATUSES:
@@ -177,6 +178,7 @@ def list_activities(status: Optional[str] = None, token: dict = Depends(verify_t
 @app.post("/activities", status_code=201)
 @app.post("/api/activities", status_code=201)
 @app.post("/k1/lex/activities", status_code=201)
+@app.post("/v1/lex/activities", status_code=201)
 def create_activity(body: ActivityCreate, token: dict = Depends(verify_token), db: Session = Depends(get_db)):
     user_id, tenant_id = _activity_owner(token)
     title = body.title.strip()
@@ -200,6 +202,7 @@ def create_activity(body: ActivityCreate, token: dict = Depends(verify_token), d
 @app.put("/activities/{activity_id}")
 @app.put("/api/activities/{activity_id}")
 @app.put("/k1/lex/activities/{activity_id}")
+@app.put("/v1/lex/activities/{activity_id}")
 def update_activity(activity_id: str, body: ActivityUpdate, token: dict = Depends(verify_token), db: Session = Depends(get_db)):
     user_id, tenant_id = _activity_owner(token)
     row = db.query(Activity).filter(
@@ -229,6 +232,7 @@ def update_activity(activity_id: str, body: ActivityUpdate, token: dict = Depend
 @app.delete("/activities/{activity_id}")
 @app.delete("/api/activities/{activity_id}")
 @app.delete("/k1/lex/activities/{activity_id}")
+@app.delete("/v1/lex/activities/{activity_id}")
 def delete_activity(activity_id: str, token: dict = Depends(verify_token), db: Session = Depends(get_db)):
     user_id, tenant_id = _activity_owner(token)
     row = db.query(Activity).filter(
