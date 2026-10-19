@@ -22,6 +22,7 @@ services:
       - svc-escritorios
       - svc-clientes
       - svc-cobrancas
+      - svc-activities
     networks:
       - kealex-network
     restart: unless-stopped
@@ -197,6 +198,33 @@ services:
     networks:
       - kealex-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  svc-activities:
+    build: ./svc-activities
+    container_name: kealex-svc-activities
+    environment:
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DB_HOST=${KEALEX_DB_HOST}
+      - KEALEX_DB_PORT=${KEALEX_DB_PORT}
+      - KEALEX_DB_NAME=${KEALEX_DB_NAME}
+      - KEALEX_DB_USER=${KEALEX_DB_USER}
+      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
+    networks:
+      - kealex-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     deploy:
       resources:
         limits:
