@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel, Field
-from sqlalchemy import Column, Date, DateTime, Index, String, Text, create_engine
+from sqlalchemy import Column, Date, DateTime, Index, Integer, PrimaryKeyConstraint, String, Text, create_engine
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -73,12 +73,28 @@ class Activity(Base):
     tenant_id = Column(String(36), nullable=False)
     title = Column(String(180), nullable=False)
     description = Column(Text, nullable=False, default="")
-    status = Column(String(20), nullable=False, default="todo")
+    status = Column(String(36), nullable=False, default="todo")
     priority = Column(String(20), nullable=False, default="media")
     due_date = Column(Date, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+
+class ActivityColumn(Base):
+    __tablename__ = "activity_columns"
+    __table_args__ = (
+        PrimaryKeyConstraint("user_id", "id", name="pk_activity_columns_user_id_id"),
+        Index("ix_activity_columns_tenant_user_position", "tenant_id", "user_id", "position"),
+    )
+
+    id = Column(String(36), nullable=False)
+    user_id = Column(String(36), nullable=False)
+    tenant_id = Column(String(36), nullable=False)
+    title = Column(String(80), nullable=False)
+    color = Column(String(7), nullable=False, default="#087E96")
+    position = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 def get_db():
     db = SessionLocal()
@@ -124,7 +140,7 @@ def health():
 class ActivityCreate(BaseModel):
     title: str = Field(min_length=1, max_length=180)
     description: str = Field(default="", max_length=5000)
-    status: Literal["todo", "in_progress", "done"] = "todo"
+    status: str = Field(default="todo", min_length=1, max_length=36)
     priority: Literal["baixa", "media", "alta"] = "media"
     dueDate: date | None = None
 
@@ -132,12 +148,46 @@ class ActivityCreate(BaseModel):
 class ActivityUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=180)
     description: str | None = Field(default=None, max_length=5000)
-    status: Literal["todo", "in_progress", "done"] | None = None
+    status: str | None = Field(default=None, min_length=1, max_length=36)
     priority: Literal["baixa", "media", "alta"] | None = None
     dueDate: date | None = None
 
 
-_ACTIVITY_STATUSES = {"todo", "in_progress", "done"}
+class ActivityColumnCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=80)
+    color: str = Field(default="#087E96", pattern=r"^#[0-9A-Fa-f]{6}$")
+
+
+class ActivityColumnUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=80)
+    color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+
+
+_DEFAULT_ACTIVITY_COLUMNS = [
+    {"id": "todo", "title": "A Fazer", "color": "#087E96"},
+    {"id": "in_progress", "title": "Em Andamento", "color": "#D97706"},
+    {"id": "done", "title": "Concluído", "color": "#16834F"},
+]
+
+
+def _activity_column_to_dict(column: ActivityColumn):
+    return {
+        "id": column.id, "title": column.title, "color": column.color,
+        "position": column.position, "createdAt": column.created_at.isoformat(),
+        "updatedAt": column.updated_at.isoformat(),
+    }
+
+
+def _ensure_activity_columns(db: Session, user_id: str, tenant_id: str):
+    columns = db.query(ActivityColumn).filter_by(user_id=user_id, tenant_id=tenant_id).order_by(ActivityColumn.position).all()
+    if columns:
+        return columns
+    now = datetime.utcnow()
+    columns = [ActivityColumn(**definition, user_id=user_id, tenant_id=tenant_id, position=index, created_at=now, updated_at=now)
+               for index, definition in enumerate(_DEFAULT_ACTIVITY_COLUMNS)]
+    db.add_all(columns)
+    db.commit()
+    return db.query(ActivityColumn).filter_by(user_id=user_id, tenant_id=tenant_id).order_by(ActivityColumn.position).all()
 
 
 def _activity_to_dict(activity: Activity):
@@ -161,13 +211,86 @@ def _activity_owner(token: dict):
     return str(user_id), str(tenant_id)
 
 
+@app.get("/activities/columns")
+@app.get("/api/activities/columns")
+@app.get("/k1/lex/activities/columns")
+@app.get("/v1/lex/activities/columns")
+def list_activity_columns(token: dict = Depends(verify_token), db: Session = Depends(get_db)):
+    user_id, tenant_id = _activity_owner(token)
+    return [_activity_column_to_dict(row) for row in _ensure_activity_columns(db, user_id, tenant_id)]
+
+
+@app.post("/activities/columns", status_code=201)
+@app.post("/api/activities/columns", status_code=201)
+@app.post("/k1/lex/activities/columns", status_code=201)
+@app.post("/v1/lex/activities/columns", status_code=201)
+def create_activity_column(body: ActivityColumnCreate, token: dict = Depends(verify_token), db: Session = Depends(get_db)):
+    user_id, tenant_id = _activity_owner(token)
+    columns = _ensure_activity_columns(db, user_id, tenant_id)
+    title = body.title.strip()
+    if not title:
+        raise HTTPException(400, "O nome da coluna é obrigatório")
+    row = ActivityColumn(id=str(uuid.uuid4()), user_id=user_id, tenant_id=tenant_id, title=title,
+                         color=body.color.upper(), position=max((item.position for item in columns), default=-1) + 1)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _activity_column_to_dict(row)
+
+
+@app.put("/activities/columns/{column_id}")
+@app.put("/api/activities/columns/{column_id}")
+@app.put("/k1/lex/activities/columns/{column_id}")
+@app.put("/v1/lex/activities/columns/{column_id}")
+def update_activity_column(column_id: str, body: ActivityColumnUpdate, token: dict = Depends(verify_token), db: Session = Depends(get_db)):
+    user_id, tenant_id = _activity_owner(token)
+    row = db.query(ActivityColumn).filter_by(id=column_id, user_id=user_id, tenant_id=tenant_id).first()
+    if not row:
+        raise HTTPException(404, "Coluna não encontrada")
+    fields = body.model_dump(exclude_unset=True)
+    if not fields:
+        raise HTTPException(400, "Informe o nome ou a cor da coluna")
+    for field, value in fields.items():
+        if value is None:
+            raise HTTPException(400, f"O campo {field} não pode ser nulo")
+        if field == "title":
+            value = value.strip()
+            if not value:
+                raise HTTPException(400, "O nome da coluna é obrigatório")
+        if field == "color":
+            value = value.upper()
+        setattr(row, field, value)
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    return _activity_column_to_dict(row)
+
+
+@app.delete("/activities/columns/{column_id}")
+@app.delete("/api/activities/columns/{column_id}")
+@app.delete("/k1/lex/activities/columns/{column_id}")
+@app.delete("/v1/lex/activities/columns/{column_id}")
+def delete_activity_column(column_id: str, token: dict = Depends(verify_token), db: Session = Depends(get_db)):
+    user_id, tenant_id = _activity_owner(token)
+    row = db.query(ActivityColumn).filter_by(id=column_id, user_id=user_id, tenant_id=tenant_id).first()
+    if not row:
+        raise HTTPException(404, "Coluna não encontrada")
+    if db.query(ActivityColumn).filter_by(user_id=user_id, tenant_id=tenant_id).count() <= 1:
+        raise HTTPException(409, "O quadro precisa manter pelo menos uma coluna")
+    has_activities = db.query(Activity).filter_by(user_id=user_id, tenant_id=tenant_id, status=column_id).first()
+    if has_activities:
+        raise HTTPException(409, "Mova as atividades desta coluna antes de excluí-la")
+    db.delete(row)
+    db.commit()
+    return {"ok": True}
+
 @app.get("/activities")
 @app.get("/api/activities")
 @app.get("/k1/lex/activities")
 @app.get("/v1/lex/activities")
 def list_activities(status: Optional[str] = None, token: dict = Depends(verify_token), db: Session = Depends(get_db)):
     user_id, tenant_id = _activity_owner(token)
-    if status is not None and status not in _ACTIVITY_STATUSES:
+    if status is not None and not db.query(ActivityColumn).filter_by(id=status, user_id=user_id, tenant_id=tenant_id).first():
         raise HTTPException(400, "Status de atividade inválido")
     query = db.query(Activity).filter(Activity.user_id == user_id, Activity.tenant_id == tenant_id)
     if status:
@@ -181,6 +304,9 @@ def list_activities(status: Optional[str] = None, token: dict = Depends(verify_t
 @app.post("/v1/lex/activities", status_code=201)
 def create_activity(body: ActivityCreate, token: dict = Depends(verify_token), db: Session = Depends(get_db)):
     user_id, tenant_id = _activity_owner(token)
+    columns = _ensure_activity_columns(db, user_id, tenant_id)
+    if body.status not in {column.id for column in columns}:
+        raise HTTPException(400, "Coluna de atividade inválida")
     title = body.title.strip()
     if not title:
         raise HTTPException(400, "O título da atividade é obrigatório")
@@ -216,6 +342,10 @@ def update_activity(activity_id: str, body: ActivityUpdate, token: dict = Depend
         if api_name != "dueDate" and value is None:
             raise HTTPException(400, f"O campo {api_name} não pode ser nulo")
         column = "due_date" if api_name == "dueDate" else api_name
+        if api_name == "status":
+            valid_column = db.query(ActivityColumn).filter_by(id=value, user_id=user_id, tenant_id=tenant_id).first()
+            if not valid_column:
+                raise HTTPException(400, "Coluna de atividade inválida")
         if api_name == "title":
             value = value.strip()
             if not value:
