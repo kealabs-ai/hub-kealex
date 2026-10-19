@@ -230,7 +230,7 @@ def create_activity_column(body: ActivityColumnCreate, token: dict = Depends(ver
     title = body.title.strip()
     if not title:
         raise HTTPException(400, "O nome da coluna é obrigatório")
-    row = ActivityColumn(id=str(uuid.uuid4()), user_id=user_id, tenant_id=tenant_id, title=title,
+    row = ActivityColumn(id=uuid.uuid4().hex[:20], user_id=user_id, tenant_id=tenant_id, title=title,
                          color=body.color.upper(), position=max((item.position for item in columns), default=-1) + 1)
     db.add(row)
     db.commit()
