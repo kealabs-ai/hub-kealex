@@ -539,6 +539,10 @@ app.add_middleware(
 @app.api_route("/k1/lex/activities/{activity_path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
 @app.api_route("/v1/lex/activities", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
 @app.api_route("/v1/lex/activities/{activity_path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
+@app.api_route("/api/activities", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
+@app.api_route("/api/activities/{activity_path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
+@app.api_route("/activities", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
+@app.api_route("/activities/{activity_path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
 async def proxy_activities(request: Request, activity_path: str = ""):
     """Encaminha rotas legadas para o microserviço de atividades."""
     import httpx
