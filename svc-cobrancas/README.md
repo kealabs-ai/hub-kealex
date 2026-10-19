@@ -16,6 +16,20 @@ Body: {
 Response: Cobranca object
 ```
 
+### Gerar pagamento ASAAS (PIX ou cartão)
+Crie primeiro a cobrança local e depois use o identificador de cliente cadastrado no ASAAS:
+```
+POST /k1/lex/cobrancas/pagamento
+Body: {
+  "cobrancaId": "uuid-da-cobranca",
+  "customer": "cus_...",
+  "billingType": "PIX"
+}
+```
+`billingType` aceita `PIX` ou `CREDIT_CARD`. Para cartão, informe também `creditCardToken` gerado pelo fluxo seguro de tokenização do ASAAS. O valor e vencimento vêm da cobrança local; o valor em centavos é convertido para reais. A resposta inclui `asaasId` e `invoiceUrl` (e `pixQrCodeUrl`, quando informado pelo ASAAS).
+
+Configure `KEALEX_ASAAS_API_KEY` com o token de acesso e, opcionalmente, `KEALEX_ASAAS_BASE_URL`. Em arquivos `.env` usados pelo Docker Compose, coloque a chave entre aspas simples (`KEALEX_ASAAS_API_KEY='...$...'`) para preservar `$` literal. Sem URL configurada, o serviço usa o sandbox `https://api-sandbox.asaas.com/v3`.
+
 ### Listar Cobrancas
 ```
 GET /k1/lex/cobrancas

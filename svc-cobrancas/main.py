@@ -1,13 +1,14 @@
-import os, uuid, enum, sys
-from datetime import datetime
+import os, uuid, enum, sys, re, hmac
+from datetime import datetime, timezone
 from typing import Optional
 import logging
-from fastapi import FastAPI, HTTPException, Depends
+import httpx
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from jose import jwt, JWTError
-from sqlalchemy import create_engine, Column, String, DateTime, Text, Integer
+from sqlalchemy import create_engine, Column, String, DateTime, Integer
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from dotenv import load_dotenv
@@ -87,6 +88,12 @@ class HistoricoCobranca(Base):
     observacao = Column(String(500), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class AsaasWebhookEvent(Base):
+    __tablename__ = "asaas_webhook_events"
+    id = Column(String(100), primary_key=True)  # event id vindo do Asaas
+    event = Column(String(80), nullable=False)
+    received_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
 def get_db():
     db = SessionLocal()
     try:
@@ -104,6 +111,30 @@ def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
         raise HTTPException(401, "Token invalido")
 
 _guard = require_active_trial if require_active_trial else verify_token
+
+KEALEX_ASAAS_API_KEY = os.getenv("KEALEX_ASAAS_API_KEY", "")
+ASAAS_BASE = os.getenv("KEALEX_ASAAS_BASE_URL", "https://api-sandbox.asaas.com/v3").rstrip("/")
+KEALEX_ASAAS_WEBHOOK_TOKEN = os.getenv("KEALEX_ASAAS_WEBHOOK_TOKEN", "")
+
+def _now():
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+def _build_asaas_payload(body, cobranca):
+    p = {
+        "billingType": body.billingType,
+        "customer": body.customer.strip(),
+        "value": round(cobranca.valor_centavos / 100, 2),
+        "dueDate": cobranca.data_vencimento.date().isoformat() if cobranca.data_vencimento else _now().date().isoformat(),
+        "description": body.description or f"Cobranca {cobranca.id}",
+        "externalReference": cobranca.id,
+    }
+    if body.billingType == "CREDIT_CARD":
+        if body.creditCardToken:
+            p["creditCardToken"] = body.creditCardToken
+        else:
+            p["creditCard"] = body.creditCard.model_dump()
+            p["creditCardHolderInfo"] = body.creditCardHolderInfo.model_dump(exclude_none=True)
+    return p
 
 app = FastAPI(title="svc-cobrancas")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -129,6 +160,31 @@ class CobrancaIn(BaseModel):
     clienteId: str
     valorCentavos: int
     dataVencimento: Optional[str] = None
+
+class CreditCardIn(BaseModel):
+    holderName: str
+    number: str
+    expiryMonth: str
+    expiryYear: str
+    ccv: str
+
+class CreditCardHolderInfoIn(BaseModel):
+    name: str
+    email: str
+    cpfCnpj: str
+    postalCode: str
+    addressNumber: str
+    addressComplement: Optional[str] = None
+    phone: str
+
+class PagamentoIn(BaseModel):
+    cobrancaId: str
+    customer: str
+    billingType: str
+    description: Optional[str] = None
+    creditCardToken: Optional[str] = None
+    creditCard: Optional[CreditCardIn] = None
+    creditCardHolderInfo: Optional[CreditCardHolderInfoIn] = None
 
 def _cobranca_to_dict(cobranca: Cobranca):
     fases_cobranca = ["Pendente", "Aguardando Pagamento", "Vencida", "Em Cobranca", "Pago"]
@@ -161,7 +217,8 @@ def _get_proximas_acoes(cobranca: Cobranca):
 @app.post(PREFIX, status_code=201, include_in_schema=False)
 def criar_cobranca(body: CobrancaIn, db: Session = Depends(get_db), payload=Depends(_guard)):
     try:
-        logger.info(f"[CREATE_COBRANCA] Iniciando criacao de cobranca para processo: {body.processoId}")
+        safe_id = re.sub(r'[^a-zA-Z0-9\-]', '', body.processoId)
+        logger.info(f"[CREATE_COBRANCA] Iniciando criacao de cobranca para processo: {safe_id}")
         tenant_id = payload.get("tenant_id")
         
         cobranca = Cobranca(
@@ -196,6 +253,72 @@ def criar_cobranca(body: CobrancaIn, db: Session = Depends(get_db), payload=Depe
         logger.error(f"[CREATE_COBRANCA] ERRO: {str(e)}", exc_info=True)
         db.rollback()
         raise HTTPException(500, f"Erro ao criar cobranca: {str(e)}")
+
+@app.post("/v1/lex/cobrancas/pagamento")
+@app.post("/k1/lex/cobrancas/pagamento")
+@app.post(f"{PREFIX}/pagamento", include_in_schema=False)
+def criar_pagamento(body: PagamentoIn, db: Session = Depends(get_db), payload=Depends(_guard)):
+    if body.billingType not in ("PIX", "CREDIT_CARD"):
+        raise HTTPException(400, "billingType invalido. Use 'PIX' ou 'CREDIT_CARD'")
+    if not body.customer.strip():
+        raise HTTPException(400, "customer (ID do cliente no ASAAS) e obrigatorio")
+    if body.billingType == "CREDIT_CARD" and not body.creditCardToken and not body.creditCard:
+        raise HTTPException(400, "Informe creditCardToken ou creditCard para pagamento com cartao")
+    if body.billingType == "CREDIT_CARD" and body.creditCard and not body.creditCardHolderInfo:
+        raise HTTPException(400, "creditCardHolderInfo e obrigatorio quando creditCard e informado")
+    if not KEALEX_ASAAS_API_KEY:
+        raise HTTPException(500, "KEALEX_ASAAS_API_KEY nao configurada")
+
+    cobranca = db.query(Cobranca).filter_by(
+        id=body.cobrancaId, tenant_id=payload.get("tenant_id")
+    ).first()
+    if not cobranca:
+        raise HTTPException(404, "Cobranca nao encontrada")
+    if cobranca.status in ("pago", "cancelado"):
+        raise HTTPException(400, f"Cobranca com status '{cobranca.status}' nao pode ser paga")
+
+    payload_asaas = _build_asaas_payload(body, cobranca)
+    try:
+        response = httpx.post(
+            f"{ASAAS_BASE}/payments",
+            json=payload_asaas,
+            headers={
+                "accept": "application/json",
+                "content-type": "application/json",
+                "access_token": KEALEX_ASAAS_API_KEY,
+                "User-Agent": "Kealex/1.0.0",
+            },
+            timeout=15,
+        )
+    except httpx.RequestError as exc:
+        logger.error("Falha de conexao com ASAAS: %s", exc)
+        raise HTTPException(502, "Erro ao conectar com gateway de pagamento")
+
+    if response.status_code not in (200, 201):
+        logger.error("ASAAS recusou pagamento: status=%s body=%s", response.status_code, response.text)
+        raise HTTPException(502, "ASAAS nao conseguiu criar o pagamento")
+
+    asaas_data = response.json()
+    status_anterior = cobranca.status
+    cobranca.status = "aguardando_pagamento"
+    cobranca.fase_atual = max(cobranca.fase_atual, 1)
+    cobranca.updated_at = _now()
+    db.add(HistoricoCobranca(
+        id=str(uuid.uuid4()), cobranca_id=cobranca.id, acao="pagamento_iniciado",
+        status_anterior=status_anterior, status_novo=cobranca.status,
+        observacao=f"billingType={body.billingType}, asaas_id={asaas_data.get('id')}",
+    ))
+    db.commit()
+    return {
+        "cobrancaId": cobranca.id,
+        "asaasId": asaas_data.get("id"),
+        "billingType": asaas_data.get("billingType"),
+        "status": asaas_data.get("status"),
+        "value": asaas_data.get("value"),
+        "dueDate": asaas_data.get("dueDate"),
+        "invoiceUrl": asaas_data.get("invoiceUrl"),
+        "pixQrCodeUrl": asaas_data.get("pixQrCodeUrl"),
+    }
 
 @app.get("/v1/lex/cobrancas")
 @app.get("/k1/lex/cobrancas")
@@ -255,7 +378,7 @@ def proxima_fase_cobranca(body: dict, db: Session = Depends(get_db), payload=Dep
         nova_fase = min(cobranca.fase_atual + 1, len(fases_cobranca) - 1)
         
         cobranca.fase_atual = nova_fase
-        cobranca.updated_at = datetime.utcnow()
+        cobranca.updated_at = _now()
         db.add(cobranca)
         
         historico = HistoricoCobranca(
@@ -298,8 +421,8 @@ def marcar_pago(body: dict, db: Session = Depends(get_db), payload=Depends(_guar
         status_anterior = cobranca.status
         cobranca.status = "pago"
         cobranca.fase_atual = 4
-        cobranca.data_pagamento = datetime.utcnow()
-        cobranca.updated_at = datetime.utcnow()
+        cobranca.data_pagamento = _now()
+        cobranca.updated_at = _now()
         db.add(cobranca)
         
         historico = HistoricoCobranca(
@@ -344,7 +467,7 @@ def cancelar_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends
         
         cobranca.status = "cancelado"
         cobranca.motivo_cancelamento = motivo
-        cobranca.updated_at = datetime.utcnow()
+        cobranca.updated_at = _now()
         db.add(cobranca)
         
         historico = HistoricoCobranca(
@@ -391,18 +514,12 @@ def timeline_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends
         
         historico = db.query(HistoricoCobranca).filter_by(cobranca_id=cobranca_id).order_by(HistoricoCobranca.created_at).all()
         
-        timeline = []
-        for h in historico:
-            timeline.append({
-                "id": h.id,
-                "acao": h.acao,
-                "fase_anterior": h.fase_anterior,
-                "fase_nova": h.fase_nova,
-                "status_anterior": h.status_anterior,
-                "status_novo": h.status_novo,
-                "observacao": h.observacao,
-                "data": h.created_at.isoformat()
-            })
+        timeline = [
+            {"id": h.id, "acao": h.acao, "fase_anterior": h.fase_anterior, "fase_nova": h.fase_nova,
+             "status_anterior": h.status_anterior, "status_novo": h.status_novo,
+             "observacao": h.observacao, "data": h.created_at.isoformat()}
+            for h in historico
+        ]
         
         logger.info(f"[TIMELINE] Timeline recuperada: {len(timeline)} eventos")
         return {
@@ -421,3 +538,89 @@ def timeline_cobranca(body: dict, db: Session = Depends(get_db), payload=Depends
     except Exception as e:
         logger.error(f"[TIMELINE] ERRO: {str(e)}", exc_info=True)
         raise HTTPException(500, f"Erro ao obter timeline: {str(e)}")
+
+# ── Webhook ───────────────────────────────────────────────────────────────────
+
+# Mapeamento evento Asaas → (status_interno, fase, acao_historico)
+_EVENTO_MAP = {
+    "PAYMENT_CONFIRMED":    ("pago",                4, "webhook_pago"),
+    "PAYMENT_RECEIVED":     ("pago",                4, "webhook_pago"),
+    "PAYMENT_OVERDUE":      ("vencida",             2, "webhook_vencida"),
+    "PAYMENT_DELETED":      ("cancelado",           None, "webhook_cancelado"),
+    "PAYMENT_REFUNDED":     ("cancelado",           None, "webhook_estornado"),
+    "PAYMENT_CHARGEBACK_REQUESTED": ("cancelado",   None, "webhook_chargeback"),
+}
+
+def _verify_webhook_token(token: str | None) -> bool:
+    if not KEALEX_ASAAS_WEBHOOK_TOKEN or not token:
+        return False
+    return hmac.compare_digest(
+        token.encode("utf-8"),
+        KEALEX_ASAAS_WEBHOOK_TOKEN.encode("utf-8"),
+    )
+
+@app.post("/v1/lex/cobrancas/webhook")
+@app.post("/k1/lex/cobrancas/webhook")
+@app.post(f"{PREFIX}/webhook", include_in_schema=False)
+async def webhook_asaas(request: Request, db: Session = Depends(get_db)):
+    import json as _json
+
+    token = request.headers.get("asaas-access-token")
+    if not _verify_webhook_token(token):
+        logging.warning("[WEBHOOK] Token invalido ou ausente")
+        raise HTTPException(401, "Token de webhook invalido")
+
+    raw = await request.body()
+    try:
+        data = _json.loads(raw)
+    except Exception:
+        raise HTTPException(400, "Payload invalido")
+
+    event_id = data.get("id")
+    event_name = data.get("event", "")
+
+    if not event_id:
+        raise HTTPException(400, "Campo 'id' ausente no payload")
+
+    # Idempotência
+    if db.get(AsaasWebhookEvent, event_id):
+        logging.info("[WEBHOOK] Evento duplicado ignorado event_id=%s", event_id)
+        return {"ok": True, "duplicated": True}
+
+    # Persiste o evento no schema compartilhado com svc-auth.
+    db.add(AsaasWebhookEvent(id=event_id, event=event_name))
+
+    # Atualiza a cobrança se o evento for mapeado
+    payment = data.get("payment", {})
+    external_ref = payment.get("externalReference")  # cobranca.id
+
+    if event_name in _EVENTO_MAP and external_ref:
+        novo_status, nova_fase, acao = _EVENTO_MAP[event_name]
+        cobranca = db.query(Cobranca).filter_by(id=external_ref).first()
+        if cobranca:
+            status_anterior = cobranca.status
+            cobranca.status = novo_status
+            if nova_fase is not None:
+                cobranca.fase_atual = nova_fase
+            if novo_status == "pago":
+                cobranca.data_pagamento = _now()
+            cobranca.updated_at = _now()
+            db.add(HistoricoCobranca(
+                id=str(uuid.uuid4()),
+                cobranca_id=cobranca.id,
+                acao=acao,
+                status_anterior=status_anterior,
+                status_novo=novo_status,
+                observacao=f"event_id={event_id} event={event_name}",
+            ))
+            logging.info(
+                "[WEBHOOK] Cobranca atualizada cobranca_id=%s event=%s status=%s",
+                cobranca.id, event_name, novo_status,
+            )
+        else:
+            logging.warning("[WEBHOOK] Cobranca nao encontrada externalReference=%s", external_ref)
+    else:
+        logging.info("[WEBHOOK] Evento nao mapeado ignorado event=%s", event_name)
+
+    db.commit()
+    return {"ok": True}
