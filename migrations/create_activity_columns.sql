@@ -1,0 +1,12 @@
+ALTER TABLE activities MODIFY COLUMN status VARCHAR(36) NOT NULL DEFAULT 'todo';
+
+CREATE TABLE IF NOT EXISTS activity_columns (
+    id VARCHAR(36) NOT NULL,
+    user_id VARCHAR(36) NOT NULL,
+    tenant_id VARCHAR(36) NOT NULL,
+    title VARCHAR(80) NOT NULL,
+    color VARCHAR(7) NOT NULL DEFAULT '#087E96',
+    position INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
