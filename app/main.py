@@ -2,7 +2,7 @@ import os, uuid, enum, logging
 from datetime import datetime, timedelta
 from typing import Optional, List
 from urllib.parse import quote_plus
-from fastapi import FastAPI, HTTPException, Depends, Header, Request, Response
+from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
@@ -534,43 +534,6 @@ app.add_middleware(
     allow_headers=["*"],
     allow_credentials=True,
 )
-
-@app.api_route("/k1/lex/activities", methods=["GET", "POST"])
-@app.api_route("/k1/lex/activities/{activity_path:path}", methods=["GET", "POST"])
-@app.api_route("/v1/lex/activities", methods=["GET", "POST"])
-@app.api_route("/v1/lex/activities/{activity_path:path}", methods=["GET", "POST"])
-@app.api_route("/api/activities", methods=["GET", "POST"])
-@app.api_route("/api/activities/{activity_path:path}", methods=["GET", "POST"])
-@app.api_route("/activities", methods=["GET", "POST"])
-@app.api_route("/activities/{activity_path:path}", methods=["GET", "POST"])
-async def proxy_activities(request: Request, activity_path: str = ""):
-    """Encaminha rotas legadas para o microserviço de atividades."""
-    import httpx
-
-    target_url = f"http://svc-activities:8000{request.url.path}"
-    forwarded_headers = {
-        name: value
-        for name, value in request.headers.items()
-        if name.lower() in {"authorization", "content-type", "accept"}
-    }
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            upstream = await client.request(
-                request.method,
-                target_url,
-                params=request.query_params,
-                content=await request.body(),
-                headers=forwarded_headers,
-            )
-    except httpx.HTTPError as exc:
-        raise HTTPException(503, "Serviço de atividades indisponível") from exc
-    response_headers = {
-        name: value
-        for name, value in upstream.headers.items()
-        if name.lower() in {"content-type", "cache-control"}
-    }
-    return Response(content=upstream.content, status_code=upstream.status_code, headers=response_headers)
-
 
 @app.on_event("startup")
 def startup_event():
