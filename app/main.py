@@ -1,14 +1,14 @@
 import os, uuid, enum, logging
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Optional, List
 from urllib.parse import quote_plus
 from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 import bcrypt
 from jose import jwt, JWTError
-from sqlalchemy import create_engine, Column, String, Boolean, DateTime, Enum as SAEnum, Text, Integer, Numeric
+from sqlalchemy import create_engine, Column, String, Boolean, Date, DateTime, Enum as SAEnum, Index, PrimaryKeyConstraint, Text, Integer, Numeric
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -280,6 +280,39 @@ class HistoricoCobranca(Base):
     status_novo = Column(String(50), nullable=True)
     observacao = Column(String(500), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class Activity(Base):
+    __tablename__ = "activities"
+    __table_args__ = (
+        Index("ix_activities_user_id", "user_id"),
+        Index("ix_activities_status", "status"),
+        Index("ix_activities_user_status", "user_id", "status"),
+    )
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), nullable=False)
+    tenant_id = Column(String(36), nullable=False)
+    title = Column(String(180), nullable=False)
+    description = Column(Text, nullable=False, default="")
+    status = Column(String(36), nullable=False, default="todo")
+    priority = Column(String(20), nullable=False, default="media")
+    due_date = Column(Date, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class ActivityColumn(Base):
+    __tablename__ = "activity_columns"
+    __table_args__ = (
+        PrimaryKeyConstraint("user_id", "id", name="pk_activity_columns_user_id_id"),
+        Index("ix_activity_columns_tenant_user_position", "tenant_id", "user_id", "position"),
+    )
+    id = Column(String(36), nullable=False)
+    user_id = Column(String(36), nullable=False)
+    tenant_id = Column(String(36), nullable=False)
+    title = Column(String(80), nullable=False)
+    color = Column(String(7), nullable=False, default="#087E96")
+    position = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class AsaasWebhookEvent(Base):
     __tablename__ = "asaas_webhook_events"
@@ -976,6 +1009,197 @@ def update_billing_profile(body: HolderInfoIn, db: Session = Depends(get_db), pa
     db.commit()
     return {"ok": True}
 
+
+class ActivityCreateIn(BaseModel):
+    title: str = Field(min_length=1, max_length=180)
+    description: str = Field(default="", max_length=5000)
+    status: str = Field(default="todo", min_length=1, max_length=36)
+    priority: str = "media"
+    dueDate: date | None = None
+
+class ActivityUpdateIn(BaseModel):
+    id: str
+    title: str | None = Field(default=None, min_length=1, max_length=180)
+    description: str | None = Field(default=None, max_length=5000)
+    status: str | None = Field(default=None, min_length=1, max_length=36)
+    priority: str | None = None
+    dueDate: date | None = None
+
+class ActivityColumnCreateIn(BaseModel):
+    title: str = Field(min_length=1, max_length=80)
+    color: str = Field(default="#087E96", pattern=r"^#[0-9A-Fa-f]{6}$")
+
+class ActivityColumnUpdateIn(BaseModel):
+    id: str
+    title: str | None = Field(default=None, min_length=1, max_length=80)
+    color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+
+class ActivityIdIn(BaseModel):
+    id: str
+
+_ACTIVITY_DEFAULT_COLUMNS = [
+    {"id": "todo", "title": "A Fazer", "color": "#087E96"},
+    {"id": "in_progress", "title": "Em Andamento", "color": "#D97706"},
+    {"id": "done", "title": "Concluído", "color": "#16834F"},
+]
+
+def _activity_owner(payload: dict) -> tuple[str, str]:
+    user_id, tenant_id = payload.get("sub"), payload.get("tenant_id")
+    if not user_id or not tenant_id:
+        raise HTTPException(401, "Token sem usuário ou escritório associado")
+    return str(user_id), str(tenant_id)
+
+def _ensure_activity_columns(db: Session, user_id: str, tenant_id: str):
+    columns = db.query(ActivityColumn).filter_by(user_id=user_id, tenant_id=tenant_id).order_by(ActivityColumn.position).all()
+    if columns:
+        return columns
+    now = datetime.utcnow()
+    columns = [
+        ActivityColumn(**definition, user_id=user_id, tenant_id=tenant_id, position=position, created_at=now, updated_at=now)
+        for position, definition in enumerate(_ACTIVITY_DEFAULT_COLUMNS)
+    ]
+    db.add_all(columns)
+    db.commit()
+    return db.query(ActivityColumn).filter_by(user_id=user_id, tenant_id=tenant_id).order_by(ActivityColumn.position).all()
+
+def _activity_column_json(column: ActivityColumn) -> dict:
+    return {
+        "id": column.id, "title": column.title, "color": column.color,
+        "position": column.position, "createdAt": column.created_at.isoformat(),
+        "updatedAt": column.updated_at.isoformat(),
+    }
+
+def _activity_json(activity: Activity) -> dict:
+    return {
+        "id": activity.id, "userId": activity.user_id, "title": activity.title,
+        "description": activity.description, "status": activity.status, "priority": activity.priority,
+        "dueDate": activity.due_date.isoformat() if activity.due_date else None,
+        "createdAt": activity.created_at.isoformat(), "updatedAt": activity.updated_at.isoformat(),
+    }
+
+@app.get("/k1/lex/activities/columns")
+def hub_list_activity_columns(payload=Depends(verify_token), db: Session = Depends(get_db)):
+    user_id, tenant_id = _activity_owner(payload)
+    return [_activity_column_json(row) for row in _ensure_activity_columns(db, user_id, tenant_id)]
+
+@app.post("/k1/lex/activities/columns", status_code=201)
+def hub_create_activity_column(body: ActivityColumnCreateIn, payload=Depends(verify_token), db: Session = Depends(get_db)):
+    user_id, tenant_id = _activity_owner(payload)
+    columns = _ensure_activity_columns(db, user_id, tenant_id)
+    title = body.title.strip()
+    if not title:
+        raise HTTPException(400, "O nome da coluna é obrigatório")
+    row = ActivityColumn(
+        id=uuid.uuid4().hex[:20], user_id=user_id, tenant_id=tenant_id, title=title,
+        color=body.color.upper(), position=max((column.position for column in columns), default=-1) + 1,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _activity_column_json(row)
+
+@app.post("/k1/lex/activities/columns/update")
+def hub_update_activity_column(body: ActivityColumnUpdateIn, payload=Depends(verify_token), db: Session = Depends(get_db)):
+    user_id, tenant_id = _activity_owner(payload)
+    row = db.query(ActivityColumn).filter_by(id=body.id, user_id=user_id, tenant_id=tenant_id).first()
+    if not row:
+        raise HTTPException(404, "Coluna não encontrada")
+    fields = body.model_dump(exclude_unset=True, exclude={"id"})
+    if not fields:
+        raise HTTPException(400, "Informe o nome ou a cor da coluna")
+    for name, value in fields.items():
+        if value is None:
+            raise HTTPException(400, f"O campo {name} não pode ser nulo")
+        if name == "title":
+            value = value.strip()
+            if not value:
+                raise HTTPException(400, "O nome da coluna é obrigatório")
+        if name == "color":
+            value = value.upper()
+        setattr(row, name, value)
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    return _activity_column_json(row)
+
+@app.post("/k1/lex/activities/columns/delete")
+def hub_delete_activity_column(body: ActivityIdIn, payload=Depends(verify_token), db: Session = Depends(get_db)):
+    user_id, tenant_id = _activity_owner(payload)
+    row = db.query(ActivityColumn).filter_by(id=body.id, user_id=user_id, tenant_id=tenant_id).first()
+    if not row:
+        raise HTTPException(404, "Coluna não encontrada")
+    if db.query(ActivityColumn).filter_by(user_id=user_id, tenant_id=tenant_id).count() <= 1:
+        raise HTTPException(409, "O quadro precisa manter pelo menos uma coluna")
+    if db.query(Activity).filter_by(user_id=user_id, tenant_id=tenant_id, status=body.id).first():
+        raise HTTPException(409, "Mova as atividades desta coluna antes de excluí-la")
+    db.delete(row)
+    db.commit()
+    return {"ok": True}
+
+@app.get("/k1/lex/activities")
+def hub_list_activities(status: str | None = None, payload=Depends(verify_token), db: Session = Depends(get_db)):
+    user_id, tenant_id = _activity_owner(payload)
+    _ensure_activity_columns(db, user_id, tenant_id)
+    query = db.query(Activity).filter(Activity.user_id == user_id, Activity.tenant_id == tenant_id)
+    if status is not None:
+        if not db.query(ActivityColumn).filter_by(id=status, user_id=user_id, tenant_id=tenant_id).first():
+            raise HTTPException(400, "Status de atividade inválido")
+        query = query.filter(Activity.status == status)
+    return [_activity_json(row) for row in query.order_by(Activity.created_at.desc()).all()]
+
+@app.post("/k1/lex/activities", status_code=201)
+def hub_create_activity(body: ActivityCreateIn, payload=Depends(verify_token), db: Session = Depends(get_db)):
+    user_id, tenant_id = _activity_owner(payload)
+    columns = _ensure_activity_columns(db, user_id, tenant_id)
+    if body.status not in {column.id for column in columns}:
+        raise HTTPException(400, "Coluna de atividade inválida")
+    if body.priority not in {"baixa", "media", "alta"}:
+        raise HTTPException(400, "Prioridade inválida")
+    title = body.title.strip()
+    if not title:
+        raise HTTPException(400, "O título da atividade é obrigatório")
+    row = Activity(
+        user_id=user_id, tenant_id=tenant_id, title=title, description=body.description.strip(),
+        status=body.status, priority=body.priority, due_date=body.dueDate,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _activity_json(row)
+
+@app.post("/k1/lex/activities/update")
+def hub_update_activity(body: ActivityUpdateIn, payload=Depends(verify_token), db: Session = Depends(get_db)):
+    user_id, tenant_id = _activity_owner(payload)
+    row = db.query(Activity).filter_by(id=body.id, user_id=user_id, tenant_id=tenant_id).first()
+    if not row:
+        raise HTTPException(404, "Atividade não encontrada")
+    for name, value in body.model_dump(exclude_unset=True, exclude={"id"}).items():
+        if name == "status" and value is not None:
+            if not db.query(ActivityColumn).filter_by(id=value, user_id=user_id, tenant_id=tenant_id).first():
+                raise HTTPException(400, "Coluna de atividade inválida")
+        if name == "priority" and value is not None and value not in {"baixa", "media", "alta"}:
+            raise HTTPException(400, "Prioridade inválida")
+        if name == "title" and value is not None:
+            value = value.strip()
+            if not value:
+                raise HTTPException(400, "O título da atividade é obrigatório")
+        if name == "description" and value is not None:
+            value = value.strip()
+        setattr(row, "due_date" if name == "dueDate" else name, value)
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    return _activity_json(row)
+
+@app.post("/k1/lex/activities/delete")
+def hub_delete_activity(body: ActivityIdIn, payload=Depends(verify_token), db: Session = Depends(get_db)):
+    user_id, tenant_id = _activity_owner(payload)
+    row = db.query(Activity).filter_by(id=body.id, user_id=user_id, tenant_id=tenant_id).first()
+    if not row:
+        raise HTTPException(404, "Atividade não encontrada")
+    db.delete(row)
+    db.commit()
+    return {"ok": True}
 
 # Health endpoints
 @app.get("/health")
