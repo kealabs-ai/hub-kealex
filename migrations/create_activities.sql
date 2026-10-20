@@ -14,3 +14,20 @@ CREATE TABLE IF NOT EXISTS activities (
     INDEX ix_activities_user_status (user_id, status),
     INDEX ix_activities_tenant_id (tenant_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Status guarda o ID da coluna do quadro, que pode ter até 36 caracteres.
+ALTER TABLE activities
+    MODIFY COLUMN status VARCHAR(36) NOT NULL DEFAULT 'todo';
+
+CREATE TABLE IF NOT EXISTS activity_columns (
+    id VARCHAR(36) NOT NULL,
+    user_id VARCHAR(36) NOT NULL,
+    tenant_id VARCHAR(36) NOT NULL,
+    title VARCHAR(80) NOT NULL,
+    color VARCHAR(7) NOT NULL DEFAULT '#087E96',
+    position INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    PRIMARY KEY (user_id, id),
+    INDEX ix_activity_columns_tenant_user_position (tenant_id, user_id, position)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
