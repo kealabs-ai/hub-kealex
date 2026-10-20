@@ -11,7 +11,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 from sqlalchemy import Column, Date, DateTime, Index, Integer, PrimaryKeyConstraint, String, Text, create_engine
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
@@ -140,18 +140,40 @@ def health():
 class ActivityCreate(BaseModel):
     title: str = Field(min_length=1, max_length=180)
     description: str = Field(default="", max_length=5000)
-    status: str = Field(default="todo", min_length=1, max_length=36)
+    status: str = Field(default="todo", min_length=1, max_length=36, validation_alias=AliasChoices("status", "columnId", "column_id"))
     priority: Literal["baixa", "media", "alta"] = "media"
-    dueDate: date | None = None
+    dueDate: date | None = Field(default=None, validation_alias=AliasChoices("dueDate", "due_date"))
+
+    @field_validator("dueDate", mode="before")
+    @classmethod
+    def parse_due_date(cls, value):
+        if value is None or value == "":
+            return None
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, str) and "T" in value:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).date()
+        return value
 
 
 class ActivityUpdate(BaseModel):
-    id: str
+    id: str = Field(validation_alias=AliasChoices("id", "activityId", "activity_id"))
     title: str | None = Field(default=None, min_length=1, max_length=180)
     description: str | None = Field(default=None, max_length=5000)
-    status: str | None = Field(default=None, min_length=1, max_length=36)
+    status: str | None = Field(default=None, min_length=1, max_length=36, validation_alias=AliasChoices("status", "columnId", "column_id"))
     priority: Literal["baixa", "media", "alta"] | None = None
-    dueDate: date | None = None
+    dueDate: date | None = Field(default=None, validation_alias=AliasChoices("dueDate", "due_date"))
+
+    @field_validator("dueDate", mode="before")
+    @classmethod
+    def parse_due_date(cls, value):
+        if value is None or value == "":
+            return None
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, str) and "T" in value:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).date()
+        return value
 
 
 class ActivityColumnCreate(BaseModel):
@@ -160,17 +182,17 @@ class ActivityColumnCreate(BaseModel):
 
 
 class ActivityColumnUpdate(BaseModel):
-    id: str
+    id: str = Field(validation_alias=AliasChoices("id", "columnId", "column_id"))
     title: str | None = Field(default=None, min_length=1, max_length=80)
     color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
 
 
 class ActivityDelete(BaseModel):
-    id: str
+    id: str = Field(validation_alias=AliasChoices("id", "activityId", "activity_id"))
 
 
 class ActivityColumnDelete(BaseModel):
-    id: str
+    id: str = Field(validation_alias=AliasChoices("id", "columnId", "column_id"))
 
 
 _DEFAULT_ACTIVITY_COLUMNS = [
@@ -257,7 +279,7 @@ def update_activity_column(body: ActivityColumnUpdate, token: dict = Depends(ver
     row = db.query(ActivityColumn).filter_by(id=body.id, user_id=user_id, tenant_id=tenant_id).first()
     if not row:
         raise HTTPException(404, "Coluna não encontrada")
-    fields = body.model_dump(exclude_unset=True)
+    fields = body.model_dump(exclude_unset=True, exclude={"id"})
     if not fields:
         raise HTTPException(400, "Informe o nome ou a cor da coluna")
     for field, value in fields.items():
@@ -348,7 +370,7 @@ def update_activity(body: ActivityUpdate, token: dict = Depends(verify_token), d
     ).first()
     if not row:
         raise HTTPException(404, "Atividade não encontrada")
-    for api_name, value in body.model_dump(exclude_unset=True).items():
+    for api_name, value in body.model_dump(exclude_unset=True, exclude={"id"}).items():
         if api_name != "dueDate" and value is None:
             raise HTTPException(400, f"O campo {api_name} não pode ser nulo")
         column = "due_date" if api_name == "dueDate" else api_name
