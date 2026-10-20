@@ -118,7 +118,7 @@ app = FastAPI(title="svc-activities")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in os.getenv("KEALEX_CORS_ALLOWED_ORIGINS", "").split(",") if origin.strip()],
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
     allow_credentials=True,
 )
@@ -146,6 +146,7 @@ class ActivityCreate(BaseModel):
 
 
 class ActivityUpdate(BaseModel):
+    id: str
     title: str | None = Field(default=None, min_length=1, max_length=180)
     description: str | None = Field(default=None, max_length=5000)
     status: str | None = Field(default=None, min_length=1, max_length=36)
@@ -159,8 +160,17 @@ class ActivityColumnCreate(BaseModel):
 
 
 class ActivityColumnUpdate(BaseModel):
+    id: str
     title: str | None = Field(default=None, min_length=1, max_length=80)
     color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+
+
+class ActivityDelete(BaseModel):
+    id: str
+
+
+class ActivityColumnDelete(BaseModel):
+    id: str
 
 
 _DEFAULT_ACTIVITY_COLUMNS = [
@@ -238,13 +248,13 @@ def create_activity_column(body: ActivityColumnCreate, token: dict = Depends(ver
     return _activity_column_to_dict(row)
 
 
-@app.put("/activities/columns/{column_id}")
-@app.put("/api/activities/columns/{column_id}")
-@app.put("/k1/lex/activities/columns/{column_id}")
-@app.put("/v1/lex/activities/columns/{column_id}")
-def update_activity_column(column_id: str, body: ActivityColumnUpdate, token: dict = Depends(verify_token), db: Session = Depends(get_db)):
+@app.post("/activities/columns/update")
+@app.post("/api/activities/columns/update")
+@app.post("/k1/lex/activities/columns/update")
+@app.post("/v1/lex/activities/columns/update")
+def update_activity_column(body: ActivityColumnUpdate, token: dict = Depends(verify_token), db: Session = Depends(get_db)):
     user_id, tenant_id = _activity_owner(token)
-    row = db.query(ActivityColumn).filter_by(id=column_id, user_id=user_id, tenant_id=tenant_id).first()
+    row = db.query(ActivityColumn).filter_by(id=body.id, user_id=user_id, tenant_id=tenant_id).first()
     if not row:
         raise HTTPException(404, "Coluna não encontrada")
     fields = body.model_dump(exclude_unset=True)
@@ -266,13 +276,13 @@ def update_activity_column(column_id: str, body: ActivityColumnUpdate, token: di
     return _activity_column_to_dict(row)
 
 
-@app.delete("/activities/columns/{column_id}")
-@app.delete("/api/activities/columns/{column_id}")
-@app.delete("/k1/lex/activities/columns/{column_id}")
-@app.delete("/v1/lex/activities/columns/{column_id}")
-def delete_activity_column(column_id: str, token: dict = Depends(verify_token), db: Session = Depends(get_db)):
+@app.post("/activities/columns/delete")
+@app.post("/api/activities/columns/delete")
+@app.post("/k1/lex/activities/columns/delete")
+@app.post("/v1/lex/activities/columns/delete")
+def delete_activity_column(body: ActivityColumnDelete, token: dict = Depends(verify_token), db: Session = Depends(get_db)):
     user_id, tenant_id = _activity_owner(token)
-    row = db.query(ActivityColumn).filter_by(id=column_id, user_id=user_id, tenant_id=tenant_id).first()
+    row = db.query(ActivityColumn).filter_by(id=body.id, user_id=user_id, tenant_id=tenant_id).first()
     if not row:
         raise HTTPException(404, "Coluna não encontrada")
     if db.query(ActivityColumn).filter_by(user_id=user_id, tenant_id=tenant_id).count() <= 1:
@@ -325,14 +335,14 @@ def create_activity(body: ActivityCreate, token: dict = Depends(verify_token), d
     return _activity_to_dict(row)
 
 
-@app.put("/activities/{activity_id}")
-@app.put("/api/activities/{activity_id}")
-@app.put("/k1/lex/activities/{activity_id}")
-@app.put("/v1/lex/activities/{activity_id}")
-def update_activity(activity_id: str, body: ActivityUpdate, token: dict = Depends(verify_token), db: Session = Depends(get_db)):
+@app.post("/activities/update")
+@app.post("/api/activities/update")
+@app.post("/k1/lex/activities/update")
+@app.post("/v1/lex/activities/update")
+def update_activity(body: ActivityUpdate, token: dict = Depends(verify_token), db: Session = Depends(get_db)):
     user_id, tenant_id = _activity_owner(token)
     row = db.query(Activity).filter(
-        Activity.id == activity_id,
+        Activity.id == body.id,
         Activity.user_id == user_id,
         Activity.tenant_id == tenant_id,
     ).first()
@@ -359,14 +369,14 @@ def update_activity(activity_id: str, body: ActivityUpdate, token: dict = Depend
     return _activity_to_dict(row)
 
 
-@app.delete("/activities/{activity_id}")
-@app.delete("/api/activities/{activity_id}")
-@app.delete("/k1/lex/activities/{activity_id}")
-@app.delete("/v1/lex/activities/{activity_id}")
-def delete_activity(activity_id: str, token: dict = Depends(verify_token), db: Session = Depends(get_db)):
+@app.post("/activities/delete")
+@app.post("/api/activities/delete")
+@app.post("/k1/lex/activities/delete")
+@app.post("/v1/lex/activities/delete")
+def delete_activity(body: ActivityDelete, token: dict = Depends(verify_token), db: Session = Depends(get_db)):
     user_id, tenant_id = _activity_owner(token)
     row = db.query(Activity).filter(
-        Activity.id == activity_id,
+        Activity.id == body.id,
         Activity.user_id == user_id,
         Activity.tenant_id == tenant_id,
     ).first()
