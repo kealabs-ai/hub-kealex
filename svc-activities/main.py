@@ -287,7 +287,7 @@ def delete_activity_column(body: ActivityColumnDelete, token: dict = Depends(ver
         raise HTTPException(404, "Coluna não encontrada")
     if db.query(ActivityColumn).filter_by(user_id=user_id, tenant_id=tenant_id).count() <= 1:
         raise HTTPException(409, "O quadro precisa manter pelo menos uma coluna")
-    has_activities = db.query(Activity).filter_by(user_id=user_id, tenant_id=tenant_id, status=column_id).first()
+    has_activities = db.query(Activity).filter_by(user_id=user_id, tenant_id=tenant_id, status=body.id).first()
     if has_activities:
         raise HTTPException(409, "Mova as atividades desta coluna antes de excluí-la")
     db.delete(row)
