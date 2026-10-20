@@ -46,10 +46,10 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-processos.rule=Host(`${KEALEX_PUBLIC_API_HOST}`) && PathPrefix(`/k1/kealex/processos`)"
+      - "traefik.http.routers.kealex-processos.rule=Host(`${KEALEX_PUBLIC_API_HOST}`) && PathPrefix(`/k1/lex/processos`)"
       - "traefik.http.routers.kealex-processos.entrypoints=websecure"
       - "traefik.http.routers.kealex-processos.tls=true"
-      - "traefik.http.routers.kealex-processos.middlewares=kealex-strip,kealex-cors"
+      - "traefik.http.routers.kealex-processos.middlewares=kealex-cors"
       - "traefik.http.services.kealex-processos.loadbalancer.server.port=8000"
     networks:
       - easypanel
