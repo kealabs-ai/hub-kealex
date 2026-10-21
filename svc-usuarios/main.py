@@ -61,6 +61,7 @@ class Base(DeclarativeBase): pass
 
 class RoleEnum(str, enum.Enum):
     admin    = "admin"
+    escritorio = "escritorio"
     advogado = "advogado"
     cliente  = "cliente"
 
@@ -69,6 +70,7 @@ class Usuario(Base):
     id           = Column(String(36),  primary_key=True, default=lambda: str(uuid.uuid4()))
     tenant_id    = Column(String(36),  nullable=False)
     escritorio_id = Column(String(36), nullable=True)
+    oab = Column(String(50), nullable=True)
     nome         = Column(String(255), nullable=False)
     email        = Column(String(255), nullable=False)
     senha_hash   = Column(String(255), nullable=False)
@@ -109,6 +111,13 @@ def _admin_guard(payload=Depends(_base_guard)):
         raise HTTPException(403, "Acesso negado")
     return payload
 
+def _team_guard(payload=Depends(_base_guard)):
+    if payload.get("role") not in ("admin", "escritorio"):
+        raise HTTPException(403, "Acesso negado")
+    if payload.get("role") == "escritorio" and not payload.get("escritorio_id"):
+        raise HTTPException(403, "Conta de escritório sem vínculo configurado")
+    return payload
+
 app = FastAPI(title="svc-usuarios")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
@@ -122,6 +131,7 @@ class UsuarioIn(BaseModel):
     senha:        str
     role:         RoleEnum
     escritorioId: Optional[str] = None
+    oab: Optional[str] = None
 
 class UsuarioListIn(BaseModel):
     role: Optional[RoleEnum] = None
@@ -139,57 +149,98 @@ class UsuarioUpdate(BaseModel):
     escritorioId: Optional[str]      = None
     clearEscritorio: bool            = False  # True = desassociar escritório
 
+    oab: Optional[str] = None
+
 class UsuarioDeleteIn(BaseModel):
     id: str
+
+OFFICE_LIMIT_MESSAGE = "Limite de {limit} advogados atingido para este escritório. Entre em contato com o suporte/admin para alterar o limite."
+
+
+def _ensure_escritorio_capacity(db: Session, tenant_id: str, escritorio_id: str, exclude_user_id: Optional[str] = None):
+    office = db.execute(
+        text("SELECT limite_advogados FROM escritorios WHERE id = :eid AND tenant_id = :tid FOR UPDATE"),
+        {"eid": escritorio_id, "tid": tenant_id},
+    ).mappings().first()
+    if not office:
+        raise HTTPException(404, "Escritório não encontrado")
+
+    query = "SELECT COUNT(*) FROM usuarios WHERE escritorio_id = :eid AND tenant_id = :tid AND ativo = 1 AND role = 'advogado'"
+    params = {"eid": escritorio_id, "tid": tenant_id}
+    if exclude_user_id:
+        query += " AND id <> :uid"
+        params["uid"] = exclude_user_id
+    count = db.execute(text(query), params).scalar_one()
+    limit = int(office["limite_advogados"])
+    if count >= limit:
+        raise HTTPException(400, OFFICE_LIMIT_MESSAGE.format(limit=limit))
+
 
 def _to_dict(u: Usuario):
     return {
         "id": u.id, "tenantId": u.tenant_id, "escritorioId": u.escritorio_id,
         "modalidade": "escritorio" if u.escritorio_id else "autonomo",
-        "nome": u.nome, "email": u.email, "role": u.role, "ativo": u.ativo,
+        "nome": u.nome, "email": u.email, "role": u.role, "ativo": u.ativo, "oab": getattr(u, "oab", None),
         "createdAt": u.created_at.isoformat(), "updatedAt": u.updated_at.isoformat()
     }
 
 @app.get("/v1/lex/usuarios")
-def list_usuarios(db: Session = Depends(get_db), payload=Depends(_admin_guard)):
+def list_usuarios(db: Session = Depends(get_db), payload=Depends(_team_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
-    return [_to_dict(u) for u in db.query(Usuario).filter_by(tenant_id=tenant_id).all()]
+    q = db.query(Usuario).filter_by(tenant_id=tenant_id)
+    if payload.get("role") == "escritorio":
+        q = q.filter_by(escritorio_id=payload.get("escritorio_id"), role=RoleEnum.advogado)
+    return [_to_dict(u) for u in q.all()]
 
 @app.post("/v1/lex/usuarios/list")
-def list_usuarios_filtered(body: UsuarioListIn, db: Session = Depends(get_db), payload=Depends(_admin_guard)):
+def list_usuarios_filtered(body: UsuarioListIn, db: Session = Depends(get_db), payload=Depends(_team_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     q = db.query(Usuario).filter_by(tenant_id=tenant_id)
     if body.role:
         q = q.filter_by(role=body.role)
+    if payload.get("role") == "escritorio":
+        q = q.filter_by(escritorio_id=payload.get("escritorio_id"), role=RoleEnum.advogado)
     return [_to_dict(u) for u in q.all()]
 
 @app.post("/v1/lex/usuarios/get")
-def get_usuario(body: UsuarioGetIn, db: Session = Depends(get_db), payload=Depends(_admin_guard)):
+def get_usuario(body: UsuarioGetIn, db: Session = Depends(get_db), payload=Depends(_team_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     u = db.query(Usuario).filter_by(id=body.id, tenant_id=tenant_id).first()
+    if payload.get("role") == "escritorio" and (u is None or u.escritorio_id != payload.get("escritorio_id") or u.role != RoleEnum.advogado):
+        raise HTTPException(404, "NÃ£o encontrado")
     if not u:
         raise HTTPException(404, "Não encontrado")
     return _to_dict(u)
 
 @app.post("/v1/lex/usuarios", status_code=201)
-def create_usuario(body: UsuarioIn, db: Session = Depends(get_db), payload=Depends(_admin_guard)):
+def create_usuario(body: UsuarioIn, db: Session = Depends(get_db), payload=Depends(_team_guard)):
     tid = payload.get("tenant_id") or payload.get("sub")
-    if body.escritorioId and not db.execute(
-        text("SELECT id FROM escritorios WHERE id = :eid AND tenant_id = :tid"),
-        {"eid": body.escritorioId, "tid": tid},
-    ).first():
-        raise HTTPException(404, "Escritório não encontrado")
+    escritorio_id = body.escritorioId
+    if payload.get("role") == "escritorio":
+        escritorio_id = payload.get("escritorio_id")
+        if body.role != RoleEnum.advogado:
+            raise HTTPException(403, "O escritÃ³rio pode cadastrar apenas advogados associados")
+    if body.role == RoleEnum.escritorio:
+        raise HTTPException(403, "A conta de escritÃ³rio deve ser criada pelo administrador")
+    if escritorio_id:
+        _ensure_escritorio_capacity(db, tid, escritorio_id)
     if db.query(Usuario).filter_by(email=body.email, tenant_id=tid).first():
         raise HTTPException(409, "Email já cadastrado")
-    u = Usuario(tenant_id=tid, escritorio_id=body.escritorioId, nome=body.nome, email=body.email,
+    u = Usuario(tenant_id=tid, escritorio_id=escritorio_id, nome=body.nome, email=body.email,
                 senha_hash=_hash(body.senha), role=body.role)
+    if hasattr(u, "oab"):
+        u.oab = body.oab
     db.add(u); db.commit(); db.refresh(u)
     return _to_dict(u)
 
 @app.post("/v1/lex/usuarios/update")
-def update_usuario(body: UsuarioUpdate, db: Session = Depends(get_db), payload=Depends(_admin_guard)):
+def update_usuario(body: UsuarioUpdate, db: Session = Depends(get_db), payload=Depends(_team_guard)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     u = db.query(Usuario).filter_by(id=body.id, tenant_id=tenant_id).first()
+    if payload.get("role") == "escritorio" and u and (u.escritorio_id != payload.get("escritorio_id") or u.role != RoleEnum.advogado):
+        raise HTTPException(404, "UsuÃ¡rio nÃ£o encontrado")
+    if payload.get("role") == "escritorio" and (body.role not in (None, RoleEnum.advogado) or body.escritorioId is not None or body.clearEscritorio):
+        raise HTTPException(403, "O escritÃ³rio pode editar apenas seus advogados associados")
     if not u:
         raise HTTPException(404, "Não encontrado")
     if body.escritorioId and not db.execute(
@@ -197,6 +248,15 @@ def update_usuario(body: UsuarioUpdate, db: Session = Depends(get_db), payload=D
         {"eid": body.escritorioId, "tid": tenant_id},
     ).first():
         raise HTTPException(404, "Escritório não encontrado")
+    target_escritorio_id = body.escritorioId if body.escritorioId is not None else (None if body.clearEscritorio else u.escritorio_id)
+    will_be_active = body.ativo if body.ativo is not None else u.ativo
+    adding_active_member = bool(
+        target_escritorio_id
+        and will_be_active
+        and (target_escritorio_id != u.escritorio_id or not u.ativo)
+    )
+    if adding_active_member:
+        _ensure_escritorio_capacity(db, tenant_id, target_escritorio_id, exclude_user_id=u.id)
     data = body.model_dump(exclude_none=True, exclude={"id", "clearEscritorio"})
     if "senha" in data:
         u.senha_hash = _hash(data.pop("senha"))
@@ -238,6 +298,8 @@ def set_modalidade(body: ModalidadeIn, db: Session = Depends(get_db), payload=De
         {"eid": body.escritorioId, "tid": tenant_id},
     ).first():
         raise HTTPException(404, "Escritório não encontrado")
+    if body.escritorioId and body.escritorioId != u.escritorio_id and u.ativo:
+        _ensure_escritorio_capacity(db, tenant_id, body.escritorioId, exclude_user_id=u.id)
     u.escritorio_id = body.escritorioId
     u.updated_at = datetime.utcnow()
     db.commit(); db.refresh(u)

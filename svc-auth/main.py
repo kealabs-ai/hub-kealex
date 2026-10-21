@@ -63,6 +63,7 @@ class Base(DeclarativeBase): pass
 
 class RoleEnum(str, enum.Enum):
     admin    = "admin"
+    escritorio = "escritorio"
     advogado = "advogado"
     cliente  = "cliente"
 
@@ -174,7 +175,7 @@ def _init_db():
 def _make_token(user: Usuario) -> str:
     exp = datetime.utcnow() + timedelta(minutes=TOKEN_EXPIRE_MINUTES)
     return jwt.encode(
-        {"sub": user.id, "role": user.role, "tenant_id": user.tenant_id, "exp": exp},
+        {"sub": user.id, "role": user.role, "tenant_id": user.tenant_id, "escritorio_id": user.escritorio_id, "exp": exp},
         KEALEX_SECRET_KEY, ALGORITHM,
     )
 

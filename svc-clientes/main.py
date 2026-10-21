@@ -154,7 +154,10 @@ def list_clientes(db: Session = Depends(get_db), payload=Depends(_guard)):
 @app.post("/v1/lex/clientes/get")
 def get_cliente(body: ClienteGetIn, db: Session = Depends(get_db), payload=Depends(_guard)):
     tid = payload.get("tenant_id") or payload.get("sub")
-    c = db.query(Cliente).filter_by(id=body.id, tenant_id=tid).first()
+    q = db.query(Cliente).filter_by(id=body.id, tenant_id=tid)
+    if payload.get("role") == "advogado":
+        q = q.filter_by(advogado_id=payload.get("sub"))
+    c = q.first()
     if not c:
         raise HTTPException(404, "Não encontrado")
     return _to_dict(c)
@@ -176,7 +179,10 @@ def create_cliente(body: ClienteIn, db: Session = Depends(get_db), payload=Depen
 @app.post("/v1/lex/clientes/update")
 def update_cliente(body: ClienteUpdate, db: Session = Depends(get_db), payload=Depends(_guard)):
     tid = payload.get("tenant_id") or payload.get("sub")
-    c = db.query(Cliente).filter_by(id=body.id, tenant_id=tid).first()
+    q = db.query(Cliente).filter_by(id=body.id, tenant_id=tid)
+    if payload.get("role") == "advogado":
+        q = q.filter_by(advogado_id=payload.get("sub"))
+    c = q.first()
     if not c:
         raise HTTPException(404, "Não encontrado")
     data = body.model_dump(exclude_none=True, exclude={"id"})
@@ -191,7 +197,10 @@ def update_cliente(body: ClienteUpdate, db: Session = Depends(get_db), payload=D
 @app.post("/v1/lex/clientes/delete")
 def delete_cliente(body: ClienteDeleteIn, db: Session = Depends(get_db), payload=Depends(_guard)):
     tid = payload.get("tenant_id") or payload.get("sub")
-    c = db.query(Cliente).filter_by(id=body.id, tenant_id=tid).first()
+    q = db.query(Cliente).filter_by(id=body.id, tenant_id=tid)
+    if payload.get("role") == "advogado":
+        q = q.filter_by(advogado_id=payload.get("sub"))
+    c = q.first()
     if not c:
         raise HTTPException(404, "Não encontrado")
     db.delete(c); db.commit()

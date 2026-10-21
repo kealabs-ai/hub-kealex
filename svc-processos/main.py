@@ -200,6 +200,17 @@ def _enrich(db: Session, processos: list[Processo]):
     clientes = {c.id: c for c in db.query(Cliente).filter(Cliente.id.in_(ids)).all()}
     return [_to_dict(p, clientes.get(p.cliente_id)) for p in processos]
 
+def _scoped_process(db: Session, processo_id: str, payload):
+    role, uid = payload.get("role"), payload.get("sub")
+    query = db.query(Processo).filter_by(id=processo_id, tenant_id=payload.get("tenant_id"))
+    if role == "advogado":
+        query = query.filter_by(advogado_id=uid, user_id=uid)
+    elif role == "cliente":
+        query = query.filter_by(cliente_id=uid)
+    elif role != "admin":
+        raise HTTPException(403, "Acesso negado")
+    return query.first()
+
 @app.get("/k1/lex/processos")
 def list_processos(db: Session = Depends(get_db), payload=Depends(_guard)):
     role, uid, tid = payload.get("role"), payload.get("sub"), payload.get("tenant_id")
@@ -208,14 +219,16 @@ def list_processos(db: Session = Depends(get_db), payload=Depends(_guard)):
     if role == "cliente":
         q = q.filter_by(cliente_id=uid)
     elif role == "advogado":
-        q = q.filter_by(advogado_id=uid)
+        q = q.filter_by(advogado_id=uid, user_id=uid)
+    elif role != "admin":
+        raise HTTPException(403, "Acesso negado")
     
     return _enrich(db, q.all())
 
 @app.post("/k1/lex/processos/get")
 def get_processo(body: ProcessoGetIn, db: Session = Depends(get_db), payload=Depends(_guard)):
     tenant_id = payload.get("tenant_id")
-    p = db.query(Processo).filter_by(id=body.processoId, tenant_id=tenant_id).first()
+    p = _scoped_process(db, body.id, payload)
     if not p:
         raise HTTPException(404, "Nao encontrado")
     cliente = db.query(Cliente).filter_by(id=p.cliente_id).first()
@@ -226,9 +239,14 @@ def create_processo(body: ProcessoIn, db: Session = Depends(get_db), payload=Dep
     try:
         logger.info(f"[CREATE_PROCESSO] Iniciando criacao de processo: {body.numero}")
         tenant_id = payload.get("tenant_id")
+        if payload.get("role") not in ("admin", "advogado"):
+            raise HTTPException(403, "Acesso negado")
         logger.info(f"[CREATE_PROCESSO] Tenant ID: {tenant_id}")
         
-        cliente = db.query(Cliente).filter_by(id=body.clienteId, tenant_id=tenant_id).first()
+        cliente_query = db.query(Cliente).filter_by(id=body.clienteId, tenant_id=tenant_id)
+        if payload.get("role") == "advogado":
+            cliente_query = cliente_query.filter_by(advogado_id=payload.get("sub"))
+        cliente = cliente_query.first()
         if not cliente:
             logger.error(f"[CREATE_PROCESSO] Cliente nao encontrado: {body.clienteId}")
             raise HTTPException(404, "Cliente nao encontrado")
@@ -241,7 +259,7 @@ def create_processo(body: ProcessoIn, db: Session = Depends(get_db), payload=Dep
             id=processo_id,
             tenant_id=tenant_id,
             user_id=payload["sub"],
-            escritorio_id=body.escritorioId,
+            escritorio_id=payload.get("escritorio_id") if payload.get("role") == "advogado" else None,
             numero=body.numero,
             titulo=body.titulo,
             descricao=body.descricao,
@@ -295,7 +313,7 @@ def create_processo(body: ProcessoIn, db: Session = Depends(get_db), payload=Dep
 @app.post("/k1/lex/processos/update")
 def update_processo(body: ProcessoUpdate, db: Session = Depends(get_db), payload=Depends(_guard)):
     tenant_id = payload.get("tenant_id")
-    p = db.query(Processo).filter_by(id=body.processoId, tenant_id=tenant_id).first()
+    p = _scoped_process(db, body.id, payload)
     if not p:
         raise HTTPException(404, "Nao encontrado")
     for k, v in body.model_dump(exclude_none=True, exclude={"id"}).items():
@@ -308,7 +326,7 @@ def update_processo(body: ProcessoUpdate, db: Session = Depends(get_db), payload
 @app.post("/k1/lex/processos/delete")
 def delete_processo(body: ProcessoDeleteIn, db: Session = Depends(get_db), payload=Depends(_guard)):
     tenant_id = payload.get("tenant_id")
-    p = db.query(Processo).filter_by(id=body.processoId, tenant_id=tenant_id).first()
+    p = _scoped_process(db, body.id, payload)
     if not p:
         raise HTTPException(404, "Nao encontrado")
     db.delete(p); db.commit()
@@ -320,7 +338,7 @@ def avancar_fase(body: AvancarFaseIn, db: Session = Depends(get_db), payload=Dep
         logger.info(f"[AVANCAR_FASE] Iniciando avanco de fase para processo: {body.processoId}, nova fase: {body.faseAtual}")
         tenant_id = payload.get("tenant_id")
         
-        p = db.query(Processo).filter_by(id=body.processoId, tenant_id=tenant_id).first()
+        p = _scoped_process(db, body.processoId, payload)
         if not p:
             logger.error(f"[AVANCAR_FASE] Processo nao encontrado: {body.processoId}")
             raise HTTPException(404, "Processo nao encontrado")
@@ -370,7 +388,7 @@ def avancar_fase(body: AvancarFaseIn, db: Session = Depends(get_db), payload=Dep
 @app.post("/k1/lex/processos/{processo_id}/proximas-fases")
 def proximas_fases(processo_id: str, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id")
-    p = db.query(Processo).filter_by(id=processo_id, tenant_id=tenant_id).first()
+    p = _scoped_process(db, processo_id, payload)
     if not p:
         raise HTTPException(404, "Processo nao encontrado")
     
@@ -397,7 +415,7 @@ def debug_fases(processo_id: str, db: Session = Depends(get_db), payload=Depends
     logger.info(f"[DEBUG_FASES] Verificando fases do processo: {processo_id}")
     tenant_id = payload.get("tenant_id")
     
-    p = db.query(Processo).filter_by(id=processo_id, tenant_id=tenant_id).first()
+    p = _scoped_process(db, processo_id, payload)
     if not p:
         logger.error(f"[DEBUG_FASES] Processo nao encontrado: {processo_id}")
         raise HTTPException(404, "Processo nao encontrado")
