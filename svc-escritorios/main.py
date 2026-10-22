@@ -1,4 +1,4 @@
-import os, uuid
+import os, uuid, secrets
 import bcrypt
 from datetime import datetime
 from typing import Optional
@@ -61,6 +61,7 @@ class Escritorio(Base):
     telefone   = Column(String(20),  nullable=True)
     email      = Column(String(255), nullable=True)
     limite_advogados = Column(Integer, nullable=False, default=3, server_default="3")
+    codigo = Column(String(16), nullable=False, unique=True)
     ativo      = Column(Boolean,     default=True)
     created_at = Column(DateTime,    default=datetime.utcnow)
     updated_at = Column(DateTime,    default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -144,7 +145,7 @@ def _to_dict(e: Escritorio, usuarios_ativos: int = 0, advogados_ativos: int = 0,
     return {
         "id": e.id, "tenantId": e.tenant_id, "nome": e.nome, "cnpj": e.cnpj,
         "endereco": e.endereco, "telefone": e.telefone, "email": e.email, "ativo": e.ativo,
-        "limiteAdvogados": e.limite_advogados,
+        "limiteAdvogados": e.limite_advogados, "codigo": e.codigo,
         "acessoConfigurado": acesso_configurado,
         "usuariosAtivos": usuarios_ativos, "advogadosAtivos": advogados_ativos,
         "createdAt": e.created_at.isoformat(), "updatedAt": e.updated_at.isoformat()
@@ -226,7 +227,16 @@ def create_escritorio(body: EscritorioIn, db: Session = Depends(get_db), payload
             raise HTTPException(403, "Trial expirado. Assine um plano para criar o escritório")
         if db.query(Escritorio).filter_by(tenant_id=tenant_id).first():
             raise HTTPException(403, "Este tenant já possui um escritório cadastrado")
-    e = Escritorio(tenant_id=tenant_id, nome=body.nome, cnpj=body.cnpj,
+    codigo = None
+    for _ in range(10):
+        candidate = "KX-" + secrets.token_hex(6).upper()
+        exists = db.execute(text("SELECT id FROM escritorios WHERE codigo = :codigo"), {"codigo": candidate}).first()
+        if not exists:
+            codigo = candidate
+            break
+    if not codigo:
+        raise HTTPException(503, "Não foi possível gerar um código para o escritório. Tente novamente.")
+    e = Escritorio(tenant_id=tenant_id, codigo=codigo, nome=body.nome, cnpj=body.cnpj,
                    endereco=body.endereco, telefone=body.telefone, email=body.email,
                    limite_advogados=body.limiteAdvogados if payload.get("role") == "admin" else 3)
     db.add(e); db.flush()
@@ -308,3 +318,31 @@ def associar_membro(body: MembroIn, db: Session = Depends(get_db), payload=Depen
     db.commit()
     return {"ok": True, "usuarioId": body.usuarioId, "escritorioId": body.escritorioId,
             "modalidade": "escritorio" if body.escritorioId else "autonomo"}
+
+class AssociarCodigoIn(BaseModel):
+    codigo: str
+
+@app.post("/v1/lex/escritorios/associar-codigo")
+def associar_por_codigo(body: AssociarCodigoIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    if payload.get("role") != "advogado":
+        raise HTTPException(403, "Somente advogados autônomos podem usar um código de associação")
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    usuario_id = payload.get("sub")
+    codigo = body.codigo.strip().upper()
+    if not codigo or len(codigo) > 16:
+        raise HTTPException(400, "Informe um código de escritório válido")
+    user = db.execute(text("SELECT id, escritorio_id, ativo FROM usuarios WHERE id = :uid AND tenant_id = :tid AND role = 'advogado' FOR UPDATE"), {"uid": usuario_id, "tid": tenant_id}).mappings().first()
+    if not user:
+        raise HTTPException(404, "Usuário não encontrado")
+    if user["escritorio_id"]:
+        raise HTTPException(409, "Você já está associado a um escritório. Solicite a alteração ao administrador.")
+    office = db.execute(text("SELECT id, tenant_id, limite_advogados FROM escritorios WHERE codigo = :codigo AND ativo = 1 FOR UPDATE"), {"codigo": codigo}).mappings().first()
+    if not office:
+        raise HTTPException(404, "Código não encontrado ou escritório inativo. Confira o código com o escritório.")
+    count = db.execute(text("SELECT COUNT(*) FROM usuarios WHERE escritorio_id = :eid AND ativo = 1 AND role = 'advogado'"), {"eid": office["id"]}).scalar_one()
+    limit = int(office["limite_advogados"])
+    if user["ativo"] and count >= limit:
+        raise HTTPException(409, f"Este escritório atingiu o limite de {limit} advogados. Entre em contato com o escritório para concluir a associação manualmente ou resolver a pendência de vagas.")
+    db.execute(text("UPDATE usuarios SET escritorio_id = :eid, updated_at = NOW() WHERE id = :uid AND tenant_id = :tid"), {"eid": office["id"], "uid": usuario_id, "tid": tenant_id})
+    db.commit()
+    return {"ok": True, "usuarioId": usuario_id, "escritorioId": office["id"], "codigo": codigo, "modalidade": "escritorio"}
