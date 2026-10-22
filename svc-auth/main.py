@@ -1,12 +1,13 @@
 import os, uuid, enum, hmac, logging
 from datetime import datetime, timedelta
+from typing import Literal
 from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
 import bcrypt
 from jose import jwt, JWTError
-from sqlalchemy import create_engine, Column, String, Boolean, DateTime, Enum as SAEnum
+from sqlalchemy import create_engine, Column, String, Boolean, DateTime, Integer, Enum as SAEnum
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from dotenv import load_dotenv
@@ -65,6 +66,7 @@ class RoleEnum(str, enum.Enum):
     admin    = "admin"
     escritorio = "escritorio"
     advogado = "advogado"
+    juridico = "juridico"
     cliente  = "cliente"
 
 class Tenant(Base):
@@ -112,6 +114,20 @@ class Usuario(Base):
     created_at    = Column(DateTime,    default=datetime.utcnow)
     updated_at    = Column(DateTime,    default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class Escritorio(Base):
+    __tablename__ = "escritorios"
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id = Column(String(36), nullable=False)
+    nome = Column(String(255), nullable=False)
+    cnpj = Column(String(18), nullable=True)
+    endereco = Column(String(500), nullable=True)
+    telefone = Column(String(20), nullable=True)
+    email = Column(String(255), nullable=True)
+    limite_advogados = Column(Integer, nullable=False, default=3, server_default="3")
+    codigo = Column(String(16), nullable=False, unique=True)
+    ativo = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 class AsaasWebhookEvent(Base):
     __tablename__ = "asaas_webhook_events"
     id = Column(String(100), primary_key=True)
@@ -255,7 +271,7 @@ class RegisterIn(BaseModel):
     email:    EmailStr
     cpfCnpj:  str
     whatsapp: str
-    perfil:   str = "advogado"  # advogado | escritorio | corporativo
+    perfil:   Literal["advogado", "escritorio", "juridico", "corporativo"] = "advogado"
     senha:    str | None = None  # opcional; se omitida, gera senha temporária
 
 class AuthUser(BaseModel):
@@ -286,6 +302,15 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
     if db.query(Usuario).filter_by(email=body.email).first():
         raise HTTPException(409, "E-mail já cadastrado. Acesse /entrar para fazer login.")
 
+    role_by_profile = {
+        "advogado": RoleEnum.advogado,
+        "escritorio": RoleEnum.escritorio,
+        "juridico": RoleEnum.juridico,
+        "corporativo": RoleEnum.juridico,
+    }
+    selected_role = role_by_profile.get(body.perfil)
+    if selected_role is None:
+        raise HTTPException(400, "Selecione um perfil válido para o cadastro.")
     now   = datetime.utcnow()
     slug  = body.email.split("@")[0].lower().replace(".", "-")[:80]
 
@@ -307,13 +332,27 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
     db.add(tenant)
     db.flush()  # gera tenant.id sem commit
 
+    office = None
+    if selected_role == RoleEnum.escritorio:
+        office = Escritorio(
+            tenant_id=tenant.id,
+            nome=body.nome,
+            cnpj=cpf_cnpj if len(cpf_cnpj) == 14 else None,
+            telefone=_digits(body.whatsapp),
+            email=body.email,
+            limite_advogados=3,
+            codigo="KX-" + uuid.uuid4().hex[:12].upper(),
+        )
+        db.add(office)
+        db.flush()
     senha_final = body.senha if body.senha and len(body.senha) >= 6 else str(uuid.uuid4())[:8]
     user = Usuario(
         tenant_id=tenant.id,
         nome=body.nome,
         email=body.email,
         senha_hash=_hash(senha_final),
-        role=RoleEnum.advogado,
+        role=selected_role,
+        escritorio_id=office.id if office else None,
     )
     db.add(user)
     db.commit()
@@ -336,7 +375,7 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
         trialExpiresAt=tenant.trial_expires_at.isoformat(),
         subscriptionExpiresAt=tenant.subscription_expires_at.isoformat() + "Z" if tenant.subscription_expires_at else None,
         escritorioId=getattr(user, 'escritorio_id', None),
-        modalidade="escritorio" if getattr(user, 'escritorio_id', None) else "autonomo",
+        modalidade="escritorio" if user.escritorio_id else "autonomo",
     )
 
 
@@ -364,7 +403,7 @@ def login(body: LoginIn, db: Session = Depends(get_db)):
         trialExpiresAt=tenant.trial_expires_at.isoformat() if tenant and tenant.trial_expires_at else None,
         subscriptionExpiresAt=tenant.subscription_expires_at.isoformat() + "Z" if tenant and tenant.subscription_expires_at else None,
         escritorioId=getattr(user, 'escritorio_id', None),
-        modalidade="escritorio" if getattr(user, 'escritorio_id', None) else "autonomo",
+        modalidade="escritorio" if user.escritorio_id else "autonomo",
     )
 
 @app.get("/k1/lex/auth/me")

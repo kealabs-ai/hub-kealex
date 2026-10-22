@@ -94,7 +94,9 @@ class Base(DeclarativeBase): pass
 # Enums
 class RoleEnum(str, enum.Enum):
     admin = "admin"
+    escritorio = "escritorio"
     advogado = "advogado"
+    juridico = "juridico"
     cliente = "cliente"
 
 class StatusEnum(str, enum.Enum):
@@ -1336,7 +1338,7 @@ def list_processos(db: Session = Depends(get_db), payload=Depends(verify_token))
     
     if role == "cliente":
         q = q.filter_by(cliente_id=uid)
-    elif role == "advogado":
+    elif role in ("advogado", "juridico"):
         q = q.filter_by(advogado_id=uid)
     
     return _enrich_processos(db, q.all())
