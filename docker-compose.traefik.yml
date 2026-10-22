@@ -184,10 +184,17 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-escritorios.rule=Host(`${KEALEX_PUBLIC_API_HOST}`) && PathPrefix(`/k1/kealex/escritorios`)"
+      - "traefik.http.routers.kealex-escritorios.rule=(Host(`${KEALEX_PUBLIC_API_HOST}`) || Host(`${KEALEX_PUBLIC_ROOT_DOMAIN}`) || Host(`${KEALEX_PUBLIC_WWW_DOMAIN}`)) && PathPrefix(`/v1/lex/escritorios`)"
       - "traefik.http.routers.kealex-escritorios.entrypoints=websecure"
       - "traefik.http.routers.kealex-escritorios.tls=true"
-      - "traefik.http.routers.kealex-escritorios.middlewares=kealex-strip,kealex-cors"
+      - "traefik.http.routers.kealex-escritorios.priority=110"
+      - "traefik.http.routers.kealex-escritorios.middlewares=kealex-cors"
+      - "traefik.http.routers.kealex-escritorios.service=kealex-escritorios"
+      - "traefik.http.routers.kealex-escritorios-legacy.rule=Host(`${KEALEX_PUBLIC_API_HOST}`) && PathPrefix(`/k1/kealex/escritorios`)"
+      - "traefik.http.routers.kealex-escritorios-legacy.entrypoints=websecure"
+      - "traefik.http.routers.kealex-escritorios-legacy.tls=true"
+      - "traefik.http.routers.kealex-escritorios-legacy.middlewares=kealex-strip,kealex-cors"
+      - "traefik.http.routers.kealex-escritorios-legacy.service=kealex-escritorios"
       - "traefik.http.services.kealex-escritorios.loadbalancer.server.port=8000"
     networks:
       - easypanel
