@@ -7,7 +7,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
 import bcrypt
 from jose import jwt, JWTError
-from sqlalchemy import create_engine, Column, String, Boolean, DateTime, Enum as SAEnum, text
+from sqlalchemy import create_engine, Column, String, Boolean, DateTime, Enum as SAEnum, ForeignKey, Text as SAText, UniqueConstraint, text
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from dotenv import load_dotenv
@@ -80,6 +80,16 @@ class Usuario(Base):
     ativo        = Column(Boolean,     default=True)
     created_at   = Column(DateTime,    default=datetime.utcnow)
     updated_at   = Column(DateTime,    default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class UsuarioChavePublica(Base):
+    __tablename__ = "usuarios_chaves_publicas"
+    __table_args__ = (UniqueConstraint("usuario_id", "orgao", name="uq_usuario_chave_publica_orgao"),)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True)
+    orgao = Column(String(120), nullable=False)
+    chave_publica = Column(SAText, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
 Base.metadata.create_all(engine)
 
@@ -155,6 +165,10 @@ class UsuarioUpdate(BaseModel):
 
 class UsuarioDeleteIn(BaseModel):
     id: str
+
+class ChavePublicaIn(BaseModel):
+    orgao: str
+    chavePublica: str
 
 OFFICE_LIMIT_MESSAGE = "Limite de {limit} advogados atingido para este escritório. Entre em contato com o suporte/admin para alterar o limite."
 
@@ -327,6 +341,50 @@ def set_modalidade(body: ModalidadeIn, db: Session = Depends(get_db), payload=De
     u.updated_at = datetime.utcnow()
     db.commit(); db.refresh(u)
     return _to_dict(u, db)
+
+def _to_public_key_dict(item: UsuarioChavePublica):
+    return {
+        "id": item.id,
+        "userId": item.user_id,
+        "orgao": item.orgao,
+        "chavePublica": item.chave_publica,
+        "createdAt": item.created_at.isoformat(),
+        "updatedAt": item.updated_at.isoformat(),
+    }
+
+@app.get("/v1/lex/usuarios/me/chaves-publicas")
+def list_my_public_keys(db: Session = Depends(get_db), payload=Depends(_base_guard)):
+    user_id = payload.get("sub")
+    tenant_id = payload.get("tenant_id") or user_id
+    user = db.query(Usuario.id).filter_by(id=user_id, tenant_id=tenant_id).first()
+    if not user:
+        raise HTTPException(404, "UsuÃ¡rio nÃ£o encontrado")
+    items = db.query(UsuarioChavePublica).filter_by(user_id=user_id).order_by(UsuarioChavePublica.orgao).all()
+    return [_to_public_key_dict(item) for item in items]
+
+@app.put("/v1/lex/usuarios/me/chaves-publicas")
+def save_my_public_key(body: ChavePublicaIn, db: Session = Depends(get_db), payload=Depends(_base_guard)):
+    user_id = payload.get("sub")
+    tenant_id = payload.get("tenant_id") or user_id
+    user = db.query(Usuario.id).filter_by(id=user_id, tenant_id=tenant_id).first()
+    if not user:
+        raise HTTPException(404, "UsuÃ¡rio nÃ£o encontrado")
+    orgao = body.orgao.strip()
+    chave_publica = body.chavePublica.strip()
+    if not orgao or len(orgao) > 120:
+        raise HTTPException(422, "Informe um Ã³rgÃ£o vÃ¡lido (atÃ© 120 caracteres).")
+    if not chave_publica or len(chave_publica) > 10000:
+        raise HTTPException(422, "Informe uma chave pÃºblica vÃ¡lida (atÃ© 10.000 caracteres).")
+    item = db.query(UsuarioChavePublica).filter_by(user_id=user_id, orgao=orgao).with_for_update().first()
+    if item:
+        item.chave_publica = chave_publica
+        item.updated_at = datetime.utcnow()
+    else:
+        item = UsuarioChavePublica(user_id=user_id, orgao=orgao, chave_publica=chave_publica)
+        db.add(item)
+    db.commit()
+    db.refresh(item)
+    return _to_public_key_dict(item)
 
 @app.get("/v1/lex/usuarios/me")
 def get_me(db: Session = Depends(get_db), payload=Depends(_base_guard)):
