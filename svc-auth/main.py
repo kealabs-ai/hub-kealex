@@ -290,6 +290,7 @@ class AuthUser(BaseModel):
     subscriptionExpiresAt: str | None = None
     escritorioId:       str | None = None
     codigoEscritorio:    str | None = None
+    escritorioNome:      str | None = None
     modalidade:         str | None = None  # autonomo | escritorio
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -355,6 +356,7 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
         senha_hash=_hash(senha_final),
         role=selected_role,
         escritorio_id=office.id if office else None,
+        codigo=office.codigo if office else None,
     )
     db.add(user)
     db.commit()
@@ -378,6 +380,7 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
         subscriptionExpiresAt=tenant.subscription_expires_at.isoformat() + "Z" if tenant.subscription_expires_at else None,
         escritorioId=getattr(user, 'escritorio_id', None),
         codigoEscritorio=getattr(user, 'codigo', None),
+        escritorioNome=office.nome if office else None,
         modalidade="escritorio" if user.escritorio_id else "autonomo",
     )
 
@@ -407,12 +410,23 @@ def login(body: LoginIn, db: Session = Depends(get_db)):
         subscriptionExpiresAt=tenant.subscription_expires_at.isoformat() + "Z" if tenant and tenant.subscription_expires_at else None,
         escritorioId=getattr(user, 'escritorio_id', None),
         codigoEscritorio=getattr(user, 'codigo', None),
+        escritorioNome=(db.query(Escritorio.nome).filter_by(id=user.escritorio_id, tenant_id=user.tenant_id).scalar() if user.escritorio_id else None),
         modalidade="escritorio" if user.escritorio_id else "autonomo",
     )
 
 @app.get("/k1/lex/auth/me")
-def me(payload=Depends(require_active_trial)):
-    return payload
+def me(payload=Depends(require_active_trial), db: Session = Depends(get_db)):
+    user = db.query(Usuario).filter_by(id=payload.get("sub"), tenant_id=payload.get("tenant_id")).first()
+    if not user:
+        raise HTTPException(404, "Usuário não encontrado")
+    office = db.query(Escritorio).filter_by(id=user.escritorio_id, tenant_id=user.tenant_id).first() if user.escritorio_id else None
+    return {
+        **payload,
+        "escritorioId": user.escritorio_id,
+        "codigoEscritorio": user.codigo,
+        "escritorioNome": office.nome if office else None,
+        "modalidade": "escritorio" if user.escritorio_id else "autonomo",
+    }
 
 
 # ── Pre-registro (fluxo de assinatura) ───────────────────────────────────────
