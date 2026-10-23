@@ -344,7 +344,8 @@ def associar_por_codigo(body: AssociarCodigoIn, db: Session = Depends(get_db), p
     user = db.execute(text("SELECT id, escritorio_id, ativo FROM usuarios WHERE id = :uid AND tenant_id = :tid AND role = 'advogado' FOR UPDATE"), {"uid": usuario_id, "tid": tenant_id}).mappings().first()
     if not user:
         raise HTTPException(404, "Usuário não encontrado")
-    if user["escritorio_id"]:
+    escritorio_atual = user["escritorio_id"]
+    if escritorio_atual is not None and str(escritorio_atual).strip():
         raise HTTPException(409, "Você já está associado a um escritório. Solicite a alteração ao administrador.")
     office = db.execute(text("SELECT id, tenant_id, nome, limite_advogados FROM escritorios WHERE codigo = :codigo AND ativo = 1 FOR UPDATE"), {"codigo": codigo}).mappings().first()
     if not office:
@@ -353,6 +354,12 @@ def associar_por_codigo(body: AssociarCodigoIn, db: Session = Depends(get_db), p
     limit = int(office["limite_advogados"])
     if user["ativo"] and count >= limit:
         raise HTTPException(409, f"Este escritório atingiu o limite de {limit} advogados. Entre em contato com o escritório para concluir a associação manualmente ou resolver a pendência de vagas.")
-    db.execute(text("UPDATE usuarios SET escritorio_id = :eid, codigo = :codigo, updated_at = NOW() WHERE id = :uid AND tenant_id = :tid"), {"eid": office["id"], "codigo": codigo, "uid": usuario_id, "tid": tenant_id})
+    updated = db.execute(
+        text("UPDATE usuarios SET escritorio_id = :eid, codigo = :codigo, updated_at = NOW() WHERE id = :uid AND tenant_id = :tid AND (escritorio_id IS NULL OR TRIM(escritorio_id) = '')"),
+        {"eid": office["id"], "codigo": codigo, "uid": usuario_id, "tid": tenant_id},
+    )
+    if updated.rowcount != 1:
+        db.rollback()
+        raise HTTPException(409, "Este advogado jÃ¡ estÃ¡ associado a um escritÃ³rio.")
     db.commit()
     return {"ok": True, "usuarioId": usuario_id, "escritorioId": office["id"], "escritorioNome": office["nome"], "codigo": codigo, "modalidade": "escritorio"}
