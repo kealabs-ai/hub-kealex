@@ -178,9 +178,16 @@ def _ensure_escritorio_capacity(db: Session, tenant_id: str, escritorio_id: str,
         raise HTTPException(400, OFFICE_LIMIT_MESSAGE.format(limit=limit))
 
 
-def _to_dict(u: Usuario):
+def _to_dict(u: Usuario, db: Session):
+    escritorio_nome = None
+    if u.escritorio_id:
+        escritorio_nome = db.execute(
+            text("SELECT nome FROM escritorios WHERE id = :eid AND tenant_id = :tid"),
+            {"eid": u.escritorio_id, "tid": u.tenant_id}
+        ).scalar_one_or_none()
     return {
         "id": u.id, "tenantId": u.tenant_id, "escritorioId": u.escritorio_id,
+        "escritorioNome": escritorio_nome,
         "codigoEscritorio": u.codigo,
         "modalidade": "escritorio" if u.escritorio_id else "autonomo",
         "nome": u.nome, "email": u.email, "role": u.role, "ativo": u.ativo, "oab": getattr(u, "oab", None),
@@ -193,7 +200,7 @@ def list_usuarios(db: Session = Depends(get_db), payload=Depends(_team_guard)):
     q = db.query(Usuario).filter_by(tenant_id=tenant_id)
     if payload.get("role") == "escritorio":
         q = q.filter_by(escritorio_id=payload.get("escritorio_id"), role=RoleEnum.advogado)
-    return [_to_dict(u) for u in q.all()]
+    return [_to_dict(u, db) for u in q.all()]
 
 @app.post("/v1/lex/usuarios/list")
 def list_usuarios_filtered(body: UsuarioListIn, db: Session = Depends(get_db), payload=Depends(_team_guard)):
@@ -203,7 +210,7 @@ def list_usuarios_filtered(body: UsuarioListIn, db: Session = Depends(get_db), p
         q = q.filter_by(role=body.role)
     if payload.get("role") == "escritorio":
         q = q.filter_by(escritorio_id=payload.get("escritorio_id"), role=RoleEnum.advogado)
-    return [_to_dict(u) for u in q.all()]
+    return [_to_dict(u, db) for u in q.all()]
 
 @app.post("/v1/lex/usuarios/get")
 def get_usuario(body: UsuarioGetIn, db: Session = Depends(get_db), payload=Depends(_team_guard)):
@@ -213,7 +220,7 @@ def get_usuario(body: UsuarioGetIn, db: Session = Depends(get_db), payload=Depen
         raise HTTPException(404, "NÃ£o encontrado")
     if not u:
         raise HTTPException(404, "Não encontrado")
-    return _to_dict(u)
+    return _to_dict(u, db)
 
 @app.post("/v1/lex/usuarios", status_code=201)
 def create_usuario(body: UsuarioIn, db: Session = Depends(get_db), payload=Depends(_team_guard)):
@@ -227,14 +234,20 @@ def create_usuario(body: UsuarioIn, db: Session = Depends(get_db), payload=Depen
         raise HTTPException(403, "A conta de escritÃ³rio deve ser criada pelo administrador")
     if escritorio_id:
         _ensure_escritorio_capacity(db, tid, escritorio_id)
+        codigo_escritorio = db.execute(
+            text("SELECT codigo FROM escritorios WHERE id = :eid AND tenant_id = :tid"),
+            {"eid": escritorio_id, "tid": tid},
+        ).scalar_one_or_none()
+    else:
+        codigo_escritorio = None
     if db.query(Usuario).filter_by(email=body.email, tenant_id=tid).first():
         raise HTTPException(409, "Email já cadastrado")
-    u = Usuario(tenant_id=tid, escritorio_id=escritorio_id, nome=body.nome, email=body.email,
+    u = Usuario(tenant_id=tid, escritorio_id=escritorio_id, codigo=codigo_escritorio, nome=body.nome, email=body.email,
                 senha_hash=_hash(body.senha), role=body.role)
     if hasattr(u, "oab"):
         u.oab = body.oab
     db.add(u); db.commit(); db.refresh(u)
-    return _to_dict(u)
+    return _to_dict(u, db)
 
 @app.post("/v1/lex/usuarios/update")
 def update_usuario(body: UsuarioUpdate, db: Session = Depends(get_db), payload=Depends(_team_guard)):
@@ -275,7 +288,7 @@ def update_usuario(body: UsuarioUpdate, db: Session = Depends(get_db), payload=D
         setattr(u, k, v)
     u.updated_at = datetime.utcnow()
     db.commit(); db.refresh(u)
-    return _to_dict(u)
+    return _to_dict(u, db)
 
 class ModalidadeIn(BaseModel):
     usuarioId: str
@@ -313,7 +326,7 @@ def set_modalidade(body: ModalidadeIn, db: Session = Depends(get_db), payload=De
     ).scalar_one_or_none() if body.escritorioId else None
     u.updated_at = datetime.utcnow()
     db.commit(); db.refresh(u)
-    return _to_dict(u)
+    return _to_dict(u, db)
 
 @app.get("/v1/lex/usuarios/me")
 def get_me(db: Session = Depends(get_db), payload=Depends(_base_guard)):
@@ -323,4 +336,4 @@ def get_me(db: Session = Depends(get_db), payload=Depends(_base_guard)):
     u = db.query(Usuario).filter_by(id=uid, tenant_id=tenant_id).first()
     if not u:
         raise HTTPException(404, "Não encontrado")
-    return _to_dict(u)
+    return _to_dict(u, db)

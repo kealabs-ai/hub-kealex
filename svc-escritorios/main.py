@@ -168,9 +168,19 @@ def list_escritorios(db: Session = Depends(get_db), payload=Depends(verify_token
 @app.post("/v1/lex/escritorios/get")
 def get_escritorio(body: EscritorioGetIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
-    query = db.query(Escritorio).filter_by(id=body.id, tenant_id=tenant_id)
-    if payload.get("role") == "escritorio":
-        query = query.filter_by(id=payload.get("escritorio_id"))
+    role = payload.get("role")
+    if role == "advogado":
+        membership = db.execute(
+            text("SELECT escritorio_id FROM usuarios WHERE id = :uid AND tenant_id = :tid AND role = 'advogado'"),
+            {"uid": payload.get("sub"), "tid": tenant_id},
+        ).mappings().first()
+        if not membership or membership["escritorio_id"] != body.id:
+            raise HTTPException(404, "Escritorio associado nao encontrado")
+        query = db.query(Escritorio).filter_by(id=body.id)
+    else:
+        query = db.query(Escritorio).filter_by(id=body.id, tenant_id=tenant_id)
+        if role == "escritorio":
+            query = query.filter_by(id=payload.get("escritorio_id"))
     e = query.first()
     if not e:
         raise HTTPException(404, "Não encontrado")
@@ -191,10 +201,10 @@ def create_escritorio_access(body: CriarAcessoIn, db: Session = Depends(get_db),
     if db.execute(text("SELECT id FROM usuarios WHERE email = :email"), {"email": body.emailAcesso}).first():
         raise HTTPException(409, "E-mail já cadastrado")
     db.execute(text("""
-        INSERT INTO usuarios (id, tenant_id, escritorio_id, nome, email, senha_hash, role, ativo, created_at, updated_at)
-        VALUES (:id, :tenant_id, :escritorio_id, :nome, :email, :senha_hash, 'escritorio', 1, :now, :now)
+        INSERT INTO usuarios (id, tenant_id, escritorio_id, codigo, nome, email, senha_hash, role, ativo, created_at, updated_at)
+        VALUES (:id, :tenant_id, :escritorio_id, :codigo, :nome, :email, :senha_hash, 'escritorio', 1, :now, :now)
     """), {
-        "id": str(uuid.uuid4()), "tenant_id": tenant_id, "escritorio_id": office.id,
+        "id": str(uuid.uuid4()), "tenant_id": tenant_id, "escritorio_id": office.id, "codigo": office.codigo,
         "nome": office.nome, "email": body.emailAcesso,
         "senha_hash": bcrypt.hashpw(body.senhaInicial.encode(), bcrypt.gensalt()).decode(), "now": datetime.utcnow(),
     })
@@ -242,10 +252,10 @@ def create_escritorio(body: EscritorioIn, db: Session = Depends(get_db), payload
     db.add(e); db.flush()
     if payload.get("role") == "admin":
         db.execute(text("""
-            INSERT INTO usuarios (id, tenant_id, escritorio_id, nome, email, senha_hash, role, ativo, created_at, updated_at)
-            VALUES (:id, :tenant_id, :escritorio_id, :nome, :email, :senha_hash, 'escritorio', 1, :now, :now)
+            INSERT INTO usuarios (id, tenant_id, escritorio_id, codigo, nome, email, senha_hash, role, ativo, created_at, updated_at)
+            VALUES (:id, :tenant_id, :escritorio_id, :codigo, :nome, :email, :senha_hash, 'escritorio', 1, :now, :now)
         """), {
-            "id": str(uuid.uuid4()), "tenant_id": tenant_id, "escritorio_id": e.id,
+            "id": str(uuid.uuid4()), "tenant_id": tenant_id, "escritorio_id": e.id, "codigo": e.codigo,
             "nome": body.nome, "email": body.emailAcesso,
             "senha_hash": bcrypt.hashpw(body.senhaInicial.encode(), bcrypt.gensalt()).decode(), "now": datetime.utcnow(),
         })
@@ -336,7 +346,7 @@ def associar_por_codigo(body: AssociarCodigoIn, db: Session = Depends(get_db), p
         raise HTTPException(404, "Usuário não encontrado")
     if user["escritorio_id"]:
         raise HTTPException(409, "Você já está associado a um escritório. Solicite a alteração ao administrador.")
-    office = db.execute(text("SELECT id, tenant_id, limite_advogados FROM escritorios WHERE codigo = :codigo AND ativo = 1 FOR UPDATE"), {"codigo": codigo}).mappings().first()
+    office = db.execute(text("SELECT id, tenant_id, nome, limite_advogados FROM escritorios WHERE codigo = :codigo AND ativo = 1 FOR UPDATE"), {"codigo": codigo}).mappings().first()
     if not office:
         raise HTTPException(404, "Código não encontrado ou escritório inativo. Confira o código com o escritório.")
     count = db.execute(text("SELECT COUNT(*) FROM usuarios WHERE escritorio_id = :eid AND ativo = 1 AND role = 'advogado'"), {"eid": office["id"]}).scalar_one()
@@ -345,4 +355,4 @@ def associar_por_codigo(body: AssociarCodigoIn, db: Session = Depends(get_db), p
         raise HTTPException(409, f"Este escritório atingiu o limite de {limit} advogados. Entre em contato com o escritório para concluir a associação manualmente ou resolver a pendência de vagas.")
     db.execute(text("UPDATE usuarios SET escritorio_id = :eid, codigo = :codigo, updated_at = NOW() WHERE id = :uid AND tenant_id = :tid"), {"eid": office["id"], "codigo": codigo, "uid": usuario_id, "tid": tenant_id})
     db.commit()
-    return {"ok": True, "usuarioId": usuario_id, "escritorioId": office["id"], "codigo": codigo, "modalidade": "escritorio"}
+    return {"ok": True, "usuarioId": usuario_id, "escritorioId": office["id"], "escritorioNome": office["nome"], "codigo": codigo, "modalidade": "escritorio"}
