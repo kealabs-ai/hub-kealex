@@ -138,10 +138,17 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-usuarios.rule=Host(`${KEALEX_PUBLIC_API_HOST}`) && PathPrefix(`/k1/kealex/usuarios`)"
+      - "traefik.http.routers.kealex-usuarios.rule=Host(`${KEALEX_PUBLIC_API_HOST}`) && PathPrefix(`/v1/lex/usuarios`)"
       - "traefik.http.routers.kealex-usuarios.entrypoints=websecure"
       - "traefik.http.routers.kealex-usuarios.tls=true"
-      - "traefik.http.routers.kealex-usuarios.middlewares=kealex-strip,kealex-cors"
+      - "traefik.http.routers.kealex-usuarios.priority=110"
+      - "traefik.http.routers.kealex-usuarios.middlewares=kealex-cors"
+      - "traefik.http.routers.kealex-usuarios.service=kealex-usuarios"
+      - "traefik.http.routers.kealex-usuarios-legacy.rule=Host(`${KEALEX_PUBLIC_API_HOST}`) && PathPrefix(`/k1/kealex/usuarios`)"
+      - "traefik.http.routers.kealex-usuarios-legacy.entrypoints=websecure"
+      - "traefik.http.routers.kealex-usuarios-legacy.tls=true"
+      - "traefik.http.routers.kealex-usuarios-legacy.middlewares=kealex-strip,kealex-cors"
+      - "traefik.http.routers.kealex-usuarios-legacy.service=kealex-usuarios"
       - "traefik.http.services.kealex-usuarios.loadbalancer.server.port=8000"
     networks:
       - easypanel
