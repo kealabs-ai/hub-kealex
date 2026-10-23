@@ -312,7 +312,7 @@ def associar_membro(body: MembroIn, db: Session = Depends(get_db), payload=Depen
                 raise HTTPException(400, f"Limite de {limit} advogados atingido para este escritório. Entre em contato com o suporte/admin para alterar o limite.")
 
     db.execute(
-        text("UPDATE usuarios SET escritorio_id = :eid, updated_at = NOW() WHERE id = :uid AND tenant_id = :tid"),
+        text("UPDATE usuarios SET escritorio_id = :eid, codigo = (SELECT codigo FROM escritorios WHERE id = :eid), updated_at = NOW() WHERE id = :uid AND tenant_id = :tid"),
         {"eid": body.escritorioId, "uid": body.usuarioId, "tid": tenant_id}
     )
     db.commit()
@@ -343,6 +343,6 @@ def associar_por_codigo(body: AssociarCodigoIn, db: Session = Depends(get_db), p
     limit = int(office["limite_advogados"])
     if user["ativo"] and count >= limit:
         raise HTTPException(409, f"Este escritório atingiu o limite de {limit} advogados. Entre em contato com o escritório para concluir a associação manualmente ou resolver a pendência de vagas.")
-    db.execute(text("UPDATE usuarios SET escritorio_id = :eid, updated_at = NOW() WHERE id = :uid AND tenant_id = :tid"), {"eid": office["id"], "uid": usuario_id, "tid": tenant_id})
+    db.execute(text("UPDATE usuarios SET escritorio_id = :eid, codigo = :codigo, updated_at = NOW() WHERE id = :uid AND tenant_id = :tid"), {"eid": office["id"], "codigo": codigo, "uid": usuario_id, "tid": tenant_id})
     db.commit()
     return {"ok": True, "usuarioId": usuario_id, "escritorioId": office["id"], "codigo": codigo, "modalidade": "escritorio"}

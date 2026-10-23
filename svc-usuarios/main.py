@@ -71,6 +71,7 @@ class Usuario(Base):
     id           = Column(String(36),  primary_key=True, default=lambda: str(uuid.uuid4()))
     tenant_id    = Column(String(36),  nullable=False)
     escritorio_id = Column(String(36), nullable=True)
+    codigo = Column(String(16), nullable=True)
     oab = Column(String(50), nullable=True)
     nome         = Column(String(255), nullable=False)
     email        = Column(String(255), nullable=False)
@@ -180,6 +181,7 @@ def _ensure_escritorio_capacity(db: Session, tenant_id: str, escritorio_id: str,
 def _to_dict(u: Usuario):
     return {
         "id": u.id, "tenantId": u.tenant_id, "escritorioId": u.escritorio_id,
+        "codigoEscritorio": u.codigo,
         "modalidade": "escritorio" if u.escritorio_id else "autonomo",
         "nome": u.nome, "email": u.email, "role": u.role, "ativo": u.ativo, "oab": getattr(u, "oab", None),
         "createdAt": u.created_at.isoformat(), "updatedAt": u.updated_at.isoformat()
@@ -263,8 +265,12 @@ def update_usuario(body: UsuarioUpdate, db: Session = Depends(get_db), payload=D
         u.senha_hash = _hash(data.pop("senha"))
     if "escritorioId" in data:
         u.escritorio_id = data.pop("escritorioId")
+        u.codigo = db.execute(
+            text("SELECT codigo FROM escritorios WHERE id = :eid"), {"eid": u.escritorio_id}
+        ).scalar_one_or_none() if u.escritorio_id else None
     elif body.clearEscritorio:
         u.escritorio_id = None
+        u.codigo = None
     for k, v in data.items():
         setattr(u, k, v)
     u.updated_at = datetime.utcnow()
@@ -302,6 +308,9 @@ def set_modalidade(body: ModalidadeIn, db: Session = Depends(get_db), payload=De
     if body.escritorioId and body.escritorioId != u.escritorio_id and u.ativo:
         _ensure_escritorio_capacity(db, tenant_id, body.escritorioId, exclude_user_id=u.id)
     u.escritorio_id = body.escritorioId
+    u.codigo = db.execute(
+        text("SELECT codigo FROM escritorios WHERE id = :eid"), {"eid": body.escritorioId}
+    ).scalar_one_or_none() if body.escritorioId else None
     u.updated_at = datetime.utcnow()
     db.commit(); db.refresh(u)
     return _to_dict(u)
