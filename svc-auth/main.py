@@ -106,6 +106,7 @@ class Usuario(Base):
     id            = Column(String(36),  primary_key=True, default=lambda: str(uuid.uuid4()))
     tenant_id     = Column(String(36),  nullable=False)
     escritorio_id = Column(String(36),  nullable=True)
+    codigo = Column(String(16), nullable=True)
     nome          = Column(String(255), nullable=False)
     email         = Column(String(255), nullable=False)
     senha_hash    = Column(String(255), nullable=False)
@@ -288,6 +289,7 @@ class AuthUser(BaseModel):
     trialExpiresAt:     str | None = None
     subscriptionExpiresAt: str | None = None
     escritorioId:       str | None = None
+    codigoEscritorio:    str | None = None
     modalidade:         str | None = None  # autonomo | escritorio
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -375,6 +377,7 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
         trialExpiresAt=tenant.trial_expires_at.isoformat(),
         subscriptionExpiresAt=tenant.subscription_expires_at.isoformat() + "Z" if tenant.subscription_expires_at else None,
         escritorioId=getattr(user, 'escritorio_id', None),
+        codigoEscritorio=getattr(user, 'codigo', None),
         modalidade="escritorio" if user.escritorio_id else "autonomo",
     )
 
@@ -403,6 +406,7 @@ def login(body: LoginIn, db: Session = Depends(get_db)):
         trialExpiresAt=tenant.trial_expires_at.isoformat() if tenant and tenant.trial_expires_at else None,
         subscriptionExpiresAt=tenant.subscription_expires_at.isoformat() + "Z" if tenant and tenant.subscription_expires_at else None,
         escritorioId=getattr(user, 'escritorio_id', None),
+        codigoEscritorio=getattr(user, 'codigo', None),
         modalidade="escritorio" if user.escritorio_id else "autonomo",
     )
 
