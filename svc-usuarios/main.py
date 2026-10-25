@@ -83,7 +83,7 @@ class Usuario(Base):
 
 class UsuarioChavePublica(Base):
     __tablename__ = "usuarios_chaves_publicas"
-    __table_args__ = (UniqueConstraint("usuario_id", "orgao", name="uq_usuario_chave_publica_orgao"),)
+    __table_args__ = (UniqueConstraint("user_id", "orgao", name="uq_usuario_chave_publica_orgao"),)
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String(36), ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True)
     orgao = Column(String(120), nullable=False)
