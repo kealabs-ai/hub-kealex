@@ -363,8 +363,8 @@ def list_my_public_keys(db: Session = Depends(get_db), payload=Depends(_base_gua
     items = db.query(UsuarioChavePublica).filter_by(user_id=user_id).order_by(UsuarioChavePublica.orgao).all()
     return [_to_public_key_dict(item) for item in items]
 
-@app.put("/v1/lex/usuarios/chaves-publicas")
-@app.put("/v1/lex/usuarios/me/chaves-publicas")
+@app.post("/v1/lex/usuarios/chaves-publicas")
+@app.post("/v1/lex/usuarios/me/chaves-publicas")
 def save_my_public_key(body: ChavePublicaIn, db: Session = Depends(get_db), payload=Depends(_base_guard)):
     user_id = payload.get("sub")
     tenant_id = payload.get("tenant_id") or user_id
