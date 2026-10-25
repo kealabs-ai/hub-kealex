@@ -15,6 +15,7 @@ services:
       - hubkealex
       - svc-activities
       - svc-escritorios
+      - svc-usuarios
     volumes:
       - ./api-gateway/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
