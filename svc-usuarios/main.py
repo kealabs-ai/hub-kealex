@@ -388,6 +388,51 @@ def save_my_public_key(body: ChavePublicaIn, db: Session = Depends(get_db), payl
     db.refresh(item)
     return _to_public_key_dict(item)
 
+@app.post("/v1/lex/usuarios/chaves-publicas/{key_id}")
+@app.post("/v1/lex/usuarios/me/chaves-publicas/{key_id}")
+def update_my_public_key(key_id: str, body: ChavePublicaIn, db: Session = Depends(get_db), payload=Depends(_base_guard)):
+    user_id = payload.get("sub")
+    tenant_id = payload.get("tenant_id") or user_id
+    if not db.query(Usuario.id).filter_by(id=user_id, tenant_id=tenant_id).first():
+        raise HTTPException(404, "UsuÃ¡rio nÃ£o encontrado")
+
+    item = db.query(UsuarioChavePublica).filter_by(id=key_id, user_id=user_id).first()
+    if not item:
+        raise HTTPException(404, "Chave pÃºblica nÃ£o encontrada")
+    orgao = body.orgao.strip()
+    chave_publica = body.chavePublica.strip()
+    if not orgao or len(orgao) > 120:
+        raise HTTPException(422, "Informe um Ã³rgÃ£o vÃ¡lido (atÃ© 120 caracteres).")
+    if not chave_publica or len(chave_publica) > 10000:
+        raise HTTPException(422, "Informe uma chave pÃºblica vÃ¡lida (atÃ© 10.000 caracteres).")
+    duplicate = db.query(UsuarioChavePublica.id).filter(
+        UsuarioChavePublica.user_id == user_id,
+        UsuarioChavePublica.orgao == orgao,
+        UsuarioChavePublica.id != key_id,
+    ).first()
+    if duplicate:
+        raise HTTPException(409, "JÃ¡ existe uma chave cadastrada para este Ã³rgÃ£o.")
+    item.orgao = orgao
+    item.chave_publica = chave_publica
+    item.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(item)
+    return _to_public_key_dict(item)
+
+@app.delete("/v1/lex/usuarios/chaves-publicas/{key_id}")
+@app.delete("/v1/lex/usuarios/me/chaves-publicas/{key_id}")
+def delete_my_public_key(key_id: str, db: Session = Depends(get_db), payload=Depends(_base_guard)):
+    user_id = payload.get("sub")
+    tenant_id = payload.get("tenant_id") or user_id
+    if not db.query(Usuario.id).filter_by(id=user_id, tenant_id=tenant_id).first():
+        raise HTTPException(404, "UsuÃ¡rio nÃ£o encontrado")
+    item = db.query(UsuarioChavePublica).filter_by(id=key_id, user_id=user_id).first()
+    if not item:
+        raise HTTPException(404, "Chave pÃºblica nÃ£o encontrada")
+    db.delete(item)
+    db.commit()
+    return {"ok": True}
+
 @app.get("/v1/lex/usuarios/me")
 def get_me(db: Session = Depends(get_db), payload=Depends(_base_guard)):
     """Retorna dados do próprio usuário autenticado."""
