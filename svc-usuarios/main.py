@@ -385,12 +385,25 @@ def consultar_processo_datajud(
         "tjro": "tjro", "tjrr": "tjrr", "tjrs": "tjrs", "tjsc": "tjsc", "tjse": "tjse",
         "tjsp": "tjsp", "tjto": "tjto",
     }
-    aliases = {**aliases_superiores, **aliases_estaduais}
+    aliases_federais = {f"trf{region}": f"trf{region}" for region in range(1, 7)}
+    aliases_trabalho = {f"trt{region}": f"trt{region}" for region in range(1, 25)}
+    ufs = ("ac", "al", "am", "ap", "ba", "ce", "dft", "es", "go", "ma", "mg", "ms", "mt", "pa", "pb", "pe", "pi", "pr", "rj", "rn", "ro", "rr", "rs", "sc", "se", "sp", "to")
+    aliases_eleitorais = {f"tre-{uf}": f"tre-{uf}" for uf in ufs}
+    aliases_militares = {alias: alias for alias in ("tjmmg", "tjmrs", "tjmsp")}
+    aliases = {**aliases_superiores, **aliases_estaduais, **aliases_federais, **aliases_trabalho, **aliases_eleitorais, **aliases_militares}
+    justica = "Justi" + chr(231) + "a"
+    orgao_por_ramo = {
+        **{alias: "Tribunais Superiores" for alias in aliases_superiores},
+        **{alias: f"{justica} Federal" for alias in aliases_federais},
+        **{alias: f"{justica} do Trabalho" for alias in aliases_trabalho},
+        **{alias: f"{justica} Eleitoral" for alias in aliases_eleitorais},
+        **{alias: f"{justica} Militar" for alias in aliases_militares},
+        **{alias: f"{justica} Estadual" for alias in aliases_estaduais},
+    }
     alias = aliases.get(tribunal)
     if not alias:
         raise HTTPException(422, "Tribunal inválido ou não disponível para consulta.")
-    key_orgao = "Tribunais Superiores" if tribunal in aliases_superiores else "Justiça Estadual"
-
+    key_orgao = orgao_por_ramo[tribunal]
     numero = "".join(char for char in body.numeroProcesso if char in "0123456789")
     if len(numero) != 20:
         raise HTTPException(422, "Informe o número CNJ completo, com 20 dígitos.")
