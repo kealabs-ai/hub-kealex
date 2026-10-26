@@ -376,10 +376,20 @@ def consultar_processo_datajud(
         raise HTTPException(404, "Usuário não encontrado")
 
     tribunal = body.tribunal.strip().lower()
-    aliases = {"stj": "stj", "tst": "tst", "tse": "tse", "stm": "stm"}
+    aliases_superiores = {"stj": "stj", "tst": "tst", "tse": "tse", "stm": "stm"}
+    aliases_estaduais = {
+        "tjac": "tjac", "tjal": "tjal", "tjam": "tjam", "tjap": "tjap", "tjba": "tjba",
+        "tjce": "tjce", "tjdft": "tjdft", "tjes": "tjes", "tjgo": "tjgo", "tjma": "tjma",
+        "tjmg": "tjmg", "tjms": "tjms", "tjmt": "tjmt", "tjpa": "tjpa", "tjpb": "tjpb",
+        "tjpe": "tjpe", "tjpi": "tjpi", "tjpr": "tjpr", "tjrj": "tjrj", "tjrn": "tjrn",
+        "tjro": "tjro", "tjrr": "tjrr", "tjrs": "tjrs", "tjsc": "tjsc", "tjse": "tjse",
+        "tjsp": "tjsp", "tjto": "tjto",
+    }
+    aliases = {**aliases_superiores, **aliases_estaduais}
     alias = aliases.get(tribunal)
     if not alias:
-        raise HTTPException(422, "Tribunal superior inválido. Use STJ, TST, TSE ou STM.")
+        raise HTTPException(422, "Tribunal inválido ou não disponível para consulta.")
+    key_orgao = "Tribunais Superiores" if tribunal in aliases_superiores else "Justiça Estadual"
 
     numero = "".join(char for char in body.numeroProcesso if char in "0123456789")
     if len(numero) != 20:
@@ -387,10 +397,10 @@ def consultar_processo_datajud(
 
     key_row = db.query(UsuarioChavePublica).filter_by(
         user_id=user_id,
-        orgao="Tribunais Superiores",
+        orgao=key_orgao,
     ).first()
     if not key_row or not key_row.chave_publica.strip():
-        raise HTTPException(400, "Cadastre a chave pública do DataJud para Tribunais Superiores no Perfil.")
+        raise HTTPException(400, f"Cadastre a chave pública do DataJud para {key_orgao} no Perfil.")
 
     api_key = key_row.chave_publica.strip()
     if api_key[:7].lower() == "apikey ":
