@@ -1,6 +1,9 @@
 import os, uuid, enum, sys
+import json
 from datetime import datetime
 from typing import Optional
+from urllib.error import HTTPError as UrlHTTPError, URLError
+from urllib.request import Request as UrlRequest, urlopen
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -169,6 +172,10 @@ class UsuarioDeleteIn(BaseModel):
 class ChavePublicaIn(BaseModel):
     orgao: str
     chavePublica: str
+
+class ConsultaDataJudIn(BaseModel):
+    tribunal: str
+    numeroProcesso: str
 
 OFFICE_LIMIT_MESSAGE = "Limite de {limit} advogados atingido para este escritório. Entre em contato com o suporte/admin para alterar o limite."
 
@@ -351,6 +358,67 @@ def _to_public_key_dict(item: UsuarioChavePublica):
         "createdAt": item.created_at.isoformat(),
         "updatedAt": item.updated_at.isoformat(),
     }
+
+@app.post("/v1/lex/usuarios/consultas/datajud")
+def consultar_processo_datajud(
+    body: ConsultaDataJudIn,
+    db: Session = Depends(get_db),
+    payload=Depends(_base_guard),
+):
+    user_id = payload.get("sub")
+    tenant_id = payload.get("tenant_id") or user_id
+    user = db.query(Usuario.id).filter_by(id=user_id, tenant_id=tenant_id).first()
+    if not user:
+        raise HTTPException(404, "Usuário não encontrado")
+
+    tribunal = body.tribunal.strip().lower()
+    aliases = {"stj": "stj", "tst": "tst", "tse": "tse", "stm": "stm"}
+    alias = aliases.get(tribunal)
+    if not alias:
+        raise HTTPException(422, "Tribunal superior inválido. Use STJ, TST, TSE ou STM.")
+
+    numero = "".join(char for char in body.numeroProcesso if char in "0123456789")
+    if len(numero) != 20:
+        raise HTTPException(422, "Informe o número CNJ completo, com 20 dígitos.")
+
+    key_row = db.query(UsuarioChavePublica).filter_by(
+        user_id=user_id,
+        orgao="Tribunais Superiores",
+    ).first()
+    if not key_row or not key_row.chave_publica.strip():
+        raise HTTPException(400, "Cadastre a chave pública do DataJud para Tribunais Superiores no Perfil.")
+
+    api_key = key_row.chave_publica.strip()
+    if api_key[:7].lower() == "apikey ":
+        api_key = api_key[7:].strip()
+
+    request_body = json.dumps({
+        "query": {"match": {"numeroProcesso": numero}},
+        "size": 1,
+    }).encode("utf-8")
+    request = UrlRequest(
+        f"https://api-publica.datajud.cnj.jus.br/api_publica_{alias}/_search",
+        data=request_body,
+        headers={
+            "Authorization": f"APIKey {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with urlopen(request, timeout=25) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except UrlHTTPError as exc:
+        if exc.code in (401, 403):
+            raise HTTPException(502, "O DataJud recusou a chave pública. Confira a chave cadastrada no Perfil.") from exc
+        if exc.code == 429:
+            raise HTTPException(503, "O DataJud está recebendo muitas consultas. Tente novamente em instantes.") from exc
+        raise HTTPException(502, f"O DataJud respondeu com erro ({exc.code}).") from exc
+    except (URLError, TimeoutError) as exc:
+        raise HTTPException(502, "Não foi possível conectar ao DataJud no momento. Tente novamente em instantes.") from exc
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HTTPException(502, "O DataJud retornou uma resposta inválida.") from exc
 
 @app.get("/v1/lex/usuarios/chaves-publicas")
 @app.get("/v1/lex/usuarios/me/chaves-publicas")
