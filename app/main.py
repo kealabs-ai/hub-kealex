@@ -244,6 +244,24 @@ class Prazo(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class Audiencia(Base):
+    __tablename__ = "audiencias"
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id = Column(String(36), nullable=False, index=True)
+    user_id = Column(String(36), nullable=False)
+    processo_id = Column(String(36), nullable=True)
+    processo_titulo = Column(String(255), nullable=False, default="")
+    tipo = Column(String(80), nullable=False, default="")
+    data_hora = Column(String(40), nullable=False, default="")
+    local = Column(String(255), nullable=False, default="")
+    juiz = Column(String(255), nullable=True)
+    partes = Column(Text, nullable=True)
+    observacoes = Column(Text, nullable=True)
+    roteiro = Column(Text, nullable=True)
+    status = Column(String(20), nullable=False, default="agendada")
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
 class Fase(Base):
     __tablename__ = "fases"
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -492,6 +510,21 @@ class ProcessoUpdate(BaseModel):
     tribunal: Optional[str] = None
 
 class ProcessoDeleteIn(BaseModel):
+    id: str
+
+class AudienciaIn(BaseModel):
+    processoId: str = ""
+    processoTitulo: str = ""
+    tipo: str = ""
+    dataHora: str = ""
+    local: str = ""
+    juiz: str | None = None
+    partes: str | None = None
+    observacoes: str | None = None
+    roteiro: str | None = None
+    status: str = "agendada"
+
+class AudienciaUpdateIn(AudienciaIn):
     id: str
 
 class IaIn(BaseModel):
@@ -1591,6 +1624,72 @@ def prazos_vencendo(body: dict = None, db: Session = Depends(get_db), payload=De
         Prazo.status == "pendente"
     ).all()
     return [{"id": p.id, "titulo": p.titulo, "dataVencimento": p.data_vencimento, "diasRestantes": (date.fromisoformat(p.data_vencimento) - date.today()).days} for p in prazos]
+
+def _audiencia_to_dict(row: Audiencia) -> dict:
+    return {
+        "id": row.id,
+        "tenantId": row.tenant_id,
+        "userId": row.user_id,
+        "processoId": row.processo_id or "",
+        "processoTitulo": row.processo_titulo,
+        "tipo": row.tipo,
+        "dataHora": row.data_hora,
+        "local": row.local,
+        "juiz": row.juiz,
+        "partes": row.partes,
+        "observacoes": row.observacoes,
+        "roteiro": row.roteiro,
+        "status": row.status,
+        "createdAt": row.created_at.isoformat(),
+        "updatedAt": row.updated_at.isoformat(),
+    }
+
+@app.get("/audiencias")
+@app.get("/k1/lex/audiencias")
+def list_audiencias(db: Session = Depends(get_db), payload=Depends(verify_token)):
+    tenant_id = payload.get("tenant_id")
+    rows = db.query(Audiencia).filter_by(tenant_id=tenant_id).order_by(Audiencia.data_hora.asc()).all()
+    return [_audiencia_to_dict(row) for row in rows]
+
+@app.post("/audiencias", status_code=201)
+@app.post("/k1/lex/audiencias", status_code=201)
+def create_audiencia(body: AudienciaIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    row = Audiencia(
+        tenant_id=payload.get("tenant_id"), user_id=payload.get("sub"),
+        processo_id=body.processoId or None, processo_titulo=body.processoTitulo,
+        tipo=body.tipo, data_hora=body.dataHora, local=body.local,
+        juiz=body.juiz, partes=body.partes, observacoes=body.observacoes,
+        roteiro=body.roteiro, status=body.status or "agendada",
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _audiencia_to_dict(row)
+
+@app.post("/audiencias/update")
+@app.post("/k1/lex/audiencias/update")
+def update_audiencia(body: AudienciaUpdateIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    row = db.query(Audiencia).filter_by(id=body.id, tenant_id=payload.get("tenant_id")).first()
+    if not row:
+        raise HTTPException(404, "Audiência não encontrada")
+    data = body.model_dump(exclude_unset=True, exclude={"id"})
+    fields = {"processoId": "processo_id", "processoTitulo": "processo_titulo", "dataHora": "data_hora"}
+    for name, value in data.items():
+        setattr(row, fields.get(name, name), value or None if name in {"juiz", "partes", "observacoes", "roteiro"} else value)
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    return _audiencia_to_dict(row)
+
+@app.post("/audiencias/delete")
+@app.post("/k1/lex/audiencias/delete")
+def delete_audiencia(body: ProcessoDeleteIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    row = db.query(Audiencia).filter_by(id=body.id, tenant_id=payload.get("tenant_id")).first()
+    if not row:
+        raise HTTPException(404, "Audiência não encontrada")
+    db.delete(row)
+    db.commit()
+    return {"ok": True}
 
 @app.get("/usuarios")
 @app.get("/k1/lex/usuarios")
