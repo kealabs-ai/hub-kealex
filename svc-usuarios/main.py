@@ -101,7 +101,11 @@ def get_db():
     try:
         yield db
     except Exception:
-        db.rollback()
+        try:
+            db.rollback()
+        except Exception:
+            # Preserve the original request error if MySQL already dropped the connection.
+            pass
         raise
     finally:
         db.close()
@@ -391,6 +395,9 @@ def consultar_processo_datajud(
     api_key = key_row.chave_publica.strip()
     if api_key[:7].lower() == "apikey ":
         api_key = api_key[7:].strip()
+
+    # Release the MySQL transaction before waiting on the external DataJud API.
+    db.rollback()
 
     request_body = json.dumps({
         "query": {"match": {"numeroProcesso": numero}},
