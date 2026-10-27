@@ -198,3 +198,7 @@ def delete_doc(body: DocumentoDeleteIn, db: Session = Depends(get_db), payload=D
         raise HTTPException(404, "Não encontrado")
     db.delete(d); db.commit()
     return {"ok": True}
+
+
+from analysis_router import router as document_analysis_router
+app.include_router(document_analysis_router)
