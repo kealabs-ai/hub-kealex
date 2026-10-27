@@ -4,6 +4,7 @@ import os
 import re
 import subprocess
 import tempfile
+import time
 import uuid
 import zipfile
 from datetime import datetime
@@ -134,24 +135,75 @@ def _extract_file(extension: str, data: bytes):
     chunks = []
     page_count = None
     if extension == "pdf":
-        if b"%PDF-" not in data[:1024]:
-            raise HTTPException(415, "O conteúdo enviado não corresponde a um arquivo PDF válido.")
+        primary_error = None
         try:
             from pypdf import PdfReader
             reader = PdfReader(io.BytesIO(data), strict=False)
             if reader.is_encrypted:
-                raise HTTPException(422, "PDF protegido por senha não pode ser analisado.")
+                raise HTTPException(422, "PDF protegido por senha n??o pode ser analisado.")
             page_count = len(reader.pages)
             if page_count > MAX_PDF_PAGES:
-                raise HTTPException(413, f"O PDF ultrapassa o limite de {MAX_PDF_PAGES} páginas.")
-            for page_number, page in enumerate(reader.pages, start=1):
-                page_text = (page.extract_text() or "").strip()
-                if page_text:
-                    chunks.extend(_split_chunks(page_text, page=page_number))
+                raise HTTPException(413, f"O PDF ultrapassa o limite de {MAX_PDF_PAGES} p??ginas.")
+            page_texts = [(page.extract_text() or "").strip() for page in reader.pages]
         except HTTPException:
             raise
         except Exception as exc:
-            raise HTTPException(422, "Não foi possível ler o PDF. Verifique se o arquivo não está corrompido.") from exc
+            primary_error = exc
+            page_texts = []
+
+        if not page_texts or any(len(value) < 40 for value in page_texts):
+            try:
+                import pypdfium2 as pdfium
+                import pytesseract
+                pdf = pdfium.PdfDocument(data)
+                page_count = len(pdf)
+                if page_count > MAX_PDF_PAGES:
+                    raise HTTPException(413, f"O PDF ultrapassa o limite de {MAX_PDF_PAGES} p??ginas.")
+                if page_texts and len(page_texts) != page_count:
+                    page_texts = []
+                if not page_texts:
+                    page_texts = [""] * page_count
+                ocr_started = time.monotonic()
+                for page_number in range(page_count):
+                    if len(page_texts[page_number]) >= 40:
+                        continue
+                    if time.monotonic() - ocr_started > 90:
+                        raise HTTPException(422, "O PDF ?? muito extenso para concluir o OCR dentro do tempo permitido. Divida o arquivo em partes menores.")
+                    page = pdf[page_number]
+                    text_page = page.get_textpage()
+                    try:
+                        extracted = (text_page.get_text_range() or "").strip()
+                        if len(extracted) >= 40:
+                            page_texts[page_number] = extracted
+                            continue
+                        width, height = page.get_size()
+                        scale = min(150 / 72, 3000 / max(width, height, 1))
+                        image = page.render(scale=scale).to_pil()
+                        try:
+                            extracted = pytesseract.image_to_string(image, lang="por+eng", timeout=15).strip()
+                        except pytesseract.pytesseract.TesseractNotFoundError as exc:
+                            raise HTTPException(503, "O OCR de PDFs digitalizados n??o est?? instalado no servi??o.") from exc
+                        except RuntimeError as exc:
+                            raise HTTPException(422, f"N??o foi poss??vel reconhecer o texto da p??gina {page_number + 1} do PDF.") from exc
+                        if extracted:
+                            page_texts[page_number] = extracted
+                    finally:
+                        try:
+                            text_page.close()
+                            page.close()
+                        except Exception:
+                            pass
+                pdf.close()
+            except HTTPException:
+                raise
+            except Exception as exc:
+                if primary_error is not None:
+                    raise HTTPException(422, "N??o foi poss??vel interpretar este PDF. O arquivo pode estar corrompido ou protegido por senha.") from primary_error
+                raise HTTPException(422, "N??o foi poss??vel extrair o conte??do deste PDF. Verifique se o arquivo n??o est?? corrompido ou protegido por senha.") from exc
+
+        for page_number, page_text in enumerate(page_texts, start=1):
+            if page_text:
+                chunks.extend(_split_chunks(page_text, page=page_number))
     elif extension == "docx":
         if not data.startswith(b"PK"):
             raise HTTPException(415, "O conteúdo enviado não corresponde a um arquivo Word DOCX válido.")
