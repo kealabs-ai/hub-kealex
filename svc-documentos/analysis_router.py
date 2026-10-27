@@ -2,6 +2,8 @@ import io
 import json
 import os
 import re
+import subprocess
+import tempfile
 import uuid
 import zipfile
 from datetime import datetime
@@ -22,7 +24,7 @@ MAX_FILE_BYTES = 10 * 1024 * 1024
 MAX_DOCUMENT_CHARS = 900_000
 MAX_PDF_PAGES = 250
 MAX_CONTEXT_CHARS = 24_000
-ALLOWED_EXTENSIONS = {"pdf", "docx", "txt", "md"}
+ALLOWED_EXTENSIONS = {"pdf", "doc", "docx", "txt", "md"}
 LONG_TEXT = Text().with_variant(LONGTEXT(), "mysql")
 
 
@@ -132,11 +134,11 @@ def _extract_file(extension: str, data: bytes):
     chunks = []
     page_count = None
     if extension == "pdf":
-        if not data.startswith(b"%PDF-"):
+        if b"%PDF-" not in data[:1024]:
             raise HTTPException(415, "O conteúdo enviado não corresponde a um arquivo PDF válido.")
         try:
             from pypdf import PdfReader
-            reader = PdfReader(io.BytesIO(data), strict=True)
+            reader = PdfReader(io.BytesIO(data), strict=False)
             if reader.is_encrypted:
                 raise HTTPException(422, "PDF protegido por senha não pode ser analisado.")
             page_count = len(reader.pages)
@@ -179,6 +181,36 @@ def _extract_file(extension: str, data: bytes):
             raise
         except Exception as exc:
             raise HTTPException(422, "Não foi possível ler o documento Word.") from exc
+    elif extension == "doc":
+        ole_signature = bytes.fromhex("D0CF11E0A1B11AE1")
+        if not data.startswith(ole_signature):
+            raise HTTPException(415, "O conte??do enviado n??o corresponde a um arquivo Word DOC v??lido.")
+        temporary_path = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".doc", delete=False) as temporary_file:
+                temporary_file.write(data)
+                temporary_path = temporary_file.name
+            result = subprocess.run(
+                ["antiword", temporary_path], capture_output=True, timeout=30, check=False,
+                env={**os.environ, "HOME": "/tmp"},
+            )
+            if result.returncode != 0 or not result.stdout.strip():
+                raise HTTPException(422, "N??o foi poss??vel extrair texto deste documento DOC.")
+            try:
+                content = result.stdout.decode("utf-8-sig")
+            except UnicodeDecodeError:
+                content = result.stdout.decode("cp1252", errors="replace")
+            chunks = _split_chunks(content)
+        except FileNotFoundError as exc:
+            raise HTTPException(503, "A leitura de arquivos DOC n??o est?? dispon??vel no servi??o. Atualize o servi??o de documentos.") from exc
+        except subprocess.TimeoutExpired as exc:
+            raise HTTPException(422, "O processamento do documento DOC excedeu o tempo limite.") from exc
+        finally:
+            if temporary_path:
+                try:
+                    os.unlink(temporary_path)
+                except OSError:
+                    pass
     else:
         try:
             content = data.decode("utf-8-sig")
