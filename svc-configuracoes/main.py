@@ -423,7 +423,12 @@ class IaIn(BaseModel):
 def get_ia(db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
-    return _row(_get_or_create(db, CfgIa, tenant_id, user_id))
+    active = _get_or_create(db, CfgIa, tenant_id, user_id)
+    provider_cfg = db.get(CfgIaProvider, (tenant_id, active.provider))
+    result = _row(active)
+    result.pop("api_key", None)
+    result["configured"] = bool((provider_cfg.api_key if provider_cfg else None) or active.api_key)
+    return result
 
 @app.get("/k1/lex/configuracoes/ia/modelos")
 def get_modelos_disponiveis():
@@ -437,7 +442,12 @@ def get_ia_ativa(db: Session = Depends(get_db), payload=Depends(verify_token)):
     """Retorna a configuração de IA ativa para o tenant (não requer admin)"""
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
-    return _row(_get_or_create(db, CfgIa, tenant_id, user_id))
+    active = _get_or_create(db, CfgIa, tenant_id, user_id)
+    provider_cfg = db.get(CfgIaProvider, (tenant_id, active.provider))
+    result = _row(active)
+    result.pop("api_key", None)
+    result["configured"] = bool((provider_cfg.api_key if provider_cfg else None) or active.api_key)
+    return result
 
 @app.post("/k1/lex/configuracoes/ia")
 def save_ia(body: IaIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
@@ -477,7 +487,11 @@ def get_ia_provedores(db: Session = Depends(get_db), payload=Depends(require_adm
     user_id = payload.get("sub")
     active = _get_or_create(db, CfgIa, tenant_id, user_id)
     rows = db.query(CfgIaProvider).filter_by(tenant_id=tenant_id).all()
-    configs = {row.provider: _row(row) for row in rows}
+    configs = {}
+    for row in rows:
+        item = _row(row)
+        item["configured"] = bool(item.pop("api_key", None))
+        configs[row.provider] = item
     # Compatibilidade: migra a configuração antiga para a respectiva aba na primeira leitura.
     if active.provider not in configs:
         legacy = CfgIaProvider(
@@ -488,7 +502,9 @@ def get_ia_provedores(db: Session = Depends(get_db), payload=Depends(require_adm
         db.add(legacy)
         db.commit()
         db.refresh(legacy)
-        configs[legacy.provider] = _row(legacy)
+        item = _row(legacy)
+        item["configured"] = bool(item.pop("api_key", None))
+        configs[legacy.provider] = item
     return {"active_provider": active.provider, "providers": configs}
 
 @app.put("/k1/lex/configuracoes/ia/provedores/{provider}")
@@ -498,6 +514,8 @@ def save_ia_provedor(provider: str, body: IaProviderIn, db: Session = Depends(ge
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
     data = body.model_dump(exclude_none=True)
+    if data.get("api_key") == "":
+        data.pop("api_key")  # campo em branco mantém a chave já armazenada
     row = db.get(CfgIaProvider, (tenant_id, provider))
     if row is None:
         row = CfgIaProvider(tenant_id=tenant_id, provider=provider, user_id=user_id,
