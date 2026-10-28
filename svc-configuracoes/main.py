@@ -534,7 +534,9 @@ def save_ia_provedor(provider: str, body: IaProviderIn, db: Session = Depends(ge
         active.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(row)
-    return _row(row)
+    result = _row(row)
+    result["configured"] = bool(result.pop("api_key", None))
+    return result
 
 @app.post("/k1/lex/configuracoes/ia/provedor-ativo/{provider}")
 def set_ia_provedor_ativo(provider: str, db: Session = Depends(get_db), payload=Depends(require_admin)):
@@ -556,7 +558,10 @@ def set_ia_provedor_ativo(provider: str, db: Session = Depends(get_db), payload=
     active.ativo = provider_cfg.ativo
     active.updated_at = datetime.utcnow()
     db.commit()
-    return _row(active)
+    result = _row(active)
+    result.pop("api_key", None)
+    result["configured"] = True
+    return result
 
 # ── Usuários ──────────────────────────────────────────────────────────────────
 
