@@ -1,4 +1,6 @@
 import os, uuid, enum, logging
+import urllib.error
+import urllib.request
 from datetime import date, datetime, timedelta
 from typing import Optional, List
 from urllib.parse import quote_plus
@@ -204,6 +206,7 @@ class CfgIaProvider(Base):
     provider = Column(String(50), primary_key=True)
     user_id = Column(String(36), nullable=False)
     api_key = Column(Text, nullable=True)
+    endpoint_url = Column(Text, nullable=True)
     modelo = Column(String(100), nullable=False)
     max_tokens = Column(Integer, default=8192)
     system_prompt = Column(Text, nullable=True)
@@ -1778,6 +1781,7 @@ def save_ia(body: IaIn, db: Session = Depends(get_db), payload=Depends(_require_
 
 class IaProviderIn(BaseModel):
     api_key: Optional[str] = None
+    endpoint_url: Optional[str] = None
     modelo: Optional[str] = None
     max_tokens: Optional[int] = None
     system_prompt: Optional[str] = None
@@ -1815,6 +1819,11 @@ def save_ia_provedor(provider: str, body: IaProviderIn, db: Session = Depends(ge
     data = body.model_dump(exclude_none=True)
     if data.get("api_key") == "":
         data.pop("api_key")
+    if "endpoint_url" in data:
+        endpoint = data["endpoint_url"].strip().rstrip("/")
+        if provider == "openai" and endpoint and endpoint != "https://api.openai.com/v1":
+            raise HTTPException(400, "Use o endpoint oficial https://api.openai.com/v1 da OpenAI.")
+        data["endpoint_url"] = endpoint or None
     row = db.get(CfgIaProvider, (tenant_id, provider))
     if row is None:
         row = CfgIaProvider(tenant_id=tenant_id, user_id=user_id, provider=provider, modelo=IA_DEFAULT_MODELS[provider])
@@ -1853,6 +1862,67 @@ def set_ia_provedor_ativo(provider: str, db: Session = Depends(get_db), payload=
     result.pop("api_key", None)
     result["configured"] = True
     return result
+
+class IaChatMessage(BaseModel):
+    role: str
+    content: str
+
+class IaChatIn(BaseModel):
+    messages: list[IaChatMessage]
+    agente_id: Optional[str] = None
+
+def _openai_response(api_key: str, model: str, system_prompt: str, messages: list[dict], max_tokens: int, endpoint_url: Optional[str]) -> str:
+    base = (endpoint_url or "https://api.openai.com/v1").rstrip("/")
+    if base != "https://api.openai.com/v1":
+        raise HTTPException(400, "Use o endpoint oficial https://api.openai.com/v1 da OpenAI.")
+    request = urllib.request.Request(
+        f"{base}/responses",
+        data=_json.dumps({"model": model, "instructions": system_prompt, "input": messages, "max_output_tokens": max_tokens}).encode("utf-8"),
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response:
+            result = _json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise HTTPException(502, f"A OpenAI respondeu com erro ({exc.code}): {detail[:1000]}") from exc
+    except (urllib.error.URLError, TimeoutError) as exc:
+        raise HTTPException(502, "NÃ£o foi possÃ­vel conectar Ã  OpenAI.") from exc
+    return result.get("output_text") or "".join(
+        part.get("text", "") for item in result.get("output", [])
+        for part in item.get("content", []) if part.get("type") == "output_text"
+    )
+
+@app.post("/k1/lex/configuracoes/ia/chat")
+def chat_ia(body: IaChatIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    messages = [{"role": m.role, "content": m.content[:32000]} for m in body.messages[-50:] if m.role in ("user", "assistant")]
+    if not messages or messages[-1]["role"] != "user":
+        raise HTTPException(400, "A Ãºltima mensagem deve ser do usuÃ¡rio.")
+    if body.agente_id:
+        config = db.query(AgenteIA).filter_by(id=body.agente_id, tenant_id=tenant_id, ativo=True, publico=True).first()
+        if not config:
+            raise HTTPException(404, "Agente de IA nÃ£o encontrado.")
+        provider, api_key, model = config.provider, config.api_key, config.modelo
+        system_prompt, max_tokens, endpoint_url = config.system_prompt, config.max_tokens or 8192, None
+    else:
+        active = db.get(CfgIa, tenant_id)
+        if not active or not active.ativo:
+            raise HTTPException(400, "Nenhum provedor de IA ativo estÃ¡ configurado.")
+        config = db.get(CfgIaProvider, (tenant_id, active.provider))
+        provider = active.provider
+        api_key = (config.api_key if config else None) or active.api_key
+        model = (config.modelo if config else None) or active.modelo
+        system_prompt = (config.system_prompt if config else None) or active.system_prompt
+        max_tokens = (config.max_tokens if config else None) or active.max_tokens or 8192
+        endpoint_url = config.endpoint_url if config else None
+    if provider != "openai":
+        raise HTTPException(400, "O chat deste endpoint estÃ¡ configurado para modelos OpenAI.")
+    if not api_key or not model:
+        raise HTTPException(400, "Configure a chave API e o modelo da OpenAI.")
+    content = _openai_response(api_key, model, system_prompt or "VocÃª Ã© um assistente jurÃ­dico especializado em direito brasileiro. Responda em portuguÃªs brasileiro.", messages, max_tokens, endpoint_url)
+    return {"content": content}
 
 # Agentes IA endpoints
 @app.get("/k1/lex/agentes")
