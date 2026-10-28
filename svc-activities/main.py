@@ -135,8 +135,8 @@ class ActivityConsoleLogMiddleware:
         "/v1/lex/activities",
     )
 
-    def __init__(self, application):
-        self.application = application
+    def __init__(self, app):
+        self.application = app
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
