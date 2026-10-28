@@ -507,7 +507,7 @@ def get_ia_provedores(db: Session = Depends(get_db), payload=Depends(require_adm
         configs[legacy.provider] = item
     return {"active_provider": active.provider, "providers": configs}
 
-@app.put("/k1/lex/configuracoes/ia/provedores/{provider}")
+@app.post("/k1/lex/configuracoes/ia/provedores/{provider}")
 def save_ia_provedor(provider: str, body: IaProviderIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
     if provider not in MODELOS_DISPONIVEIS:
         raise HTTPException(400, "Provider inválido")
@@ -536,7 +536,7 @@ def save_ia_provedor(provider: str, body: IaProviderIn, db: Session = Depends(ge
     db.refresh(row)
     return _row(row)
 
-@app.put("/k1/lex/configuracoes/ia/provedor-ativo/{provider}")
+@app.post("/k1/lex/configuracoes/ia/provedor-ativo/{provider}")
 def set_ia_provedor_ativo(provider: str, db: Session = Depends(get_db), payload=Depends(require_admin)):
     if provider not in MODELOS_DISPONIVEIS:
         raise HTTPException(400, "Provider inválido")
