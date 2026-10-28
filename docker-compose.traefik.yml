@@ -168,10 +168,10 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-configuracoes.rule=Host(`${KEALEX_PUBLIC_API_HOST}`) && PathPrefix(`/k1/kealex/configuracoes`)"
+      - "traefik.http.routers.kealex-configuracoes.rule=Host(`${KEALEX_PUBLIC_API_HOST}`) && PathPrefix(`/k1/lex/configuracoes`)"
       - "traefik.http.routers.kealex-configuracoes.entrypoints=websecure"
       - "traefik.http.routers.kealex-configuracoes.tls=true"
-      - "traefik.http.routers.kealex-configuracoes.middlewares=kealex-strip,kealex-cors"
+      - "traefik.http.routers.kealex-configuracoes.middlewares=kealex-cors"
       - "traefik.http.services.kealex-configuracoes.loadbalancer.server.port=8000"
     networks:
       - easypanel
