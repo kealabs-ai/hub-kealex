@@ -1876,8 +1876,11 @@ def _validate_model_provider(provider: str, model: str):
 def get_ia(db: Session = Depends(get_db), payload=Depends(_require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
-    result = _row(_get_or_create_cfg_ia(db, tenant_id, user_id))
-    result["configured"] = bool(result.pop("api_key", None))
+    active = _get_or_create_cfg_ia(db, tenant_id, user_id)
+    provider_cfg = db.get(CfgIaProvider, (tenant_id, active.provider))
+    result = _row(active)
+    legacy_key = result.pop("api_key", None)
+    result["configured"] = bool((provider_cfg.api_key if provider_cfg else None) or legacy_key)
     return result
 
 @app.get("/k1/lex/configuracoes/ia/modelos")
@@ -1888,8 +1891,11 @@ def get_modelos_disponiveis():
 def get_ia_ativa(db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
-    result = _row(_get_or_create_cfg_ia(db, tenant_id, user_id))
-    result["configured"] = bool(result.pop("api_key", None))
+    active = _get_or_create_cfg_ia(db, tenant_id, user_id)
+    provider_cfg = db.get(CfgIaProvider, (tenant_id, active.provider))
+    result = _row(active)
+    legacy_key = result.pop("api_key", None)
+    result["configured"] = bool((provider_cfg.api_key if provider_cfg else None) or legacy_key)
     return result
 
 @app.post("/k1/lex/configuracoes/ia")
@@ -2040,7 +2046,7 @@ def _provider_response(provider: str, api_key: str, model: str, system_prompt: s
         headers = {}
         data = {"systemInstruction": {"parts": [{"text": system_prompt}]}, "contents": [{"role": "model" if m["role"] == "assistant" else "user", "parts": [{"text": m["content"]}]} for m in messages], "generationConfig": {"maxOutputTokens": max_tokens}}
     else:
-        base = {"groq": "https://api.groq.com/openai/v1", "cerebras": "https://api.cerebras.ai/v1"}.get(provider)
+        base = {"groq": "https://api.groq.com/openai/v1", "cerebras": "https://api.cerebras.ai/v1", "deepseek": "https://api.deepseek.com"}.get(provider)
         if not base:
             raise HTTPException(400, "Fabricante de IA não suportado.")
         url, headers = f"{base}/chat/completions", {"Authorization": f"Bearer {api_key}"}

@@ -744,7 +744,7 @@ def _provider_response(provider: str, api_key: str, model: str, system_prompt: s
         headers = {}
         data = {"systemInstruction": {"parts": [{"text": system_prompt}]}, "contents": [{"role": "model" if m["role"] == "assistant" else "user", "parts": [{"text": m["content"]}]} for m in messages], "generationConfig": {"maxOutputTokens": max_tokens}}
     else:
-        base = {"groq": "https://api.groq.com/openai/v1", "cerebras": "https://api.cerebras.ai/v1"}.get(provider)
+        base = {"groq": "https://api.groq.com/openai/v1", "cerebras": "https://api.cerebras.ai/v1", "deepseek": "https://api.deepseek.com"}.get(provider)
         if not base:
             raise HTTPException(400, "Fabricante de IA não suportado.")
         url, headers = f"{base}/chat/completions", {"Authorization": f"Bearer {api_key}"}
