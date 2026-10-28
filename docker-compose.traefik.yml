@@ -173,6 +173,12 @@ services:
       - "traefik.http.routers.kealex-configuracoes.tls=true"
       - "traefik.http.routers.kealex-configuracoes.middlewares=kealex-cors"
       - "traefik.http.services.kealex-configuracoes.loadbalancer.server.port=8000"
+      - "traefik.http.routers.kealex-configuracoes-ia-keys.rule=Host(`${KEALEX_PUBLIC_API_HOST}`) && PathPrefix(`/k1/lex/configuracoes/ia/minhas-chaves`)"
+      - "traefik.http.routers.kealex-configuracoes-ia-keys.entrypoints=websecure"
+      - "traefik.http.routers.kealex-configuracoes-ia-keys.tls=true"
+      - "traefik.http.routers.kealex-configuracoes-ia-keys.middlewares=kealex-cors"
+      - "traefik.http.routers.kealex-configuracoes-ia-keys.service=kealex-configuracoes"
+      - "traefik.http.routers.kealex-configuracoes-ia-keys.priority=130"
     networks:
       - easypanel
     restart: unless-stopped
