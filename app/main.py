@@ -198,6 +198,18 @@ class CfgIa(Base):
     ativo = Column(Boolean, default=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class CfgIaProvider(Base):
+    __tablename__ = "cfg_ia_providers"
+    tenant_id = Column(String(36), primary_key=True)
+    provider = Column(String(50), primary_key=True)
+    user_id = Column(String(36), nullable=False)
+    api_key = Column(Text, nullable=True)
+    modelo = Column(String(100), nullable=False)
+    max_tokens = Column(Integer, default=8192)
+    system_prompt = Column(Text, nullable=True)
+    ativo = Column(Boolean, default=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 class AgenteIA(Base):
     __tablename__ = "agentes_ia"
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -1723,8 +1735,13 @@ def save_configuracoes_geral(body: dict, db: Session = Depends(get_db), payload=
 # IA Configuration
 MODELOS_DISPONIVEIS = {
     "cerebras": ["llama-3.3-70b", "llama-3.1-70b", "llama-3.1-8b"],
-    "groq": ["llama-3.3-70b-versatile", "llama-3.1-70b-versatile", "llama-3.1-8b-instant", "llama-3.2-90b-text-preview", "llama-3.2-11b-text-preview", "gemma2-9b-it"]
+    "groq": ["llama-3.3-70b-versatile", "llama-3.1-70b-versatile", "llama-3.1-8b-instant", "llama-3.2-90b-text-preview", "llama-3.2-11b-text-preview", "gemma2-9b-it"],
+    "openai": ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano"],
+    "google": ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"],
+    "claude": ["claude-opus-5", "claude-sonnet-5", "claude-opus-4-8", "claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
 }
+
+IA_DEFAULT_MODELS = {"cerebras": "llama-3.3-70b", "groq": "llama-3.3-70b-versatile", "openai": "gpt-5.5", "google": "gemini-3.8-flash", "claude": "claude-sonnet-5"}
 
 @app.get("/k1/lex/configuracoes/ia")
 def get_ia(db: Session = Depends(get_db), payload=Depends(_require_admin)):
@@ -1758,6 +1775,84 @@ def save_ia(body: IaIn, db: Session = Depends(get_db), payload=Depends(_require_
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
     return _row(_upsert_cfg_ia(db, tenant_id, user_id, data))
+
+class IaProviderIn(BaseModel):
+    api_key: Optional[str] = None
+    modelo: Optional[str] = None
+    max_tokens: Optional[int] = None
+    system_prompt: Optional[str] = None
+    ativo: Optional[bool] = None
+
+@app.get("/k1/lex/configuracoes/ia/provedores")
+def get_ia_provedores(db: Session = Depends(get_db), payload=Depends(_require_admin)):
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_id = payload.get("sub")
+    active = _get_or_create_cfg_ia(db, tenant_id, user_id)
+    rows = db.query(CfgIaProvider).filter_by(tenant_id=tenant_id).all()
+    configs = {}
+    for row in rows:
+        item = _row(row)
+        item["configured"] = bool(item.pop("api_key", None))
+        configs[row.provider] = item
+    if active.provider not in configs:
+        legacy = CfgIaProvider(tenant_id=tenant_id, user_id=user_id, provider=active.provider,
+            api_key=active.api_key, modelo=active.modelo or IA_DEFAULT_MODELS.get(active.provider, ""),
+            max_tokens=active.max_tokens or 8192, system_prompt=active.system_prompt, ativo=active.ativo)
+        db.add(legacy)
+        db.commit()
+        db.refresh(legacy)
+        item = _row(legacy)
+        item["configured"] = bool(item.pop("api_key", None))
+        configs[legacy.provider] = item
+    return {"active_provider": active.provider, "providers": configs}
+
+@app.post("/k1/lex/configuracoes/ia/provedores/{provider}")
+def save_ia_provedor(provider: str, body: IaProviderIn, db: Session = Depends(get_db), payload=Depends(_require_admin)):
+    if provider not in MODELOS_DISPONIVEIS:
+        raise HTTPException(400, "Provider inválido")
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_id = payload.get("sub")
+    data = body.model_dump(exclude_none=True)
+    if data.get("api_key") == "":
+        data.pop("api_key")
+    row = db.get(CfgIaProvider, (tenant_id, provider))
+    if row is None:
+        row = CfgIaProvider(tenant_id=tenant_id, user_id=user_id, provider=provider, modelo=IA_DEFAULT_MODELS[provider])
+        db.add(row)
+    for key, value in data.items():
+        setattr(row, key, value)
+    row.updated_at = datetime.utcnow()
+    active = db.get(CfgIa, tenant_id)
+    if active and active.provider == provider:
+        active.api_key, active.modelo = row.api_key, row.modelo
+        active.max_tokens, active.system_prompt, active.ativo = row.max_tokens, row.system_prompt, row.ativo
+        active.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    result = _row(row)
+    result["configured"] = bool(result.pop("api_key", None))
+    return result
+
+@app.post("/k1/lex/configuracoes/ia/provedor-ativo/{provider}")
+def set_ia_provedor_ativo(provider: str, db: Session = Depends(get_db), payload=Depends(_require_admin)):
+    if provider not in MODELOS_DISPONIVEIS:
+        raise HTTPException(400, "Provider inválido")
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_id = payload.get("sub")
+    config = db.get(CfgIaProvider, (tenant_id, provider))
+    if config is None or not config.api_key:
+        raise HTTPException(400, "Configure a chave API deste provedor antes de ativá-lo")
+    if not config.ativo:
+        raise HTTPException(400, "Habilite este provedor antes de ativá-lo")
+    active = _get_or_create_cfg_ia(db, tenant_id, user_id)
+    active.provider, active.api_key, active.modelo = provider, config.api_key, config.modelo
+    active.max_tokens, active.system_prompt, active.ativo = config.max_tokens, config.system_prompt, config.ativo
+    active.updated_at = datetime.utcnow()
+    db.commit()
+    result = _row(active)
+    result.pop("api_key", None)
+    result["configured"] = True
+    return result
 
 # Agentes IA endpoints
 @app.get("/k1/lex/agentes")
