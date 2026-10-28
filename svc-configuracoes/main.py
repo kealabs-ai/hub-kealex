@@ -414,6 +414,18 @@ IA_DEFAULT_MODELS = {
     "openai": "gpt-5.5", "google": "gemini-3.8-flash", "claude": "claude-sonnet-5",
 }
 
+def _validate_model_provider(provider: str, model: str):
+    name = (model or "").strip().lower()
+    valid = {
+        "openai": name.startswith(("gpt-", "o1-", "o3-", "o4-", "chatgpt-")),
+        "claude": name.startswith("claude-"),
+        "google": name.startswith("gemini-"),
+        "cerebras": bool(name) and not name.startswith(("gpt-", "o1-", "o3-", "o4-", "chatgpt-", "claude-", "gemini-")),
+        "groq": bool(name) and not name.startswith(("gpt-", "o1-", "o3-", "o4-", "chatgpt-", "claude-", "gemini-")),
+    }
+    if provider not in valid or not valid[provider]:
+        raise HTTPException(400, f"O modelo '{model}' não corresponde ao fabricante '{provider}'.")
+
 class IaIn(BaseModel):
     provider:      Optional[str]  = None
     api_key:       Optional[str]  = None
@@ -456,9 +468,10 @@ def get_ia_ativa(db: Session = Depends(get_db), payload=Depends(verify_token)):
 def save_ia(body: IaIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
     data = body.model_dump(exclude_none=True)
     
-    # Validar provider
-    if "provider" in data and data["provider"] not in ["cerebras", "groq"]:
-        raise HTTPException(400, "Provider inválido. Use 'cerebras' ou 'groq'")
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    current = db.get(CfgIa, tenant_id)
+    if "provider" in data or "modelo" in data:
+        _validate_model_provider(data.get("provider") or (current.provider if current else "cerebras"), data.get("modelo") or (current.modelo if current else IA_DEFAULT_MODELS["cerebras"]))
     
     # Permitir qualquer modelo (sem validação restrita à lista)
     # O frontend pode enviar modelos dinâmicos não listados em MODELOS_DISPONIVEIS
@@ -518,6 +531,8 @@ def save_ia_provedor(provider: str, body: IaProviderIn, db: Session = Depends(ge
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
     data = body.model_dump(exclude_none=True)
+    current = db.get(CfgIaProvider, (tenant_id, provider))
+    _validate_model_provider(provider, data.get("modelo") or (current.modelo if current else IA_DEFAULT_MODELS[provider]))
     if data.get("api_key") == "":
         data.pop("api_key")
     if "endpoint_url" in data:
@@ -605,6 +620,39 @@ def _openai_response(api_key: str, model: str, system_prompt: str, messages: lis
         for part in item.get("content", []) if part.get("type") == "output_text"
     )
 
+def _provider_response(provider: str, api_key: str, model: str, system_prompt: str, messages: list[dict], max_tokens: int, endpoint_url: Optional[str] = None) -> str:
+    if provider == "openai":
+        return _openai_response(api_key, model, system_prompt, messages, max_tokens, endpoint_url)
+    if provider == "claude":
+        url = "https://api.anthropic.com/v1/messages"
+        headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01"}
+        data = {"model": model, "max_tokens": max_tokens, "system": system_prompt, "messages": messages}
+    elif provider == "google":
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+        headers = {}
+        data = {"systemInstruction": {"parts": [{"text": system_prompt}]}, "contents": [{"role": "model" if m["role"] == "assistant" else "user", "parts": [{"text": m["content"]}]} for m in messages], "generationConfig": {"maxOutputTokens": max_tokens}}
+    else:
+        base = {"groq": "https://api.groq.com/openai/v1", "cerebras": "https://api.cerebras.ai/v1"}.get(provider)
+        if not base:
+            raise HTTPException(400, "Fabricante de IA não suportado.")
+        url, headers = f"{base}/chat/completions", {"Authorization": f"Bearer {api_key}"}
+        data = {"model": model, "messages": [{"role": "system", "content": system_prompt}, *messages], "max_tokens": max_tokens}
+    headers.update({"Content-Type": "application/json"})
+    request = urllib.request.Request(url, data=json.dumps(data).encode("utf-8"), headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise HTTPException(502, f"{provider} respondeu com erro ({exc.code}): {detail[:1000]}") from exc
+    except (urllib.error.URLError, TimeoutError) as exc:
+        raise HTTPException(502, f"Não foi possível conectar ao provedor {provider}.") from exc
+    if provider == "claude":
+        return "".join(part.get("text", "") for part in result.get("content", []))
+    if provider == "google":
+        return "".join(part.get("text", "") for part in result.get("candidates", [{}])[0].get("content", {}).get("parts", []))
+    return result.get("choices", [{}])[0].get("message", {}).get("content", "")
+
 @app.post("/k1/lex/configuracoes/ia/chat")
 def chat_ia(body: IaChatIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
@@ -628,6 +676,14 @@ def chat_ia(body: IaChatIn, db: Session = Depends(get_db), payload=Depends(verif
         system_prompt = (config.system_prompt if config else None) or active.system_prompt
         max_tokens = (config.max_tokens if config else None) or active.max_tokens or 8192
         endpoint_url = config.endpoint_url if config else None
+    if api_key and model:
+        _validate_model_provider(provider, model)
+    if provider != "openai":
+        if not api_key or not model:
+            raise HTTPException(400, f"Configure a chave API e o modelo do provedor {provider}.")
+        _validate_model_provider(provider, model)
+        content = _provider_response(provider, api_key, model, system_prompt or "Você é um assistente jurídico especializado em direito brasileiro. Responda em português brasileiro.", messages, max_tokens, endpoint_url)
+        return {"content": content}
     if provider != "openai":
         raise HTTPException(400, "O chat deste endpoint está configurado para modelos OpenAI.")
     if not api_key or not model:
@@ -752,7 +808,13 @@ def listar_agentes_publicos(db: Session = Depends(get_db), payload=Depends(verif
         AgenteIA.ativo == True,
         AgenteIA.publico == True
     ).order_by(AgenteIA.created_at.desc()).all()
-    return [{**_row(a)} for a in agentes]
+    public_agents = []
+    for agent in agentes:
+        item = _row(agent)
+        item.pop("api_key", None)
+        item["configured"] = bool(agent.api_key)
+        public_agents.append(item)
+    return public_agents
 
 @app.get("/k1/lex/agentes/{agente_id}")
 def buscar_agente(agente_id: str, db: Session = Depends(get_db), payload=Depends(verify_token)):
@@ -776,8 +838,7 @@ def buscar_agente(agente_id: str, db: Session = Depends(get_db), payload=Depends
 def criar_agente(body: AgenteIACreate, db: Session = Depends(get_db), payload=Depends(require_admin)):
     """Cria um novo agente (apenas admin)"""
     # Validar provider
-    if body.provider not in ["cerebras", "groq"]:
-        raise HTTPException(400, "Provider inválido. Use 'cerebras' ou 'groq'")
+    _validate_model_provider(body.provider, body.modelo)
     
     # Validar prefixo da API key
     if body.provider == "cerebras" and not body.api_key.startswith("csk-"):
@@ -814,8 +875,7 @@ def atualizar_agente(agente_id: str, body: AgenteIAUpdate, db: Session = Depends
     
     # Validar provider se fornecido
     update_data = body.model_dump(exclude_none=True)
-    if "provider" in update_data and update_data["provider"] not in ["cerebras", "groq"]:
-        raise HTTPException(400, "Provider inválido. Use 'cerebras' ou 'groq'")
+    _validate_model_provider(update_data.get("provider", agente.provider), update_data.get("modelo", agente.modelo))
     
     # Validar prefixo da API key se fornecida
     if "api_key" in update_data:
