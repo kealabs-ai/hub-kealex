@@ -233,13 +233,12 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-configuracoes.rule=(Host(`${KEALEX_PUBLIC_API_HOST}`) || Host(`${KEALEX_PUBLIC_ROOT_DOMAIN}`) || Host(`${KEALEX_PUBLIC_WWW_DOMAIN}`)) && PathPrefix(`/v1/lex/configuracoes`)"
+      - "traefik.http.routers.kealex-configuracoes.rule=(Host(`${KEALEX_PUBLIC_API_HOST}`) || Host(`${KEALEX_PUBLIC_ROOT_DOMAIN}`) || Host(`${KEALEX_PUBLIC_WWW_DOMAIN}`)) && PathPrefix(`/k1/lex/configuracoes`)"
       - "traefik.http.routers.kealex-configuracoes.entrypoints=https"
       - "traefik.http.routers.kealex-configuracoes.tls=true"
       - "traefik.http.routers.kealex-configuracoes.service=kealex-configuracoes"
       - "traefik.http.services.kealex-configuracoes.loadbalancer.server.port=8000"
-      - "traefik.http.middlewares.kealex-conf-strip.stripprefix.prefixes=/v1/lex"
-      - "traefik.http.routers.kealex-configuracoes.middlewares=kealex-conf-strip,kealex-cors"
+      - "traefik.http.routers.kealex-configuracoes.middlewares=kealex-cors"
       - "traefik.http.routers.kealex-configuracoes.priority=100"
     networks:
       - easypanel
