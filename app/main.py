@@ -1,4 +1,4 @@
-import os, uuid, enum, logging
+import os, uuid, enum, logging, base64, hashlib
 import urllib.error
 import urllib.request
 from datetime import date, datetime, timedelta
@@ -10,9 +10,10 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr, Field
 import bcrypt
 from jose import jwt, JWTError
-from sqlalchemy import create_engine, Column, String, Boolean, Date, DateTime, Enum as SAEnum, Index, PrimaryKeyConstraint, Text, Integer, Numeric
+from sqlalchemy import create_engine, Column, String, Boolean, Date, DateTime, Enum as SAEnum, Index, PrimaryKeyConstraint, Text, Integer, Numeric, ForeignKey, UniqueConstraint
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from cryptography.fernet import Fernet, InvalidToken
 
 # Carregar variáveis de ambiente
 from dotenv import load_dotenv
@@ -57,6 +58,12 @@ DB_USER = DATABASE_CONFIG.username or ""
 KEALEX_SECRET_KEY = os.getenv("KEALEX_JWT_SECRET") or os.getenv("KEALEX_SECRET_KEY")
 if not KEALEX_SECRET_KEY:
     raise RuntimeError("KEALEX_JWT_SECRET ou KEALEX_SECRET_KEY precisa estar configurada no ambiente")
+_api_key_crypto_secret = os.getenv("KEALEX_API_KEYS_ENCRYPTION_KEY") or os.getenv("KEALEX_JWT_SECRET") or os.getenv("KEALEX_SECRET_KEY")
+_api_key_fernet_key = _api_key_crypto_secret.encode() if os.getenv("KEALEX_API_KEYS_ENCRYPTION_KEY") else base64.urlsafe_b64encode(hashlib.sha256((_api_key_crypto_secret + ":user-api-keys:v1").encode()).digest())
+try:
+    API_KEY_FERNET = Fernet(_api_key_fernet_key)
+except (ValueError, TypeError) as exc:
+    raise RuntimeError("KEALEX_API_KEYS_ENCRYPTION_KEY precisa ser uma chave Fernet válida.") from exc
 ALGORITHM = "HS256"
 KEALEX_JWT_EXPIRY_HOURS = int(os.getenv("KEALEX_JWT_EXPIRY_HOURS", "8"))
 TOKEN_EXPIRE_MINUTES = KEALEX_JWT_EXPIRY_HOURS * 60
@@ -212,6 +219,20 @@ class CfgIaProvider(Base):
     system_prompt = Column(Text, nullable=True)
     ativo = Column(Boolean, default=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class UserApiKey(Base):
+    __tablename__ = "user_api_keys"
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id = Column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False)
+    created_by = Column(String(36), ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False)
+    provider = Column(String(50), nullable=False)
+    model = Column(String(190), nullable=False)
+    api_key_encrypted = Column(Text, nullable=False)
+    is_active = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    __table_args__ = (UniqueConstraint("user_id", "provider", "model", name="uq_user_api_keys_user_provider_model"),)
 
 class AgenteIA(Base):
     __tablename__ = "agentes_ia"
@@ -1742,18 +1763,111 @@ MODELOS_DISPONIVEIS = {
     "openai": ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano"],
     "google": ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"],
     "claude": ["claude-opus-5", "claude-sonnet-5", "claude-opus-4-8", "claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
+    "deepseek": ["deepseek-chat", "deepseek-reasoner"],
 }
 
-IA_DEFAULT_MODELS = {"cerebras": "llama-3.3-70b", "groq": "llama-3.3-70b-versatile", "openai": "gpt-5.5", "google": "gemini-3.8-flash", "claude": "claude-sonnet-5"}
+IA_DEFAULT_MODELS = {"cerebras": "llama-3.3-70b", "groq": "llama-3.3-70b-versatile", "openai": "gpt-5.5", "google": "gemini-3.8-flash", "claude": "claude-sonnet-5", "deepseek": "deepseek-chat"}
+
+def _encrypt_user_api_key(value: str) -> str:
+    return API_KEY_FERNET.encrypt(value.encode("utf-8")).decode("ascii")
+
+def _decrypt_user_api_key(value: str) -> str:
+    try:
+        return API_KEY_FERNET.decrypt(value.encode("ascii")).decode("utf-8")
+    except (InvalidToken, ValueError, UnicodeDecodeError) as exc:
+        raise HTTPException(500, "Não foi possível descriptografar uma chave de IA. Configure a mesma chave de criptografia usada ao salvar credenciais.") from exc
+
+def _user_api_key_json(row: UserApiKey) -> dict:
+    secret = _decrypt_user_api_key(row.api_key_encrypted)
+    return {"id": row.id, "provider": row.provider, "model": row.model, "api_key_masked": "•" * max(4, min(12, len(secret) - 4)) + secret[-4:], "is_active": row.is_active, "created_at": row.created_at, "updated_at": row.updated_at}
+
+def _validate_user_api_key(provider: str, value: str):
+    prefixes = {"cerebras": ("csk-",), "groq": ("gsk-", "gsk_"), "openai": ("sk-",), "google": ("AIza",), "claude": ("sk-ant-",), "deepseek": ("sk-",)}
+    if provider not in prefixes or not value.startswith(prefixes[provider]):
+        raise HTTPException(400, f"A chave API informada não corresponde ao provedor '{provider}'.")
+
+def _current_api_key_owner(db: Session, payload: dict) -> tuple[str, str]:
+    user_id = str(payload.get("sub") or "")
+    user = db.get(Usuario, user_id) if user_id else None
+    if not user or not user.ativo:
+        raise HTTPException(401, "Usuário autenticado não encontrado ou inativo.")
+    return user.id, user.tenant_id
+
+class UserApiKeyCreate(BaseModel):
+    provider: str
+    model: str
+    api_key: str
+    is_active: bool = True
+
+class UserApiKeyUpdate(BaseModel):
+    provider: Optional[str] = None
+    model: Optional[str] = None
+    api_key: Optional[str] = None
+    is_active: Optional[bool] = None
+
+@app.get("/k1/lex/configuracoes/ia/minhas-chaves")
+def list_my_ia_keys(db: Session = Depends(get_db), payload=Depends(verify_token)):
+    user_id, tenant_id = _current_api_key_owner(db, payload)
+    rows = db.query(UserApiKey).filter_by(user_id=user_id, tenant_id=tenant_id).order_by(UserApiKey.created_at.desc()).all()
+    return [_user_api_key_json(row) for row in rows]
+
+@app.post("/k1/lex/configuracoes/ia/minhas-chaves", status_code=201)
+def create_my_ia_key(body: UserApiKeyCreate, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    user_id, tenant_id = _current_api_key_owner(db, payload)
+    _validate_model_provider(body.provider, body.model)
+    _validate_user_api_key(body.provider, body.api_key.strip())
+    if db.query(UserApiKey).filter_by(user_id=user_id, provider=body.provider, model=body.model).first():
+        raise HTTPException(409, "Já existe uma chave cadastrada para este provedor e modelo.")
+    if body.is_active:
+        db.query(UserApiKey).filter_by(user_id=user_id, tenant_id=tenant_id, is_active=True).update({"is_active": False}, synchronize_session=False)
+    row = UserApiKey(tenant_id=tenant_id, user_id=user_id, created_by=user_id, provider=body.provider, model=body.model, api_key_encrypted=_encrypt_user_api_key(body.api_key.strip()), is_active=body.is_active)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _user_api_key_json(row)
+
+@app.put("/k1/lex/configuracoes/ia/minhas-chaves/{key_id}")
+def update_my_ia_key(key_id: str, body: UserApiKeyUpdate, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    user_id, tenant_id = _current_api_key_owner(db, payload)
+    row = db.query(UserApiKey).filter_by(id=key_id, user_id=user_id, tenant_id=tenant_id).first()
+    if not row:
+        raise HTTPException(404, "Chave de IA não encontrada.")
+    provider = body.provider or row.provider
+    model = body.model or row.model
+    _validate_model_provider(provider, model)
+    duplicate = db.query(UserApiKey).filter(UserApiKey.user_id == user_id, UserApiKey.provider == provider, UserApiKey.model == model, UserApiKey.id != row.id).first()
+    if duplicate:
+        raise HTTPException(409, "Já existe uma chave cadastrada para este provedor e modelo.")
+    secret = body.api_key.strip() if body.api_key and body.api_key.strip() else _decrypt_user_api_key(row.api_key_encrypted)
+    _validate_user_api_key(provider, secret)
+    if body.is_active is True:
+        db.query(UserApiKey).filter(UserApiKey.user_id == user_id, UserApiKey.tenant_id == tenant_id, UserApiKey.id != row.id, UserApiKey.is_active.is_(True)).update({"is_active": False}, synchronize_session=False)
+    row.provider, row.model, row.api_key_encrypted = provider, model, _encrypt_user_api_key(secret)
+    if body.is_active is not None:
+        row.is_active = body.is_active
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    return _user_api_key_json(row)
+
+@app.delete("/k1/lex/configuracoes/ia/minhas-chaves/{key_id}", status_code=204)
+def delete_my_ia_key(key_id: str, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    user_id, tenant_id = _current_api_key_owner(db, payload)
+    row = db.query(UserApiKey).filter_by(id=key_id, user_id=user_id, tenant_id=tenant_id).first()
+    if not row:
+        raise HTTPException(404, "Chave de IA não encontrada.")
+    db.delete(row)
+    db.commit()
 
 def _validate_model_provider(provider: str, model: str):
     name = (model or "").strip().lower()
     valid = {
         "openai": name.startswith(("gpt-", "o1-", "o3-", "o4-", "chatgpt-")),
         "claude": name.startswith("claude-"),
+        "deepseek": name.startswith("deepseek-"),
         "google": name.startswith("gemini-"),
-        "cerebras": bool(name) and not name.startswith(("gpt-", "o1-", "o3-", "o4-", "chatgpt-", "claude-", "gemini-")),
-        "groq": bool(name) and not name.startswith(("gpt-", "o1-", "o3-", "o4-", "chatgpt-", "claude-", "gemini-")),
+        "cerebras": bool(name) and not name.startswith(("gpt-", "o1-", "o3-", "o4-", "chatgpt-", "claude-", "gemini-", "deepseek-")),
+        "groq": bool(name) and not name.startswith(("gpt-", "o1-", "o3-", "o4-", "chatgpt-", "claude-", "gemini-", "deepseek-")),
     }
     if provider not in valid or not valid[provider]:
         raise HTTPException(400, f"O modelo '{model}' não corresponde ao fabricante '{provider}'.")
@@ -1762,7 +1876,9 @@ def _validate_model_provider(provider: str, model: str):
 def get_ia(db: Session = Depends(get_db), payload=Depends(_require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
-    return _row(_get_or_create_cfg_ia(db, tenant_id, user_id))
+    result = _row(_get_or_create_cfg_ia(db, tenant_id, user_id))
+    result["configured"] = bool(result.pop("api_key", None))
+    return result
 
 @app.get("/k1/lex/configuracoes/ia/modelos")
 def get_modelos_disponiveis():
@@ -1772,7 +1888,9 @@ def get_modelos_disponiveis():
 def get_ia_ativa(db: Session = Depends(get_db), payload=Depends(verify_token)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
-    return _row(_get_or_create_cfg_ia(db, tenant_id, user_id))
+    result = _row(_get_or_create_cfg_ia(db, tenant_id, user_id))
+    result["configured"] = bool(result.pop("api_key", None))
+    return result
 
 @app.post("/k1/lex/configuracoes/ia")
 def save_ia(body: IaIn, db: Session = Depends(get_db), payload=Depends(_require_admin)):
@@ -1945,7 +2063,8 @@ def _provider_response(provider: str, api_key: str, model: str, system_prompt: s
 
 @app.post("/k1/lex/configuracoes/ia/chat")
 def chat_ia(body: IaChatIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_id, tenant_id = _current_api_key_owner(db, payload)
+    personal_active = db.query(UserApiKey).filter_by(user_id=user_id, tenant_id=tenant_id, is_active=True).first()
     messages = [{"role": m.role, "content": m.content[:32000]} for m in body.messages[-50:] if m.role in ("user", "assistant")]
     if not messages or messages[-1]["role"] != "user":
         raise HTTPException(400, "A Ãºltima mensagem deve ser do usuÃ¡rio.")
@@ -1955,11 +2074,14 @@ def chat_ia(body: IaChatIn, db: Session = Depends(get_db), payload=Depends(verif
             raise HTTPException(404, "Agente de IA nÃ£o encontrado.")
         provider, api_key, model = config.provider, config.api_key, config.modelo
         system_prompt, max_tokens, endpoint_url = config.system_prompt, config.max_tokens or 8192, None
+        personal = db.query(UserApiKey).filter_by(user_id=user_id, tenant_id=tenant_id, provider=provider, model=model, is_active=True).first()
+        if personal:
+            api_key = _decrypt_user_api_key(personal.api_key_encrypted)
     else:
-        active = db.get(CfgIa, tenant_id)
+        active = CfgIa(tenant_id=tenant_id, provider=personal_active.provider, api_key=_decrypt_user_api_key(personal_active.api_key_encrypted), modelo=personal_active.model, max_tokens=8192, ativo=True) if personal_active else db.get(CfgIa, tenant_id)
         if not active or not active.ativo:
             raise HTTPException(400, "Nenhum provedor de IA ativo estÃ¡ configurado.")
-        config = db.get(CfgIaProvider, (tenant_id, active.provider))
+        config = None if personal_active else db.get(CfgIaProvider, (tenant_id, active.provider))
         provider = active.provider
         api_key = (config.api_key if config else None) or active.api_key
         model = (config.modelo if config else None) or active.modelo
