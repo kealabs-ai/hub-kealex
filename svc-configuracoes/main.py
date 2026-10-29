@@ -749,13 +749,15 @@ def _provider_response(provider: str, api_key: str, model: str, system_prompt: s
             raise HTTPException(400, "Fabricante de IA não suportado.")
         url, headers = f"{base}/chat/completions", {"Authorization": f"Bearer {api_key}"}
         data = {"model": model, "messages": [{"role": "system", "content": system_prompt}, *messages], "max_tokens": max_tokens}
-    headers.update({"Content-Type": "application/json"})
+    headers.update({"Content-Type": "application/json", "Accept": "application/json", "User-Agent": "Kealex-AI/1.0"})
     request = urllib.request.Request(url, data=json.dumps(data).encode("utf-8"), headers=headers, method="POST")
     try:
         with urllib.request.urlopen(request, timeout=120) as response:
             result = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
+        if provider == "groq" and exc.code == 403 and "1010" in detail:
+            raise HTTPException(502, "O acesso do servidor ao Groq foi bloqueado pelo Cloudflare (erro 1010). Confira as regras de segurança ou a rota de saída do servidor no provedor.") from exc
         raise HTTPException(502, f"{provider} respondeu com erro ({exc.code}): {detail[:1000]}") from exc
     except (urllib.error.URLError, TimeoutError) as exc:
         raise HTTPException(502, f"Não foi possível conectar ao provedor {provider}.") from exc
