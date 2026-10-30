@@ -1,4 +1,4 @@
-import os, uuid, json, base64, hashlib
+﻿import os, uuid, json, base64, hashlib
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta
@@ -9,6 +9,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from jose import jwt, JWTError
 from sqlalchemy import create_engine, Column, String, Text, Integer, Boolean, DateTime, UniqueConstraint
+from sqlalchemy import text as sql_text
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from cryptography.fernet import Fernet, InvalidToken
@@ -48,7 +49,7 @@ _api_key_fernet_key = _api_key_crypto_secret.encode() if os.getenv("KEALEX_API_K
 try:
     API_KEY_FERNET = Fernet(_api_key_fernet_key)
 except (ValueError, TypeError) as exc:
-    raise RuntimeError("KEALEX_API_KEYS_ENCRYPTION_KEY precisa ser uma chave Fernet válida.") from exc
+    raise RuntimeError("KEALEX_API_KEYS_ENCRYPTION_KEY precisa ser uma chave Fernet vÃ¡lida.") from exc
 ALGORITHM = "HS256"
 
 engine       = create_engine(
@@ -63,7 +64,7 @@ bearer       = HTTPBearer()
 
 class Base(DeclarativeBase): pass
 
-# ── Models ────────────────────────────────────────────────────────────────────
+# â”€â”€ Models â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class CfgGeral(Base):
     __tablename__ = "cfg_geral"
@@ -208,11 +209,13 @@ class AgenteIA(Base):
     __tablename__ = "agentes_ia"
     id            = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     tenant_id     = Column(String(36), nullable=False)
+    owner_user_id = Column(String(36), nullable=True, index=True)
+    created_by    = Column(String(36), nullable=True)
     escritorio_id = Column(String(36), nullable=True)
     nome          = Column(String(255), nullable=False)
     descricao     = Column(Text, nullable=True)
     provider      = Column(String(50), nullable=False)
-    api_key       = Column(Text, nullable=False)
+    api_key       = Column(Text, nullable=True)
     modelo        = Column(String(255), nullable=False)
     max_tokens    = Column(Integer, nullable=False, default=8192)
     system_prompt = Column(Text, nullable=True)
@@ -220,6 +223,39 @@ class AgenteIA(Base):
     publico       = Column(Boolean, nullable=False, default=True)
     created_at    = Column(DateTime, default=datetime.utcnow)
     updated_at    = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class AIPlanPolicy(Base):
+    __tablename__ = "ia_politicas_planos"
+    tenant_id = Column(String(36), primary_key=True)
+    plan_key = Column(String(40), primary_key=True)
+    can_create_agents = Column(Boolean, nullable=False, default=False)
+    allowed_roles = Column(Text, nullable=False, default='["advogado"]')
+    max_agents = Column(Integer, nullable=False, default=0)
+    allowed_models = Column(Text, nullable=False, default="[]")
+    allowed_menus = Column(Text, nullable=False, default="[]")
+    monthly_token_limit = Column(Integer, nullable=False, default=0)
+    fallback_provider = Column(String(50), nullable=True)
+    fallback_model = Column(String(190), nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class AIUserPolicy(Base):
+    __tablename__ = "ia_politicas_usuarios"
+    tenant_id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), primary_key=True)
+    can_create_agents = Column(Boolean, nullable=True)
+    max_agents = Column(Integer, nullable=True)
+    allowed_models = Column(Text, nullable=True)
+    allowed_menus = Column(Text, nullable=True)
+    monthly_token_limit = Column(Integer, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class AITokenUsage(Base):
+    __tablename__ = "ia_uso_tokens"
+    tenant_id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), primary_key=True)
+    period = Column(String(7), primary_key=True)
+    tokens_used = Column(Integer, nullable=False, default=0)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class DriveSource(Base):
     __tablename__ = "drive_sources"
@@ -251,7 +287,7 @@ class IndexacaoArquivos(Base):
 
 Base.metadata.create_all(engine)
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def get_db():
     db = SessionLocal()
@@ -267,7 +303,7 @@ def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
     try:
         return jwt.decode(creds.credentials, KEALEX_SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
-        raise HTTPException(401, "Token inválido")
+        raise HTTPException(401, "Token invÃ¡lido")
 
 def require_admin(payload=Depends(verify_token)):
     if payload.get("role") != "admin":
@@ -308,7 +344,7 @@ def _upsert(db, Model, tenant_id: str, user_id: str, data: dict):
     db.refresh(row)
     return row
 
-# ── App ───────────────────────────────────────────────────────────────────────
+# â”€â”€ App â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 app = FastAPI(title="svc-configuracoes")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -317,7 +353,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 def health():
     return {"status": "ok", "service": "svc-configuracoes"}
 
-# ── Geral ─────────────────────────────────────────────────────────────────────
+# â”€â”€ Geral â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class GeralIn(BaseModel):
     nome_plataforma:  Optional[str]  = None
@@ -340,7 +376,7 @@ def save_geral(body: GeralIn, db: Session = Depends(get_db), payload=Depends(req
     user_id = payload.get("sub")
     return _row(_upsert(db, CfgGeral, tenant_id, user_id, body.model_dump(exclude_none=True)))
 
-# ── CDN ───────────────────────────────────────────────────────────────────────
+# â”€â”€ CDN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class CdnIn(BaseModel):
     provider:          Optional[str]  = None
@@ -366,7 +402,7 @@ def save_cdn(body: CdnIn, db: Session = Depends(get_db), payload=Depends(require
     user_id = payload.get("sub")
     return _row(_upsert(db, CfgCdn, tenant_id, user_id, body.model_dump(exclude_none=True)))
 
-# ── Database ──────────────────────────────────────────────────────────────────
+# â”€â”€ Database â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class DatabaseIn(BaseModel):
     tipo:              Optional[str]  = None
@@ -381,7 +417,7 @@ class DatabaseIn(BaseModel):
 
 @app.get("/k1/lex/configuracoes/database/env")
 def get_database_env(payload=Depends(require_admin)):
-    """Retorna os dados de conexão sem revelar a senha."""
+    """Retorna os dados de conexÃ£o sem revelar a senha."""
     database_url = make_url(KEALEX_DATABASE_URL)
     return {
         "host": database_url.host or "",
@@ -404,10 +440,10 @@ def save_database(body: DatabaseIn, db: Session = Depends(get_db), payload=Depen
     user_id = payload.get("sub")
     return _row(_upsert(db, CfgDatabase, tenant_id, user_id, body.model_dump(exclude_none=True)))
 
-# ── IA ────────────────────────────────────────────────────────────────────────
+# â”€â”€ IA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-# Modelos disponíveis por provider (lista de referência)
-# Nota: O endpoint aceita modelos dinâmicos não listados aqui
+# Modelos disponÃ­veis por provider (lista de referÃªncia)
+# Nota: O endpoint aceita modelos dinÃ¢micos nÃ£o listados aqui
 MODELOS_DISPONIVEIS = {
     "cerebras": [
         "llama-3.3-70b",
@@ -447,7 +483,7 @@ def _validate_model_provider(provider: str, model: str):
         "groq": bool(name) and not name.startswith(("gpt-", "o1-", "o3-", "o4-", "chatgpt-", "claude-", "gemini-", "deepseek-")),
     }
     if provider not in valid or not valid[provider]:
-        raise HTTPException(400, f"O modelo '{model}' não corresponde ao fabricante '{provider}'.")
+        raise HTTPException(400, f"O modelo '{model}' nÃ£o corresponde ao fabricante '{provider}'.")
 
 def _encrypt_user_api_key(value: str) -> str:
     return API_KEY_FERNET.encrypt(value.encode("utf-8")).decode("ascii")
@@ -456,22 +492,22 @@ def _decrypt_user_api_key(value: str) -> str:
     try:
         return API_KEY_FERNET.decrypt(value.encode("ascii")).decode("utf-8")
     except (InvalidToken, ValueError, UnicodeDecodeError) as exc:
-        raise HTTPException(500, "Não foi possível descriptografar uma chave de IA. Confira a chave de criptografia do serviço.") from exc
+        raise HTTPException(500, "NÃ£o foi possÃ­vel descriptografar uma chave de IA. Confira a chave de criptografia do serviÃ§o.") from exc
 
 def _user_api_key_json(row: UserApiKey) -> dict:
     secret = _decrypt_user_api_key(row.api_key_encrypted)
-    return {"id": row.id, "provider": row.provider, "model": row.model, "api_key_masked": "•" * max(4, min(12, len(secret) - 4)) + secret[-4:], "is_active": row.is_active, "created_at": row.created_at.isoformat() if row.created_at else None, "updated_at": row.updated_at.isoformat() if row.updated_at else None}
+    return {"id": row.id, "provider": row.provider, "model": row.model, "api_key_masked": "â€¢" * max(4, min(12, len(secret) - 4)) + secret[-4:], "is_active": row.is_active, "created_at": row.created_at.isoformat() if row.created_at else None, "updated_at": row.updated_at.isoformat() if row.updated_at else None}
 
 def _validate_user_api_key(provider: str, value: str):
     prefixes = {"cerebras": ("csk-",), "groq": ("gsk-", "gsk_"), "openai": ("sk-",), "google": ("AIza",), "claude": ("sk-ant-",), "deepseek": ("sk-",)}
     if provider not in prefixes or not value.startswith(prefixes[provider]):
-        raise HTTPException(400, f"A chave API informada não corresponde ao provedor '{provider}'.")
+        raise HTTPException(400, f"A chave API informada nÃ£o corresponde ao provedor '{provider}'.")
 
 def _current_api_key_owner(payload: dict) -> tuple[str, str]:
     user_id = str(payload.get("sub") or "")
     tenant_id = str(payload.get("tenant_id") or "")
     if not user_id or not tenant_id:
-        raise HTTPException(401, "O token não identifica o usuário e o tenant.")
+        raise HTTPException(401, "O token nÃ£o identifica o usuÃ¡rio e o tenant.")
     return user_id, tenant_id
 
 class UserApiKeyCreate(BaseModel):
@@ -489,16 +525,18 @@ class UserApiKeyUpdate(BaseModel):
 @app.get("/k1/lex/configuracoes/ia/minhas-chaves")
 def list_my_ia_keys(db: Session = Depends(get_db), payload=Depends(verify_token)):
     user_id, tenant_id = _current_api_key_owner(payload)
+    _assert_ai_menu(db, payload, "/configuracoes/ia")
     rows = db.query(UserApiKey).filter_by(user_id=user_id, tenant_id=tenant_id).order_by(UserApiKey.created_at.desc()).all()
     return [_user_api_key_json(row) for row in rows]
 
 @app.post("/k1/lex/configuracoes/ia/minhas-chaves", status_code=201)
 def create_my_ia_key(body: UserApiKeyCreate, db: Session = Depends(get_db), payload=Depends(verify_token)):
     user_id, tenant_id = _current_api_key_owner(payload)
+    _assert_ai_menu(db, payload, "/configuracoes/ia")
     _validate_model_provider(body.provider, body.model)
     _validate_user_api_key(body.provider, body.api_key.strip())
     if db.query(UserApiKey).filter_by(user_id=user_id, provider=body.provider, model=body.model).first():
-        raise HTTPException(409, "Já existe uma chave cadastrada para este provedor e modelo.")
+        raise HTTPException(409, "JÃ¡ existe uma chave cadastrada para este provedor e modelo.")
     if body.is_active:
         db.query(UserApiKey).filter_by(user_id=user_id, tenant_id=tenant_id, is_active=True).update({"is_active": False}, synchronize_session=False)
     row = UserApiKey(tenant_id=tenant_id, user_id=user_id, created_by=user_id, provider=body.provider, model=body.model, api_key_encrypted=_encrypt_user_api_key(body.api_key.strip()), is_active=body.is_active)
@@ -510,14 +548,15 @@ def create_my_ia_key(body: UserApiKeyCreate, db: Session = Depends(get_db), payl
 @app.put("/k1/lex/configuracoes/ia/minhas-chaves/{key_id}")
 def update_my_ia_key(key_id: str, body: UserApiKeyUpdate, db: Session = Depends(get_db), payload=Depends(verify_token)):
     user_id, tenant_id = _current_api_key_owner(payload)
+    _assert_ai_menu(db, payload, "/configuracoes/ia")
     row = db.query(UserApiKey).filter_by(id=key_id, user_id=user_id, tenant_id=tenant_id).first()
     if not row:
-        raise HTTPException(404, "Chave de IA não encontrada.")
+        raise HTTPException(404, "Chave de IA nÃ£o encontrada.")
     provider, model = body.provider or row.provider, body.model or row.model
     _validate_model_provider(provider, model)
     duplicate = db.query(UserApiKey).filter(UserApiKey.user_id == user_id, UserApiKey.provider == provider, UserApiKey.model == model, UserApiKey.id != row.id).first()
     if duplicate:
-        raise HTTPException(409, "Já existe uma chave cadastrada para este provedor e modelo.")
+        raise HTTPException(409, "JÃ¡ existe uma chave cadastrada para este provedor e modelo.")
     secret = body.api_key.strip() if body.api_key and body.api_key.strip() else _decrypt_user_api_key(row.api_key_encrypted)
     _validate_user_api_key(provider, secret)
     if body.is_active is True:
@@ -532,9 +571,10 @@ def update_my_ia_key(key_id: str, body: UserApiKeyUpdate, db: Session = Depends(
 @app.delete("/k1/lex/configuracoes/ia/minhas-chaves/{key_id}", status_code=204)
 def delete_my_ia_key(key_id: str, db: Session = Depends(get_db), payload=Depends(verify_token)):
     user_id, tenant_id = _current_api_key_owner(payload)
+    _assert_ai_menu(db, payload, "/configuracoes/ia")
     row = db.query(UserApiKey).filter_by(id=key_id, user_id=user_id, tenant_id=tenant_id).first()
     if not row:
-        raise HTTPException(404, "Chave de IA não encontrada.")
+        raise HTTPException(404, "Chave de IA nÃ£o encontrada.")
     db.delete(row)
     db.commit()
 
@@ -559,14 +599,14 @@ def get_ia(db: Session = Depends(get_db), payload=Depends(require_admin)):
 
 @app.get("/k1/lex/configuracoes/ia/modelos")
 def get_modelos_disponiveis():
-    """Retorna a lista de modelos disponíveis por provider (referência apenas)
-    Nota: O endpoint POST /k1/lex/configuracoes/ia aceita qualquer modelo, não apenas os listados aqui
+    """Retorna a lista de modelos disponÃ­veis por provider (referÃªncia apenas)
+    Nota: O endpoint POST /k1/lex/configuracoes/ia aceita qualquer modelo, nÃ£o apenas os listados aqui
     """
     return MODELOS_DISPONIVEIS
 
 @app.get("/k1/lex/configuracoes/ia/ativa")
 def get_ia_ativa(db: Session = Depends(get_db), payload=Depends(verify_token)):
-    """Retorna a configuração de IA ativa para o tenant (não requer admin)"""
+    """Retorna a configuraÃ§Ã£o de IA ativa para o tenant (nÃ£o requer admin)"""
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
     active = _get_or_create(db, CfgIa, tenant_id, user_id)
@@ -585,8 +625,8 @@ def save_ia(body: IaIn, db: Session = Depends(get_db), payload=Depends(require_a
     if "provider" in data or "modelo" in data:
         _validate_model_provider(data.get("provider") or (current.provider if current else "cerebras"), data.get("modelo") or (current.modelo if current else IA_DEFAULT_MODELS["cerebras"]))
     
-    # Permitir qualquer modelo (sem validação restrita à lista)
-    # O frontend pode enviar modelos dinâmicos não listados em MODELOS_DISPONIVEIS
+    # Permitir qualquer modelo (sem validaÃ§Ã£o restrita Ã  lista)
+    # O frontend pode enviar modelos dinÃ¢micos nÃ£o listados em MODELOS_DISPONIVEIS
     
     # Validar prefixo da API key
     if "api_key" in data and data["api_key"]:
@@ -594,9 +634,9 @@ def save_ia(body: IaIn, db: Session = Depends(get_db), payload=Depends(require_a
         existing = db.get(CfgIa, tenant_id)
         provider = data.get("provider") or (existing.provider if existing else "cerebras")
         if provider == "cerebras" and not data["api_key"].startswith("csk-"):
-            raise HTTPException(400, "API key Cerebras deve começar com 'csk-'")
+            raise HTTPException(400, "API key Cerebras deve comeÃ§ar com 'csk-'")
         if provider == "groq" and not (data["api_key"].startswith("gsk-") or data["api_key"].startswith("gsk_")):
-            raise HTTPException(400, "API key Groq deve começar com 'gsk-' ou 'gsk_'")
+            raise HTTPException(400, "API key Groq deve comeÃ§ar com 'gsk-' ou 'gsk_'")
     
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
@@ -621,7 +661,7 @@ def get_ia_provedores(db: Session = Depends(get_db), payload=Depends(require_adm
         item = _row(row)
         item["configured"] = bool(item.pop("api_key", None))
         configs[row.provider] = item
-    # Compatibilidade: migra a configuração antiga para a respectiva aba na primeira leitura.
+    # Compatibilidade: migra a configuraÃ§Ã£o antiga para a respectiva aba na primeira leitura.
     if active.provider not in configs:
         legacy = CfgIaProvider(
             tenant_id=tenant_id, user_id=user_id, provider=active.provider,
@@ -639,7 +679,7 @@ def get_ia_provedores(db: Session = Depends(get_db), payload=Depends(require_adm
 @app.post("/k1/lex/configuracoes/ia/provedores/{provider}")
 def save_ia_provedor(provider: str, body: IaProviderIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
     if provider not in MODELOS_DISPONIVEIS:
-        raise HTTPException(400, "Provider inválido")
+        raise HTTPException(400, "Provider invÃ¡lido")
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
     data = body.model_dump(exclude_none=True)
@@ -677,14 +717,14 @@ def save_ia_provedor(provider: str, body: IaProviderIn, db: Session = Depends(ge
 @app.post("/k1/lex/configuracoes/ia/provedor-ativo/{provider}")
 def set_ia_provedor_ativo(provider: str, db: Session = Depends(get_db), payload=Depends(require_admin)):
     if provider not in MODELOS_DISPONIVEIS:
-        raise HTTPException(400, "Provider inválido")
+        raise HTTPException(400, "Provider invÃ¡lido")
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     user_id = payload.get("sub")
     provider_cfg = db.get(CfgIaProvider, (tenant_id, provider))
     if provider_cfg is None or not provider_cfg.api_key:
-        raise HTTPException(400, "Configure a chave API deste provedor antes de ativá-lo")
+        raise HTTPException(400, "Configure a chave API deste provedor antes de ativÃ¡-lo")
     if not provider_cfg.ativo:
-        raise HTTPException(400, "Habilite este provedor antes de ativá-lo")
+        raise HTTPException(400, "Habilite este provedor antes de ativÃ¡-lo")
     active = _get_or_create(db, CfgIa, tenant_id, user_id)
     active.provider = provider
     active.api_key = provider_cfg.api_key
@@ -699,7 +739,7 @@ def set_ia_provedor_ativo(provider: str, db: Session = Depends(get_db), payload=
     result["configured"] = True
     return result
 
-# ── Usuários ──────────────────────────────────────────────────────────────────
+# â”€â”€ UsuÃ¡rios â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class IaChatMessage(BaseModel):
     role: str
@@ -726,7 +766,7 @@ def _openai_response(api_key: str, model: str, system_prompt: str, messages: lis
         detail = exc.read().decode("utf-8", errors="replace")
         raise HTTPException(502, f"A OpenAI respondeu com erro ({exc.code}): {detail[:1000]}") from exc
     except (urllib.error.URLError, TimeoutError) as exc:
-        raise HTTPException(502, "NÃ£o foi possÃ­vel conectar Ã  OpenAI.") from exc
+        raise HTTPException(502, "NÃƒÂ£o foi possÃƒÂ­vel conectar ÃƒÂ  OpenAI.") from exc
     return result.get("output_text") or "".join(
         part.get("text", "") for item in result.get("output", [])
         for part in item.get("content", []) if part.get("type") == "output_text"
@@ -746,7 +786,7 @@ def _provider_response(provider: str, api_key: str, model: str, system_prompt: s
     else:
         base = {"groq": "https://api.groq.com/openai/v1", "cerebras": "https://api.cerebras.ai/v1", "deepseek": "https://api.deepseek.com"}.get(provider)
         if not base:
-            raise HTTPException(400, "Fabricante de IA não suportado.")
+            raise HTTPException(400, "Fabricante de IA nÃ£o suportado.")
         url, headers = f"{base}/chat/completions", {"Authorization": f"Bearer {api_key}"}
         data = {"model": model, "messages": [{"role": "system", "content": system_prompt}, *messages], "max_tokens": max_tokens}
     headers.update({"Content-Type": "application/json", "Accept": "application/json", "User-Agent": "Kealex-AI/1.0"})
@@ -757,27 +797,39 @@ def _provider_response(provider: str, api_key: str, model: str, system_prompt: s
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
         if provider == "groq" and exc.code == 403 and "1010" in detail:
-            raise HTTPException(502, "O acesso do servidor ao Groq foi bloqueado pelo Cloudflare (erro 1010). Confira as regras de segurança ou a rota de saída do servidor no provedor.") from exc
+            raise HTTPException(502, "O acesso do servidor ao Groq foi bloqueado pelo Cloudflare (erro 1010). Confira as regras de seguranÃ§a ou a rota de saÃ­da do servidor no provedor.") from exc
         raise HTTPException(502, f"{provider} respondeu com erro ({exc.code}): {detail[:1000]}") from exc
     except (urllib.error.URLError, TimeoutError) as exc:
-        raise HTTPException(502, f"Não foi possível conectar ao provedor {provider}.") from exc
+        raise HTTPException(502, f"NÃ£o foi possÃ­vel conectar ao provedor {provider}.") from exc
     if provider == "claude":
         return "".join(part.get("text", "") for part in result.get("content", []))
     if provider == "google":
         return "".join(part.get("text", "") for part in result.get("candidates", [{}])[0].get("content", {}).get("parts", []))
     return result.get("choices", [{}])[0].get("message", {}).get("content", "")
 
+def _record_ai_usage(db: Session, tenant_id: str, user_id: str, messages: list, answer: str):
+    # Approximation for providers whose wrapper does not expose usage metadata.
+    used = max(1, (sum(len(str(item.get("content", ""))) for item in messages) + len(answer or "")) // 4)
+    period = datetime.utcnow().strftime("%Y-%m")
+    row = db.query(AITokenUsage).filter_by(tenant_id=tenant_id, user_id=user_id, period=period).first()
+    if row:
+        row.tokens_used += used
+    else:
+        db.add(AITokenUsage(tenant_id=tenant_id, user_id=user_id, period=period, tokens_used=used))
+    db.commit()
+
 @app.post("/k1/lex/configuracoes/ia/chat")
 def chat_ia(body: IaChatIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
     user_id, tenant_id = _current_api_key_owner(payload)
+    _assert_ai_menu(db, payload, "/ia")
     personal_active = db.query(UserApiKey).filter_by(user_id=user_id, tenant_id=tenant_id, is_active=True).first()
     messages = [{"role": m.role, "content": m.content[:32000]} for m in body.messages[-50:] if m.role in ("user", "assistant")]
     if not messages or messages[-1]["role"] != "user":
-        raise HTTPException(400, "A Ãºltima mensagem deve ser do usuÃ¡rio.")
+        raise HTTPException(400, "A ÃƒÂºltima mensagem deve ser do usuÃƒÂ¡rio.")
     if body.agente_id:
-        config = db.query(AgenteIA).filter_by(id=body.agente_id, tenant_id=tenant_id, ativo=True, publico=True).first()
+        config = db.query(AgenteIA).filter(AgenteIA.id == body.agente_id, AgenteIA.tenant_id == tenant_id, AgenteIA.ativo == True, ((AgenteIA.publico == True) | (AgenteIA.owner_user_id == user_id))).first()
         if not config:
-            raise HTTPException(404, "Agente de IA nÃ£o encontrado.")
+            raise HTTPException(404, "Agente de IA nÃƒÂ£o encontrado.")
         provider, api_key, model = config.provider, config.api_key, config.modelo
         system_prompt, max_tokens, endpoint_url = config.system_prompt, config.max_tokens or 8192, None
         personal = db.query(UserApiKey).filter_by(user_id=user_id, tenant_id=tenant_id, provider=provider, model=model, is_active=True).first()
@@ -786,7 +838,7 @@ def chat_ia(body: IaChatIn, db: Session = Depends(get_db), payload=Depends(verif
     else:
         active = CfgIa(tenant_id=tenant_id, provider=personal_active.provider, api_key=_decrypt_user_api_key(personal_active.api_key_encrypted), modelo=personal_active.model, max_tokens=8192, ativo=True) if personal_active else db.get(CfgIa, tenant_id)
         if not active or not active.ativo:
-            raise HTTPException(400, "Nenhum provedor de IA ativo estÃ¡ configurado.")
+            raise HTTPException(400, "Nenhum provedor de IA ativo estÃƒÂ¡ configurado.")
         config = None if personal_active else db.get(CfgIaProvider, (tenant_id, active.provider))
         provider = active.provider
         api_key = (config.api_key if config else None) or active.api_key
@@ -794,21 +846,29 @@ def chat_ia(body: IaChatIn, db: Session = Depends(get_db), payload=Depends(verif
         system_prompt = (config.system_prompt if config else None) or active.system_prompt
         max_tokens = (config.max_tokens if config else None) or active.max_tokens or 8192
         endpoint_url = config.endpoint_url if config else None
+    policy = _effective_ai_policy(db, payload)
+    if not _model_allowed(policy, provider, model):
+        raise HTTPException(403, "O modelo selecionado nÃ£o estÃ¡ liberado no seu plano.")
+    if policy["monthly_token_limit"] > 0 and policy["tokens_used"] >= policy["monthly_token_limit"]:
+        fallback_provider, fallback_model = policy.get("fallback_provider"), policy.get("fallback_model")
+        fallback_key = db.query(UserApiKey).filter_by(user_id=user_id, tenant_id=tenant_id, provider=fallback_provider, model=fallback_model, is_active=True).first() if fallback_provider and fallback_model else None
+        if not fallback_key:
+            raise HTTPException(429, "A cota mensal de tokens terminou e nÃ£o hÃ¡ chave pessoal para o modelo de continuidade do plano.")
+        provider, model = fallback_provider, fallback_model
+        api_key = _decrypt_user_api_key(fallback_key.api_key_encrypted)
+        endpoint_url = None
     if api_key and model:
         _validate_model_provider(provider, model)
-    if provider != "openai":
-        if not api_key or not model:
-            raise HTTPException(400, f"Configure a chave API e o modelo do provedor {provider}.")
-        _validate_model_provider(provider, model)
-        content = _provider_response(provider, api_key, model, system_prompt or "Você é um assistente jurídico especializado em direito brasileiro. Responda em português brasileiro.", messages, max_tokens, endpoint_url)
-        return {"content": content}
-    if provider != "openai":
-        raise HTTPException(400, "O chat deste endpoint está configurado para modelos OpenAI.")
     if not api_key or not model:
-        raise HTTPException(400, "Configure a chave API e o modelo da OpenAI.")
-    content = _openai_response(api_key, model, system_prompt or "VocÃª Ã© um assistente jurÃ­dico especializado em direito brasileiro. Responda em portuguÃªs brasileiro.", messages, max_tokens, endpoint_url)
-    return {"content": content}
-
+        raise HTTPException(400, f"Configure a chave API e o modelo do provedor {provider}.")
+    _validate_model_provider(provider, model)
+    system = system_prompt or "Você é um assistente jurídico especializado em direito brasileiro. Responda em português brasileiro."
+    if provider == "openai":
+        content = _openai_response(api_key, model, system, messages, max_tokens, endpoint_url)
+    else:
+        content = _provider_response(provider, api_key, model, system, messages, max_tokens, endpoint_url)
+    _record_ai_usage(db, tenant_id, user_id, messages, content)
+    return {"content": content, "provider": provider, "model": model}
 class UsuariosIn(BaseModel):
     max_tentativas_login: Optional[int]  = None
     bloqueio_minutos:     Optional[int]  = None
@@ -832,7 +892,7 @@ def save_usuarios(body: UsuariosIn, db: Session = Depends(get_db), payload=Depen
     user_id = payload.get("sub")
     return _row(_upsert(db, CfgUsuarios, tenant_id, user_id, body.model_dump(exclude_none=True)))
 
-# ── Segurança ─────────────────────────────────────────────────────────────────
+# â”€â”€ SeguranÃ§a â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class SegurancaIn(BaseModel):
     twofa_obrigatorio:   Optional[bool] = None
@@ -859,7 +919,7 @@ def save_seguranca(body: SegurancaIn, db: Session = Depends(get_db), payload=Dep
     user_id = payload.get("sub")
     return _row(_upsert(db, CfgSeguranca, tenant_id, user_id, body.model_dump(exclude_none=True)))
 
-# ── Notificações ──────────────────────────────────────────────────────────────
+# â”€â”€ NotificaÃ§Ãµes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class NotificacoesIn(BaseModel):
     email_provider:   Optional[str]  = None
@@ -886,7 +946,7 @@ def save_notificacoes(body: NotificacoesIn, db: Session = Depends(get_db), paylo
     user_id = payload.get("sub")
     return _row(_upsert(db, CfgNotificacoes, tenant_id, user_id, body.model_dump(exclude_none=True)))
 
-# ── Agentes IA ────────────────────────────────────────────────────────────────
+# â”€â”€ Agentes IA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class AgenteIACreate(BaseModel):
     nome: str
@@ -919,7 +979,7 @@ def listar_agentes(db: Session = Depends(get_db), payload=Depends(require_admin)
 
 @app.get("/k1/lex/agentes/publicos")
 def listar_agentes_publicos(db: Session = Depends(get_db), payload=Depends(verify_token)):
-    """Lista agentes públicos e ativos (disponíveis para todos)"""
+    """Lista agentes pÃºblicos e ativos (disponÃ­veis para todos)"""
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     agentes = db.query(AgenteIA).filter(
         AgenteIA.tenant_id == tenant_id,
@@ -934,9 +994,187 @@ def listar_agentes_publicos(db: Session = Depends(get_db), payload=Depends(verif
         public_agents.append(item)
     return public_agents
 
+class PersonalAgentIn(BaseModel):
+    nome: str
+    descricao: Optional[str] = None
+    provider: str
+    modelo: str
+    max_tokens: int = 4096
+    system_prompt: Optional[str] = None
+    ativo: bool = True
+
+
+def _json_items(value, default=None):
+    try:
+        parsed = json.loads(value) if value else default
+        return parsed if isinstance(parsed, list) else (default or [])
+    except (TypeError, ValueError):
+        return default or []
+
+
+def _plan_key(db: Session, tenant_id: str) -> str:
+    try:
+        value = db.execute(sql_text("SELECT plano FROM tenants WHERE id=:tenant_id"), {"tenant_id": tenant_id}).scalar()
+        return str(value or "trial").lower()
+    except Exception:
+        db.rollback()
+        return "trial"
+
+
+def _effective_ai_policy(db: Session, payload: dict) -> dict:
+    user_id, tenant_id = _current_api_key_owner(payload)
+    role = str(payload.get("role") or "")
+    plan_key = _plan_key(db, tenant_id)
+    plan = db.query(AIPlanPolicy).filter_by(tenant_id=tenant_id, plan_key=plan_key).first()
+    user = db.query(AIUserPolicy).filter_by(tenant_id=tenant_id, user_id=user_id).first()
+    allowed_roles = _json_items(plan.allowed_roles, ["advogado"]) if plan else ["advogado"]
+    models = _json_items(plan.allowed_models, []) if plan else []
+    menus = _json_items(plan.allowed_menus, ["/processos", "/documentos", "/prazos", "/atividades", "/financeiro", "/cobranca", "/usuarios", "/equipe", "/clientes", "/intimacoes", "/audiencias", "/integracao-orgaos", "/ia", "/analise-documentos", "/meus-agents", "/configuracoes/ia"]) if plan else ["/processos", "/documentos", "/prazos", "/atividades", "/financeiro", "/cobranca", "/usuarios", "/equipe", "/clientes", "/intimacoes", "/audiencias", "/integracao-orgaos", "/ia", "/analise-documentos", "/meus-agents", "/configuracoes/ia"]
+    if user and user.allowed_models is not None: models = _json_items(user.allowed_models, [])
+    if user and user.allowed_menus is not None: menus = _json_items(user.allowed_menus, [])
+    can_create = bool(plan and plan.can_create_agents and role in allowed_roles)
+    if user and user.can_create_agents is not None: can_create = bool(user.can_create_agents)
+    monthly_limit = user.monthly_token_limit if user and user.monthly_token_limit is not None else (plan.monthly_token_limit if plan else 0)
+    max_agents = user.max_agents if user and user.max_agents is not None else (plan.max_agents if plan else 0)
+    period = datetime.utcnow().strftime("%Y-%m")
+    usage = db.query(AITokenUsage).filter_by(tenant_id=tenant_id, user_id=user_id, period=period).first()
+    return {"plan_key": plan_key, "can_create_agents": can_create, "allowed_roles": allowed_roles, "max_agents": max_agents or 0, "allowed_models": models, "allowed_menus": menus, "monthly_token_limit": monthly_limit or 0, "fallback_provider": plan.fallback_provider if plan else None, "fallback_model": plan.fallback_model if plan else None, "tokens_used": usage.tokens_used if usage else 0}
+
+
+def _model_allowed(policy: dict, provider: str, model: str) -> bool:
+    allowed = policy.get("allowed_models") or []
+    return not allowed or model in allowed or f"{provider}:{model}" in allowed
+
+
+def _assert_ai_menu(db: Session, payload: dict, path: str):
+    policy = _effective_ai_policy(db, payload)
+    if path not in policy.get("allowed_menus", []):
+        raise HTTPException(403, "Este recurso de IA nÃ£o estÃ¡ liberado no plano do usuÃ¡rio.")
+
+@app.get("/k1/lex/ia/politica")
+def get_effective_ai_policy(db: Session = Depends(get_db), payload=Depends(verify_token)):
+    return _effective_ai_policy(db, payload)
+
+
+class AIPlanPolicyIn(BaseModel):
+    can_create_agents: bool = False
+    allowed_roles: list[str] = ["advogado"]
+    max_agents: int = 0
+    allowed_models: list[str] = []
+    allowed_menus: list[str] = []
+    monthly_token_limit: int = 0
+    fallback_provider: Optional[str] = None
+    fallback_model: Optional[str] = None
+
+
+@app.get("/k1/lex/ia/admin/politicas")
+def list_ai_plan_policies(db: Session = Depends(get_db), payload=Depends(require_admin)):
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    saved = {row.plan_key: row for row in db.query(AIPlanPolicy).filter_by(tenant_id=tenant_id).all()}
+    plans = [("trial", "Trial"), ("starter", "Starter"), ("professional", "Professional"), ("enterprise", "Enterprise")]
+    known_plans = db.execute(sql_text("SELECT DISTINCT plano FROM tenants WHERE plano IS NOT NULL")).scalars().all()
+    for known_plan in known_plans:
+        key = str(known_plan or "").strip().lower()
+        if key and key not in {plan_key for plan_key, _ in plans}: plans.append((key, key.replace("_", " ").title()))
+    return [{"plan_key": key, "plan_label": label, "can_create_agents": bool(saved[key].can_create_agents) if key in saved else False, "allowed_roles": _json_items(saved[key].allowed_roles, ["advogado"]) if key in saved else ["advogado"], "max_agents": saved[key].max_agents if key in saved else 0, "allowed_models": _json_items(saved[key].allowed_models, []) if key in saved else [], "allowed_menus": _json_items(saved[key].allowed_menus, ["/processos", "/documentos", "/prazos", "/atividades", "/financeiro", "/cobranca", "/usuarios", "/equipe", "/clientes", "/intimacoes", "/audiencias", "/integracao-orgaos", "/ia", "/analise-documentos", "/meus-agents", "/configuracoes/ia"]) if key in saved else ["/processos", "/documentos", "/prazos", "/atividades", "/financeiro", "/cobranca", "/usuarios", "/equipe", "/clientes", "/intimacoes", "/audiencias", "/integracao-orgaos", "/ia", "/analise-documentos", "/meus-agents", "/configuracoes/ia"], "monthly_token_limit": saved[key].monthly_token_limit if key in saved else 0, "fallback_provider": saved[key].fallback_provider if key in saved else None, "fallback_model": saved[key].fallback_model if key in saved else None} for key, label in plans]
+
+
+@app.put("/k1/lex/ia/admin/politicas/{plan_key}")
+def save_ai_plan_policy(plan_key: str, body: AIPlanPolicyIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    if plan_key not in {"trial", "starter", "professional", "enterprise"}: raise HTTPException(400, "Plano invÃ¡lido.")
+    if body.max_agents < 0 or body.monthly_token_limit < 0: raise HTTPException(400, "Limites nÃ£o podem ser negativos.")
+    row = db.query(AIPlanPolicy).filter_by(tenant_id=tenant_id, plan_key=plan_key).first()
+    if not row:
+        row = AIPlanPolicy(tenant_id=tenant_id, plan_key=plan_key)
+        db.add(row)
+    for field in ("can_create_agents", "max_agents", "monthly_token_limit", "fallback_provider", "fallback_model"): setattr(row, field, getattr(body, field))
+    row.allowed_roles = json.dumps(body.allowed_roles)
+    row.allowed_models = json.dumps(body.allowed_models)
+    row.allowed_menus = json.dumps(body.allowed_menus)
+    db.commit()
+    return {"plan_key": plan_key, **body.model_dump()}
+
+
+class AIUserPolicyIn(BaseModel):
+    can_create_agents: Optional[bool] = None
+    max_agents: Optional[int] = None
+    allowed_models: Optional[list[str]] = None
+    allowed_menus: Optional[list[str]] = None
+    monthly_token_limit: Optional[int] = None
+
+
+@app.get("/k1/lex/ia/admin/usuarios/{user_id}")
+def get_ai_user_policy(user_id: str, db: Session = Depends(get_db), payload=Depends(require_admin)):
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    row = db.query(AIUserPolicy).filter_by(tenant_id=tenant_id, user_id=user_id).first()
+    if not row: return {"user_id": user_id, "can_create_agents": None, "max_agents": None, "monthly_token_limit": None, "allowed_models": None, "allowed_menus": None}
+    return {"user_id": user_id, "can_create_agents": row.can_create_agents, "max_agents": row.max_agents, "monthly_token_limit": row.monthly_token_limit, "allowed_models": _json_items(row.allowed_models, []) if row.allowed_models else None, "allowed_menus": _json_items(row.allowed_menus, []) if row.allowed_menus else None}
+
+@app.put("/k1/lex/ia/admin/usuarios/{user_id}")
+def save_ai_user_policy(user_id: str, body: AIUserPolicyIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    row = db.query(AIUserPolicy).filter_by(tenant_id=tenant_id, user_id=user_id).first()
+    if not row:
+        row = AIUserPolicy(tenant_id=tenant_id, user_id=user_id)
+        db.add(row)
+    values = body.model_dump(exclude_unset=True)
+    for field in ("allowed_models", "allowed_menus"):
+        if field in values and values[field] is not None: values[field] = json.dumps(values[field])
+    for field, value in values.items(): setattr(row, field, value)
+    db.commit()
+    return {"user_id": user_id, **values}
+
+
+@app.get("/k1/lex/agentes/meus")
+def list_my_agents(db: Session = Depends(get_db), payload=Depends(verify_token)):
+    user_id, tenant_id = _current_api_key_owner(payload)
+    _assert_ai_menu(db, payload, "/meus-agents")
+    return [{**_row(agent), "api_key": None, "configured": bool(db.query(UserApiKey).filter_by(user_id=user_id, tenant_id=tenant_id, provider=agent.provider, model=agent.modelo, is_active=True).first())} for agent in db.query(AgenteIA).filter_by(tenant_id=tenant_id, owner_user_id=user_id).order_by(AgenteIA.created_at.desc()).all()]
+
+
+@app.post("/k1/lex/agentes/meus", status_code=201)
+def create_my_agent(body: PersonalAgentIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    user_id, tenant_id = _current_api_key_owner(payload)
+    _assert_ai_menu(db, payload, "/meus-agents")
+    policy = _effective_ai_policy(db, payload)
+    if not policy["can_create_agents"]: raise HTTPException(403, "Seu plano nÃ£o permite criar agentes personalizados.")
+    count = db.query(AgenteIA).filter_by(tenant_id=tenant_id, owner_user_id=user_id).count()
+    if policy["max_agents"] > 0 and count >= policy["max_agents"]: raise HTTPException(403, "VocÃª atingiu o limite de agentes do seu plano.")
+    _validate_model_provider(body.provider, body.modelo)
+    if not _model_allowed(policy, body.provider, body.modelo): raise HTTPException(403, "O modelo nÃ£o estÃ¡ liberado no seu plano.")
+    if not db.query(UserApiKey).filter_by(tenant_id=tenant_id, user_id=user_id, provider=body.provider, model=body.modelo, is_active=True).first(): raise HTTPException(400, "Cadastre sua chave de IA para este provedor e modelo antes de criar o agente.")
+    agent = AgenteIA(tenant_id=tenant_id, owner_user_id=user_id, created_by=user_id, escritorio_id=payload.get("escritorio_id"), nome=body.nome, descricao=body.descricao, provider=body.provider, modelo=body.modelo, max_tokens=body.max_tokens, system_prompt=body.system_prompt, ativo=body.ativo, publico=False, api_key=None)
+    db.add(agent); db.commit(); db.refresh(agent)
+    return {**_row(agent), "api_key": None, "configured": True}
+
+
+@app.put("/k1/lex/agentes/meus/{agente_id}")
+def update_my_agent(agente_id: str, body: PersonalAgentIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    user_id, tenant_id = _current_api_key_owner(payload)
+    _assert_ai_menu(db, payload, "/meus-agents")
+    agent = db.query(AgenteIA).filter_by(id=agente_id, tenant_id=tenant_id, owner_user_id=user_id).first()
+    if not agent: raise HTTPException(404, "Agente nÃ£o encontrado.")
+    policy = _effective_ai_policy(db, payload)
+    _validate_model_provider(body.provider, body.modelo)
+    if not _model_allowed(policy, body.provider, body.modelo): raise HTTPException(403, "O modelo nÃ£o estÃ¡ liberado no seu plano.")
+    if not db.query(UserApiKey).filter_by(tenant_id=tenant_id, user_id=user_id, provider=body.provider, model=body.modelo, is_active=True).first(): raise HTTPException(400, "Cadastre sua chave de IA para este provedor e modelo antes de salvar.")
+    for field, value in body.model_dump().items(): setattr(agent, field, value)
+    agent.updated_at = datetime.utcnow(); db.commit(); db.refresh(agent)
+    return {**_row(agent), "api_key": None, "configured": True}
+
+
+@app.delete("/k1/lex/agentes/meus/{agente_id}", status_code=204)
+def delete_my_agent(agente_id: str, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    user_id, tenant_id = _current_api_key_owner(payload)
+    _assert_ai_menu(db, payload, "/meus-agents")
+    agent = db.query(AgenteIA).filter_by(id=agente_id, tenant_id=tenant_id, owner_user_id=user_id).first()
+    if not agent: raise HTTPException(404, "Agente nÃ£o encontrado.")
+    db.delete(agent); db.commit()
+
 @app.get("/k1/lex/agentes/{agente_id}")
 def buscar_agente(agente_id: str, db: Session = Depends(get_db), payload=Depends(verify_token)):
-    """Busca um agente específico"""
+    """Busca um agente especÃ­fico"""
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     agente = db.query(AgenteIA).filter(
         AgenteIA.id == agente_id,
@@ -944,9 +1182,9 @@ def buscar_agente(agente_id: str, db: Session = Depends(get_db), payload=Depends
     ).first()
     
     if not agente:
-        raise HTTPException(404, "Agente não encontrado")
+        raise HTTPException(404, "Agente nÃ£o encontrado")
     
-    # Se não for admin, só pode ver agentes públicos
+    # Se nÃ£o for admin, sÃ³ pode ver agentes pÃºblicos
     if payload.get("role") != "admin" and not agente.publico:
         raise HTTPException(403, "Acesso negado a este agente")
     
@@ -960,9 +1198,9 @@ def criar_agente(body: AgenteIACreate, db: Session = Depends(get_db), payload=De
     
     # Validar prefixo da API key
     if body.provider == "cerebras" and not body.api_key.startswith("csk-"):
-        raise HTTPException(400, "API key Cerebras deve começar com 'csk-'")
+        raise HTTPException(400, "API key Cerebras deve comeÃ§ar com 'csk-'")
     if body.provider == "groq" and not (body.api_key.startswith("gsk-") or body.api_key.startswith("gsk_")):
-        raise HTTPException(400, "API key Groq deve começar com 'gsk-' ou 'gsk_'")
+        raise HTTPException(400, "API key Groq deve comeÃ§ar com 'gsk-' ou 'gsk_'")
     
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     escritorio_id = payload.get("escritorio_id")
@@ -989,7 +1227,7 @@ def atualizar_agente(agente_id: str, body: AgenteIAUpdate, db: Session = Depends
     ).first()
     
     if not agente:
-        raise HTTPException(404, "Agente não encontrado")
+        raise HTTPException(404, "Agente nÃ£o encontrado")
     
     # Validar provider se fornecido
     update_data = body.model_dump(exclude_none=True)
@@ -999,9 +1237,9 @@ def atualizar_agente(agente_id: str, body: AgenteIAUpdate, db: Session = Depends
     if "api_key" in update_data:
         provider = update_data.get("provider", agente.provider)
         if provider == "cerebras" and not update_data["api_key"].startswith("csk-"):
-            raise HTTPException(400, "API key Cerebras deve começar com 'csk-'")
+            raise HTTPException(400, "API key Cerebras deve comeÃ§ar com 'csk-'")
         if provider == "groq" and not (update_data["api_key"].startswith("gsk-") or update_data["api_key"].startswith("gsk_")):
-            raise HTTPException(400, "API key Groq deve começar com 'gsk-' ou 'gsk_'")
+            raise HTTPException(400, "API key Groq deve comeÃ§ar com 'gsk-' ou 'gsk_'")
     
     # Atualizar campos
     for field, value in update_data.items():
@@ -1023,14 +1261,14 @@ def deletar_agente(agente_id: str, db: Session = Depends(get_db), payload=Depend
     ).first()
     
     if not agente:
-        raise HTTPException(404, "Agente não encontrado")
+        raise HTTPException(404, "Agente nÃ£o encontrado")
     
     db.delete(agente)
     db.commit()
     
     return None
 
-# ── Google Drive ──────────────────────────────────────────────────────────────
+# â”€â”€ Google Drive â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _get_drive_service(service_account_json: str):
     """Cria cliente Google Drive a partir de service account"""
@@ -1116,7 +1354,7 @@ def atualizar_drive_source(source_id: str, body: DriveSourceUpdate, db: Session 
     ).first()
     
     if not source:
-        raise HTTPException(404, "Source não encontrada")
+        raise HTTPException(404, "Source nÃ£o encontrada")
     
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(source, field, value)
@@ -1136,7 +1374,7 @@ def sincronizar_drive_source(source_id: str, db: Session = Depends(get_db), payl
     ).first()
     
     if not source:
-        raise HTTPException(404, "Source não encontrada")
+        raise HTTPException(404, "Source nÃ£o encontrada")
     
     service = _get_drive_service(source.service_account)
     arquivos = _buscar_arquivos_drive(service, source.pasta_id)
@@ -1181,7 +1419,7 @@ def listar_arquivos_indexados(source_id: str, db: Session = Depends(get_db), pay
 
 @app.get("/k1/lex/agentes/{agente_id}/drive-contexto")
 def obter_drive_contexto(agente_id: str, prompt: str = "", db: Session = Depends(get_db), payload=Depends(verify_token)):
-    """Obtém contexto do Drive para enriquecer prompt do agente (busca por palavras-chave)"""
+    """ObtÃ©m contexto do Drive para enriquecer prompt do agente (busca por palavras-chave)"""
     tenant_id = payload.get("tenant_id") or payload.get("sub")
     
     agente = db.query(AgenteIA).filter(
@@ -1190,7 +1428,7 @@ def obter_drive_contexto(agente_id: str, prompt: str = "", db: Session = Depends
     ).first()
     
     if not agente:
-        raise HTTPException(404, "Agente não encontrado")
+        raise HTTPException(404, "Agente nÃ£o encontrado")
     
     palavras_prompt = prompt.lower().split() if prompt else []
     sources = db.query(DriveSource).filter(
@@ -1228,3 +1466,6 @@ def obter_drive_contexto(agente_id: str, prompt: str = "", db: Session = Depends
         "total_encontrado": len(contexto_arquivos),
         "prompt_enriquecido": prompt_enriquecido
     }
+
+
+
