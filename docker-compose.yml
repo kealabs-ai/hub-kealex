@@ -1,8 +1,8 @@
-version: '3.8'
+﻿version: '3.8'
 
 services:
 
-  # ── HUBKEALEX ──────────────────────────────────────────────────────────
+  # â”€â”€ HUBKEALEX â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   hubkealex:
     build: .
     container_name: hubkealex
@@ -68,7 +68,7 @@ services:
       - kealabs-net
       - easypanel
 
-  # ── SVC-COBRANCAS ──────────────────────────────────────────────────────
+  # â”€â”€ SVC-COBRANCAS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   # Authentication and billing API
   kealex-svc-auth:
     build: ./svc-auth
@@ -268,6 +268,44 @@ services:
         condition: on-failure
     networks:
       - kealabs-net
+      - easypanel
+
+  kealex-svc-configuracoes:
+    build: ./svc-configuracoes
+    image: kealex/svc-configuracoes:latest
+    environment:
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY:-${KEALEX_JWT_SECRET}}
+      - KEALEX_DB_HOST=${KEALEX_DB_HOST}
+      - KEALEX_DB_PORT=${KEALEX_DB_PORT}
+      - KEALEX_DB_NAME=${KEALEX_DB_NAME}
+      - KEALEX_DB_USER=${KEALEX_DB_USER}
+      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
+      - KEALEX_PUBLIC_APP_URL=${KEALEX_PUBLIC_APP_URL:-}
+      - KEALEX_SUPPORT_EMAIL=${KEALEX_SUPPORT_EMAIL:-}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=easypanel"
+      - "traefik.http.routers.kealex-configuracoes-ia.rule=(Host(`${KEALEX_PUBLIC_API_HOST}`) || Host(`${KEALEX_PUBLIC_LEGACY_DOMAIN}`) || Host(`${KEALEX_PUBLIC_LEGACY_WWW_DOMAIN}`)) && (PathPrefix(`/k1/lex/ia`) || PathPrefix(`/k1/lex/agentes`) || PathPrefix(`/k1/lex/configuracoes/ia`))"
+      - "traefik.http.routers.kealex-configuracoes-ia.entrypoints=https"
+      - "traefik.http.routers.kealex-configuracoes-ia.tls=true"
+      - "traefik.http.routers.kealex-configuracoes-ia.priority=250"
+      - "traefik.http.routers.kealex-configuracoes-ia.middlewares=hubkealex-cors"
+      - "traefik.http.routers.kealex-configuracoes-ia.service=kealex-configuracoes-ia"
+      - "traefik.http.services.kealex-configuracoes-ia.loadbalancer.server.port=8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    networks:
+      - kealex-internal
       - easypanel
 
 networks:
