@@ -1,4 +1,4 @@
-version: '3.8'
+﻿version: '3.8'
 
 networks:
   easypanel:
@@ -248,7 +248,9 @@ services:
       - "traefik.http.routers.kealex-configuracoes-ia-keys.priority=130"
     networks:
       - easypanel
-      - kealex-internal
+      kealex-internal:
+        aliases:
+          - svc-configuracoes
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
@@ -399,10 +401,11 @@ services:
     image: kealex/api-gateway:latest
     depends_on:
       - kealex-svc-auth
+      - kealex-svc-configuracoes
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-gw.rule=(Host(`${KEALEX_PUBLIC_API_HOST}`) || Host(`${KEALEX_PUBLIC_ROOT_DOMAIN}`) || Host(`${KEALEX_PUBLIC_WWW_DOMAIN}`)) && (PathPrefix(`/v1/lex`) || PathPrefix(`/docs`))"
+      - "traefik.http.routers.kealex-gw.rule=(Host(`${KEALEX_PUBLIC_API_HOST}`) || Host(`${KEALEX_PUBLIC_ROOT_DOMAIN}`) || Host(`${KEALEX_PUBLIC_WWW_DOMAIN}`)) && (PathPrefix(`/v1/lex`) || PathPrefix(`/k1/lex`) || PathPrefix(`/docs`))"
       - "traefik.http.routers.kealex-gw.entrypoints=https"
       - "traefik.http.routers.kealex-gw.tls=true"
       - "traefik.http.routers.kealex-gw.priority=200"
@@ -416,3 +419,4 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+

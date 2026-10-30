@@ -11,6 +11,7 @@ from pydantic import BaseModel, EmailStr, Field
 import bcrypt
 from jose import jwt, JWTError
 from sqlalchemy import create_engine, Column, String, Boolean, Date, DateTime, Enum as SAEnum, Index, PrimaryKeyConstraint, Text, Integer, Numeric, ForeignKey, UniqueConstraint
+from sqlalchemy import text as sql_text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from cryptography.fernet import Fernet, InvalidToken
@@ -238,17 +239,52 @@ class AgenteIA(Base):
     __tablename__ = "agentes_ia"
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     tenant_id = Column(String(36), nullable=False)
+    owner_user_id = Column(String(36), nullable=True, index=True)
+    created_by = Column(String(36), nullable=True)
     escritorio_id = Column(String(36), nullable=True)
     nome = Column(String(255), nullable=False)
     descricao = Column(Text, nullable=True)
     provider = Column(String(50), nullable=False)
-    api_key = Column(Text, nullable=False)
+    api_key = Column(Text, nullable=True)
     modelo = Column(String(255), nullable=False)
     max_tokens = Column(Integer, nullable=False, default=8192)
     system_prompt = Column(Text, nullable=True)
     ativo = Column(Boolean, nullable=False, default=True)
     publico = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class AIPlanPolicy(Base):
+    __tablename__ = "ia_politicas_planos"
+    tenant_id = Column(String(36), primary_key=True)
+    plan_key = Column(String(40), primary_key=True)
+    can_create_agents = Column(Boolean, nullable=False, default=False)
+    allowed_roles = Column(Text, nullable=False, default='["advogado"]')
+    max_agents = Column(Integer, nullable=False, default=0)
+    allowed_models = Column(Text, nullable=False, default="[]")
+    allowed_menus = Column(Text, nullable=False, default="[]")
+    monthly_token_limit = Column(Integer, nullable=False, default=0)
+    fallback_provider = Column(String(50), nullable=True)
+    fallback_model = Column(String(190), nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class AIUserPolicy(Base):
+    __tablename__ = "ia_politicas_usuarios"
+    tenant_id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), primary_key=True)
+    can_create_agents = Column(Boolean, nullable=True)
+    max_agents = Column(Integer, nullable=True)
+    allowed_models = Column(Text, nullable=True)
+    allowed_menus = Column(Text, nullable=True)
+    monthly_token_limit = Column(Integer, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class AITokenUsage(Base):
+    __tablename__ = "ia_uso_tokens"
+    tenant_id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), primary_key=True)
+    period = Column(String(7), primary_key=True)
+    tokens_used = Column(Integer, nullable=False, default=0)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class Documento(Base):
