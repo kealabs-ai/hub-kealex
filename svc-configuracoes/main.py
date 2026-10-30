@@ -1,4 +1,4 @@
-﻿import os, uuid, json, base64, hashlib
+import os, re, uuid, json, base64, hashlib
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta
@@ -1082,7 +1082,15 @@ def list_ai_plan_policies(db: Session = Depends(get_db), payload=Depends(require
 @app.put("/k1/lex/ia/admin/politicas/{plan_key}")
 def save_ai_plan_policy(plan_key: str, body: AIPlanPolicyIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
-    if plan_key not in {"trial", "starter", "professional", "enterprise"}: raise HTTPException(400, "Plano invÃ¡lido.")
+    plan_key = plan_key.strip().lower()
+    if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,39}", plan_key):
+        raise HTTPException(400, "Identificador de plano invÃ¡lido.")
+    known_plan = db.execute(
+        sql_text("SELECT 1 FROM tenants WHERE LOWER(plano)=:plan_key LIMIT 1"),
+        {"plan_key": plan_key},
+    ).scalar()
+    if plan_key not in {"trial", "starter", "professional", "enterprise"} and not known_plan:
+        raise HTTPException(400, "Plano invÃ¡lido.")
     if body.max_agents < 0 or body.monthly_token_limit < 0: raise HTTPException(400, "Limites nÃ£o podem ser negativos.")
     row = db.query(AIPlanPolicy).filter_by(tenant_id=tenant_id, plan_key=plan_key).first()
     if not row:
@@ -1107,6 +1115,11 @@ class AIUserPolicyIn(BaseModel):
 @app.get("/k1/lex/ia/admin/usuarios/{user_id}")
 def get_ai_user_policy(user_id: str, db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_exists = db.execute(
+        sql_text("SELECT 1 FROM usuarios WHERE id=:user_id AND tenant_id=:tenant_id LIMIT 1"),
+        {"user_id": user_id, "tenant_id": tenant_id},
+    ).scalar()
+    if not user_exists: raise HTTPException(404, "UsuÃ¡rio nÃ£o encontrado neste tenant.")
     row = db.query(AIUserPolicy).filter_by(tenant_id=tenant_id, user_id=user_id).first()
     if not row: return {"user_id": user_id, "can_create_agents": None, "max_agents": None, "monthly_token_limit": None, "allowed_models": None, "allowed_menus": None}
     return {"user_id": user_id, "can_create_agents": row.can_create_agents, "max_agents": row.max_agents, "monthly_token_limit": row.monthly_token_limit, "allowed_models": _json_items(row.allowed_models, []) if row.allowed_models else None, "allowed_menus": _json_items(row.allowed_menus, []) if row.allowed_menus else None}
@@ -1114,6 +1127,13 @@ def get_ai_user_policy(user_id: str, db: Session = Depends(get_db), payload=Depe
 @app.put("/k1/lex/ia/admin/usuarios/{user_id}")
 def save_ai_user_policy(user_id: str, body: AIUserPolicyIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
     tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_exists = db.execute(
+        sql_text("SELECT 1 FROM usuarios WHERE id=:user_id AND tenant_id=:tenant_id LIMIT 1"),
+        {"user_id": user_id, "tenant_id": tenant_id},
+    ).scalar()
+    if not user_exists: raise HTTPException(404, "UsuÃ¡rio nÃ£o encontrado neste tenant.")
+    if any(value is not None and value < 0 for value in (body.max_agents, body.monthly_token_limit)):
+        raise HTTPException(400, "Limites nÃ£o podem ser negativos.")
     row = db.query(AIUserPolicy).filter_by(tenant_id=tenant_id, user_id=user_id).first()
     if not row:
         row = AIUserPolicy(tenant_id=tenant_id, user_id=user_id)
@@ -1466,6 +1486,5 @@ def obter_drive_contexto(agente_id: str, prompt: str = "", db: Session = Depends
         "total_encontrado": len(contexto_arquivos),
         "prompt_enriquecido": prompt_enriquecido
     }
-
 
 
