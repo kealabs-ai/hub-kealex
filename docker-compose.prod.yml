@@ -254,9 +254,7 @@ services:
       - "traefik.http.routers.kealex-ai.priority=250"
     networks:
       - easypanel
-      kealex-internal:
-        aliases:
-          - svc-configuracoes
+      - kealex-internal
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
