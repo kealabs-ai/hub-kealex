@@ -246,6 +246,12 @@ services:
       - "traefik.http.routers.kealex-configuracoes-ia-keys.service=kealex-configuracoes"
       - "traefik.http.routers.kealex-configuracoes-ia-keys.middlewares=kealex-cors"
       - "traefik.http.routers.kealex-configuracoes-ia-keys.priority=130"
+      - "traefik.http.routers.kealex-ai.rule=(Host(`${KEALEX_PUBLIC_API_HOST}`) || Host(`${KEALEX_PUBLIC_ROOT_DOMAIN}`) || Host(`${KEALEX_PUBLIC_WWW_DOMAIN}`)) && (PathPrefix(`/k1/lex/ia`) || PathPrefix(`/k1/lex/agentes`))"
+      - "traefik.http.routers.kealex-ai.entrypoints=https"
+      - "traefik.http.routers.kealex-ai.tls=true"
+      - "traefik.http.routers.kealex-ai.service=kealex-configuracoes"
+      - "traefik.http.routers.kealex-ai.middlewares=kealex-cors"
+      - "traefik.http.routers.kealex-ai.priority=250"
     networks:
       - easypanel
       kealex-internal:
