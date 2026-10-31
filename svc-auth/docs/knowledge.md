@@ -15,9 +15,12 @@ O serviço usa SQLAlchemy com MySQL/PyMySQL. O banco é compartilhado com os dem
 | `app/api/routes/user_routes.py` | Consulta da identidade autenticada. |
 | `app/api/routes/billing_routes.py` | Endpoints de assinatura, faturamento e webhook Asaas. |
 | `app/api/schemas/` | Schemas de entrada e resposta da API. |
+| `app/api/dependencies.py` | Dependências HTTP para autenticação e validação de acesso do tenant. |
 | `app/application/use_cases/` | Regras de acesso de tenant e concessão de período de assinatura. |
+| `app/domain/exceptions.py` | Exceções de domínio para acesso negado. |
 | `app/infrastructure/database/` | Sessões e modelos SQLAlchemy. |
 | `app/infrastructure/security/` | Hash de senha e JWT. |
+| `app/core/` | Configuração de ambiente e normalização. |
 | `main.py` | Compatibilidade com `uvicorn main:app` usado pelo Docker. |
 | `requirements.txt` | Dependências Python fixadas em versões específicas. |
 | `Dockerfile` | Imagem Python 3.12, instalação de dependências e inicialização via Uvicorn na porta 8000. |
@@ -67,7 +70,7 @@ Papéis declarados: `admin`, `escritorio`, `advogado`, `juridico` e `cliente`. N
 
 ## 6. API
 
-Prefixo funcional observado no código: `/k1/lex/auth`. Os nomes/formatos abaixo refletem as rotas definidas em `main.py`; consulte os schemas e funções do arquivo para os campos completos e obrigatórios.
+Prefixo funcional observado no código: `/k1/lex/auth`. Os nomes/formatos abaixo refletem as rotas em `app/api/routes/`; consulte os schemas em `app/api/schemas/` para os campos completos e obrigatórios.
 
 | Método e rota | Autenticação | Finalidade |
 |---|---|---|
@@ -94,7 +97,7 @@ FastAPI também publica documentação OpenAPI nos caminhos padrão (`/docs`, `/
 - Trial padrão: 7 dias (`TRIAL_DAYS`). Cadastro inicia trial imediatamente.
 - A criação do banco garante tenant inicial `kealex` e administrador padrão, se ausentes.
 - O guard de acesso permite plano `trial` enquanto não expirado e planos `starter`, `professional` ou `enterprise` quando `subscription_status == active` e não expirados.
-- `_grant_subscription_period` evita conceder período repetido para o mesmo `payment_id`; ciclo trimestral concede 90 dias, os demais ciclos considerados concedem 30.
+- `grant_subscription_period` evita conceder período repetido para o mesmo `payment_id`; ciclo trimestral concede 90 dias, os demais ciclos considerados concedem 30.
 - Webhook exige header `asaas-access-token`, registra o ID do evento e ignora duplicatas. `PAYMENT_CONFIRMED`/`PAYMENT_RECEIVED` concedem período; `PAYMENT_OVERDUE` marca `past_due` e desativa tenant; `SUBSCRIPTION_DELETED` marca `canceled` e desativa tenant.
 - O webhook registra eventos válidos sem assinatura associada como ignorados, evitando reprocessamento do mesmo evento.
 
@@ -125,8 +128,27 @@ FastAPI/Uvicorn (API), Pydantic EmailStr (validação), SQLAlchemy e PyMySQL (pe
 
 ## 11. Referências internas
 
-- Implementação: [`main.py`](main.py)
-- Dependências: [`requirements.txt`](requirements.txt)
-- Container: [`Dockerfile`](Dockerfile)
-- Seed de desenvolvimento: [`seed_users.py`](seed_users.py)
-- Gateway: [`../api-gateway/nginx.conf`](../api-gateway/nginx.conf)
+- Implementação: [`../app/main.py`](../app/main.py)
+- Dependências: [`../requirements.txt`](../requirements.txt)
+- Container: [`../Dockerfile`](../Dockerfile)
+- Seed de desenvolvimento: [`../scripts/seed_users.py`](../scripts/seed_users.py)
+- Gateway: [`../../api-gateway/nginx.conf`](../../api-gateway/nginx.conf)
+
+## 12. Testes locais e build Docker
+
+Use Python 3.12 no ambiente local, alinhado ao `Dockerfile` e às versões fixadas das dependências. No PowerShell, a partir da raiz de `svc-auth`:
+
+```powershell
+py -3.12 -m venv .venv312
+.\.venv312\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python -m unittest discover -s tests/unit -v
+python -m unittest discover -s tests/integration -v
+```
+
+Para gerar a imagem Docker a partir da raiz de `svc-auth`:
+
+```powershell
+docker build -t svc-auth:teste .
+docker image ls svc-auth
+```
