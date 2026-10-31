@@ -1,4 +1,4 @@
-import os, uuid, enum, logging, base64, hashlib
+import os, re, uuid, enum, logging, base64, hashlib
 import urllib.error
 import urllib.request
 from datetime import date, datetime, timedelta
@@ -2146,6 +2146,251 @@ def chat_ia(body: IaChatIn, db: Session = Depends(get_db), payload=Depends(verif
         raise HTTPException(400, "Configure a chave API e o modelo da OpenAI.")
     content = _openai_response(api_key, model, system_prompt or "VocÃª Ã© um assistente jurÃ­dico especializado em direito brasileiro. Responda em portuguÃªs brasileiro.", messages, max_tokens, endpoint_url)
     return {"content": content}
+
+AI_DEFAULT_MENUS = [
+    "/processos", "/documentos", "/prazos", "/atividades", "/financeiro",
+    "/cobranca", "/usuarios", "/equipe", "/clientes", "/intimacoes",
+    "/audiencias", "/integracao-orgaos", "/ia", "/analise-documentos",
+    "/meus-agents", "/configuracoes/ia",
+]
+AI_DEFAULT_PLANS = [
+    ("trial", "Trial"),
+    ("starter", "Starter"),
+    ("professional", "Professional"),
+    ("enterprise", "Enterprise"),
+]
+
+
+def _ai_json_items(value, default):
+    if not value:
+        return list(default)
+    try:
+        parsed = json.loads(value)
+    except (TypeError, ValueError):
+        return list(default)
+    return parsed if isinstance(parsed, list) else list(default)
+
+
+def _ai_plan_key(db: Session, tenant_id: str) -> str:
+    value = db.execute(
+        sql_text("SELECT plano FROM tenants WHERE id=:tenant_id"),
+        {"tenant_id": tenant_id},
+    ).scalar()
+    return str(value or "trial").strip().lower()
+
+
+def _effective_ai_policy(db: Session, payload: dict) -> dict:
+    user_id, tenant_id = _current_api_key_owner(db, payload)
+    plan_key = _ai_plan_key(db, tenant_id)
+    plan = db.query(AIPlanPolicy).filter_by(tenant_id=tenant_id, plan_key=plan_key).first()
+    user = db.query(AIUserPolicy).filter_by(tenant_id=tenant_id, user_id=user_id).first()
+    allowed_roles = _ai_json_items(plan.allowed_roles, ["advogado"]) if plan else ["advogado"]
+    models = _ai_json_items(plan.allowed_models, []) if plan else []
+    menus = _ai_json_items(plan.allowed_menus, AI_DEFAULT_MENUS) if plan else list(AI_DEFAULT_MENUS)
+    if user and user.allowed_models is not None:
+        models = _ai_json_items(user.allowed_models, [])
+    if user and user.allowed_menus is not None:
+        menus = _ai_json_items(user.allowed_menus, [])
+
+    can_create_agents = bool(
+        plan
+        and plan.can_create_agents
+        and str(payload.get("role") or "") in allowed_roles
+    )
+    if user and user.can_create_agents is not None:
+        can_create_agents = bool(user.can_create_agents)
+
+    token_period = datetime.utcnow().strftime("%Y-%m")
+    usage = db.query(AITokenUsage).filter_by(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        period=token_period,
+    ).first()
+    return {
+        "plan_key": plan_key,
+        "can_create_agents": can_create_agents,
+        "allowed_roles": allowed_roles,
+        "max_agents": (
+            user.max_agents if user and user.max_agents is not None
+            else (plan.max_agents if plan else 0)
+        ) or 0,
+        "allowed_models": models,
+        "allowed_menus": menus,
+        "monthly_token_limit": (
+            user.monthly_token_limit
+            if user and user.monthly_token_limit is not None
+            else (plan.monthly_token_limit if plan else 0)
+        ) or 0,
+        "fallback_provider": plan.fallback_provider if plan else None,
+        "fallback_model": plan.fallback_model if plan else None,
+        "tokens_used": usage.tokens_used if usage else 0,
+    }
+
+
+def _assert_ai_menu(db: Session, payload: dict, path: str):
+    policy = _effective_ai_policy(db, payload)
+    if path not in policy["allowed_menus"]:
+        raise HTTPException(403, "Este recurso de IA não está liberado no plano do usuário.")
+
+
+class AIPlanPolicyIn(BaseModel):
+    can_create_agents: bool = False
+    allowed_roles: list[str] = Field(default_factory=lambda: ["advogado"])
+    max_agents: int = 0
+    allowed_models: list[str] = Field(default_factory=list)
+    allowed_menus: list[str] = Field(default_factory=list)
+    monthly_token_limit: int = 0
+    fallback_provider: Optional[str] = None
+    fallback_model: Optional[str] = None
+
+
+class AIUserPolicyIn(BaseModel):
+    can_create_agents: Optional[bool] = None
+    max_agents: Optional[int] = None
+    allowed_models: Optional[list[str]] = None
+    allowed_menus: Optional[list[str]] = None
+    monthly_token_limit: Optional[int] = None
+
+
+@app.get("/k1/lex/ia/politica")
+def get_effective_ai_policy(db: Session = Depends(get_db), payload=Depends(verify_token)):
+    return _effective_ai_policy(db, payload)
+
+
+@app.get("/k1/lex/ia/admin/politicas")
+def list_ai_plan_policies(db: Session = Depends(get_db), payload=Depends(_require_admin)):
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    saved = {
+        row.plan_key: row
+        for row in db.query(AIPlanPolicy).filter_by(tenant_id=tenant_id).all()
+    }
+    plans = list(AI_DEFAULT_PLANS)
+    known_plans = db.execute(
+        sql_text("SELECT DISTINCT plano FROM tenants WHERE plano IS NOT NULL")
+    ).scalars().all()
+    known_keys = {key for key, _label in plans}
+    for known_plan in known_plans:
+        key = str(known_plan or "").strip().lower()
+        if key and key not in known_keys:
+            plans.append((key, key.replace("_", " ").title()))
+            known_keys.add(key)
+
+    return [
+        {
+            "plan_key": key,
+            "plan_label": label,
+            "can_create_agents": bool(saved[key].can_create_agents) if key in saved else False,
+            "allowed_roles": _ai_json_items(saved[key].allowed_roles, ["advogado"]) if key in saved else ["advogado"],
+            "max_agents": saved[key].max_agents if key in saved else 0,
+            "allowed_models": _ai_json_items(saved[key].allowed_models, []) if key in saved else [],
+            "allowed_menus": _ai_json_items(saved[key].allowed_menus, AI_DEFAULT_MENUS) if key in saved else list(AI_DEFAULT_MENUS),
+            "monthly_token_limit": saved[key].monthly_token_limit if key in saved else 0,
+            "fallback_provider": saved[key].fallback_provider if key in saved else None,
+            "fallback_model": saved[key].fallback_model if key in saved else None,
+        }
+        for key, label in plans
+    ]
+
+
+@app.put("/k1/lex/ia/admin/politicas/{plan_key}")
+def save_ai_plan_policy(
+    plan_key: str,
+    body: AIPlanPolicyIn,
+    db: Session = Depends(get_db),
+    payload=Depends(_require_admin),
+):
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    plan_key = plan_key.strip().lower()
+    if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,39}", plan_key):
+        raise HTTPException(400, "Identificador de plano inválido.")
+    known_plan = db.execute(
+        sql_text("SELECT 1 FROM tenants WHERE LOWER(plano)=:plan_key LIMIT 1"),
+        {"plan_key": plan_key},
+    ).scalar()
+    if plan_key not in {key for key, _label in AI_DEFAULT_PLANS} and not known_plan:
+        raise HTTPException(400, "Plano inválido.")
+    if body.max_agents < 0 or body.monthly_token_limit < 0:
+        raise HTTPException(400, "Limites não podem ser negativos.")
+
+    row = db.query(AIPlanPolicy).filter_by(tenant_id=tenant_id, plan_key=plan_key).first()
+    if not row:
+        row = AIPlanPolicy(tenant_id=tenant_id, plan_key=plan_key)
+        db.add(row)
+    row.can_create_agents = body.can_create_agents
+    row.allowed_roles = json.dumps(body.allowed_roles)
+    row.max_agents = body.max_agents
+    row.allowed_models = json.dumps(body.allowed_models)
+    row.allowed_menus = json.dumps(body.allowed_menus)
+    row.monthly_token_limit = body.monthly_token_limit
+    row.fallback_provider = body.fallback_provider
+    row.fallback_model = body.fallback_model
+    db.commit()
+    return {"plan_key": plan_key, **body.model_dump()}
+
+
+@app.get("/k1/lex/ia/admin/usuarios/{user_id}")
+def get_ai_user_policy(
+    user_id: str,
+    db: Session = Depends(get_db),
+    payload=Depends(_require_admin),
+):
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_exists = db.execute(
+        sql_text("SELECT 1 FROM usuarios WHERE id=:user_id AND tenant_id=:tenant_id LIMIT 1"),
+        {"user_id": user_id, "tenant_id": tenant_id},
+    ).scalar()
+    if not user_exists:
+        raise HTTPException(404, "Usuário não encontrado neste tenant.")
+    row = db.query(AIUserPolicy).filter_by(tenant_id=tenant_id, user_id=user_id).first()
+    if not row:
+        return {
+            "user_id": user_id,
+            "can_create_agents": None,
+            "max_agents": None,
+            "monthly_token_limit": None,
+            "allowed_models": None,
+            "allowed_menus": None,
+        }
+    return {
+        "user_id": user_id,
+        "can_create_agents": row.can_create_agents,
+        "max_agents": row.max_agents,
+        "monthly_token_limit": row.monthly_token_limit,
+        "allowed_models": _ai_json_items(row.allowed_models, []) if row.allowed_models is not None else None,
+        "allowed_menus": _ai_json_items(row.allowed_menus, []) if row.allowed_menus is not None else None,
+    }
+
+
+@app.put("/k1/lex/ia/admin/usuarios/{user_id}")
+def save_ai_user_policy(
+    user_id: str,
+    body: AIUserPolicyIn,
+    db: Session = Depends(get_db),
+    payload=Depends(_require_admin),
+):
+    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    user_exists = db.execute(
+        sql_text("SELECT 1 FROM usuarios WHERE id=:user_id AND tenant_id=:tenant_id LIMIT 1"),
+        {"user_id": user_id, "tenant_id": tenant_id},
+    ).scalar()
+    if not user_exists:
+        raise HTTPException(404, "Usuário não encontrado neste tenant.")
+    if any(value is not None and value < 0 for value in (body.max_agents, body.monthly_token_limit)):
+        raise HTTPException(400, "Limites não podem ser negativos.")
+
+    row = db.query(AIUserPolicy).filter_by(tenant_id=tenant_id, user_id=user_id).first()
+    if not row:
+        row = AIUserPolicy(tenant_id=tenant_id, user_id=user_id)
+        db.add(row)
+    values = body.model_dump(exclude_unset=True)
+    for field in ("allowed_models", "allowed_menus"):
+        if field in values and values[field] is not None:
+            values[field] = json.dumps(values[field])
+    for field, value in values.items():
+        setattr(row, field, value)
+    db.commit()
+    return {"user_id": user_id, **body.model_dump()}
+
 
 # Agentes IA endpoints
 @app.get("/k1/lex/agentes")
