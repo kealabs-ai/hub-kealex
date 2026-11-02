@@ -1,4 +1,4 @@
-﻿version: '3.8'
+version: '3.8'
 
 networks:
   easypanel:
@@ -8,6 +8,22 @@ networks:
     internal: false
 
 services:
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${KEALEX_RABBITMQ_USER:-kealex}
+      RABBITMQ_DEFAULT_PASS: ${KEALEX_RABBITMQ_PASSWORD:?Configure KEALEX_RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+    networks:
+      - kealex-internal
+
   kealex-svc-auth:
     build: ./svc-auth
     image: kealex/svc-auth:latest
@@ -18,10 +34,17 @@ services:
       - KEALEX_DB_NAME=${KEALEX_DB_NAME}
       - KEALEX_DB_USER=${KEALEX_DB_USER}
       - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
+      - KEALEX_DB_POOL_SIZE=
+      - KEALEX_DB_MAX_OVERFLOW=
+      - KEALEX_DB_POOL_TIMEOUT=
       - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
       - KEALEX_ASAAS_API_KEY=${KEALEX_ASAAS_API_KEY:-}
       - KEALEX_ASAAS_BASE_URL=${KEALEX_ASAAS_BASE_URL}
       - KEALEX_ASAAS_WEBHOOK_TOKEN=${KEALEX_ASAAS_WEBHOOK_TOKEN:-}
+      - KEALEX_RABBITMQ_HOST=rabbitmq
+      - KEALEX_RABBITMQ_PORT=5672
+      - KEALEX_RABBITMQ_USER=${KEALEX_RABBITMQ_USER:-kealex}
+      - KEALEX_RABBITMQ_PASSWORD=${KEALEX_RABBITMQ_PASSWORD}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
@@ -47,6 +70,9 @@ services:
       - easypanel
       - kealex-internal
     restart: unless-stopped
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
       interval: 30s
@@ -64,6 +90,9 @@ services:
       - KEALEX_DB_NAME=${KEALEX_DB_NAME}
       - KEALEX_DB_USER=${KEALEX_DB_USER}
       - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
+      - KEALEX_DB_POOL_SIZE=
+      - KEALEX_DB_MAX_OVERFLOW=
+      - KEALEX_DB_POOL_TIMEOUT=
       - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
     labels:
       - "traefik.enable=true"
@@ -96,6 +125,9 @@ services:
       - KEALEX_DB_NAME=${KEALEX_DB_NAME}
       - KEALEX_DB_USER=${KEALEX_DB_USER}
       - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
+      - KEALEX_DB_POOL_SIZE=
+      - KEALEX_DB_MAX_OVERFLOW=
+      - KEALEX_DB_POOL_TIMEOUT=
       - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
     labels:
       - "traefik.enable=true"
@@ -129,6 +161,9 @@ services:
       - KEALEX_DB_NAME=${KEALEX_DB_NAME}
       - KEALEX_DB_USER=${KEALEX_DB_USER}
       - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
+      - KEALEX_DB_POOL_SIZE=
+      - KEALEX_DB_MAX_OVERFLOW=
+      - KEALEX_DB_POOL_TIMEOUT=
       - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
     labels:
       - "traefik.enable=true"
@@ -162,6 +197,9 @@ services:
       - KEALEX_DB_NAME=${KEALEX_DB_NAME}
       - KEALEX_DB_USER=${KEALEX_DB_USER}
       - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
+      - KEALEX_DB_POOL_SIZE=
+      - KEALEX_DB_MAX_OVERFLOW=
+      - KEALEX_DB_POOL_TIMEOUT=
       - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
     labels:
       - "traefik.enable=true"
@@ -195,6 +233,9 @@ services:
       - KEALEX_DB_NAME=${KEALEX_DB_NAME}
       - KEALEX_DB_USER=${KEALEX_DB_USER}
       - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
+      - KEALEX_DB_POOL_SIZE=
+      - KEALEX_DB_MAX_OVERFLOW=
+      - KEALEX_DB_POOL_TIMEOUT=
       - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
     labels:
       - "traefik.enable=true"
@@ -227,6 +268,9 @@ services:
       - KEALEX_DB_NAME=${KEALEX_DB_NAME}
       - KEALEX_DB_USER=${KEALEX_DB_USER}
       - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
+      - KEALEX_DB_POOL_SIZE=
+      - KEALEX_DB_MAX_OVERFLOW=
+      - KEALEX_DB_POOL_TIMEOUT=
       - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
       - KEALEX_PUBLIC_APP_URL=${KEALEX_PUBLIC_APP_URL}
       - KEALEX_SUPPORT_EMAIL=${KEALEX_SUPPORT_EMAIL}
@@ -273,6 +317,9 @@ services:
       - KEALEX_DB_NAME=${KEALEX_DB_NAME}
       - KEALEX_DB_USER=${KEALEX_DB_USER}
       - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
+      - KEALEX_DB_POOL_SIZE=
+      - KEALEX_DB_MAX_OVERFLOW=
+      - KEALEX_DB_POOL_TIMEOUT=
       - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
     labels:
       - "traefik.enable=true"
@@ -305,6 +352,9 @@ services:
       - KEALEX_DB_NAME=${KEALEX_DB_NAME}
       - KEALEX_DB_USER=${KEALEX_DB_USER}
       - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
+      - KEALEX_DB_POOL_SIZE=
+      - KEALEX_DB_MAX_OVERFLOW=
+      - KEALEX_DB_POOL_TIMEOUT=
       - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
     labels:
       - "traefik.enable=true"
@@ -338,6 +388,9 @@ services:
       - KEALEX_DB_NAME=${KEALEX_DB_NAME}
       - KEALEX_DB_USER=${KEALEX_DB_USER}
       - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
+      - KEALEX_DB_POOL_SIZE=
+      - KEALEX_DB_MAX_OVERFLOW=
+      - KEALEX_DB_POOL_TIMEOUT=
       - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
     labels:
       - "traefik.enable=true"
@@ -375,6 +428,9 @@ services:
       - KEALEX_DB_NAME=${KEALEX_DB_NAME}
       - KEALEX_DB_USER=${KEALEX_DB_USER}
       - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
+      - KEALEX_DB_POOL_SIZE=
+      - KEALEX_DB_MAX_OVERFLOW=
+      - KEALEX_DB_POOL_TIMEOUT=
       - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
       - KEALEX_ASAAS_API_KEY=${KEALEX_ASAAS_API_KEY:-}
       - KEALEX_ASAAS_BASE_URL=${KEALEX_ASAAS_BASE_URL:-https://api-sandbox.asaas.com/v3}
@@ -423,4 +479,35 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  svc-arquivos:
+    build: ./svc-arquivos
+    image: kealex/svc-arquivos:latest
+    environment:
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY:-${KEALEX_JWT_SECRET}}
+      - UPLOAD_DIR=/data/uploads
+      - MAX_UPLOAD_BYTES=${KEALEX_MAX_UPLOAD_BYTES:-104857600}
+    volumes:
+      - kealex-uploads:/data/uploads
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=easypanel"
+      - "traefik.http.routers.kealex-arquivos.rule=(Host(`${KEALEX_PUBLIC_API_HOST}`) || Host(`${KEALEX_PUBLIC_ROOT_DOMAIN}`) || Host(`${KEALEX_PUBLIC_WWW_DOMAIN}`)) && PathPrefix(`/v1/lex/arquivos`)"
+      - "traefik.http.routers.kealex-arquivos.entrypoints=https"
+      - "traefik.http.routers.kealex-arquivos.tls=true"
+      - "traefik.http.routers.kealex-arquivos.service=kealex-arquivos"
+      - "traefik.http.services.kealex-arquivos.loadbalancer.server.port=8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - kealex-internal
+      - easypanel
+
+volumes:
+  rabbitmq-data:
+  kealex-uploads:
 

@@ -21,7 +21,7 @@ router = APIRouter()
 @router.get("/k1/lex/agentes")
 def listar_agentes(db: Session = Depends(get_db), payload=Depends(_require_admin)):
     """Lista todos os agentes do tenant (apenas admin)"""
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     agentes = db.query(AgenteIA).filter(AgenteIA.tenant_id == tenant_id).order_by(AgenteIA.created_at.desc()).all()
     return [{**_row(a)} for a in agentes]
 
@@ -29,7 +29,7 @@ def listar_agentes(db: Session = Depends(get_db), payload=Depends(_require_admin
 @router.get("/k1/lex/agentes/publicos")
 def listar_agentes_publicos(db: Session = Depends(get_db), payload=Depends(verify_token)):
     """Lista agentes publicos e ativos (disponiveis para todos)"""
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     agentes = db.query(AgenteIA).filter(
         AgenteIA.tenant_id == tenant_id,
         AgenteIA.ativo == True,
@@ -47,7 +47,7 @@ def listar_agentes_publicos(db: Session = Depends(get_db), payload=Depends(verif
 @router.get("/k1/lex/agentes/{agente_id}")
 def buscar_agente_by_id(agente_id: str, db: Session = Depends(get_db), payload=Depends(verify_token)):
     """Busca um agente especifico por ID via GET"""
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     agente = db.query(AgenteIA).filter(
         AgenteIA.id == agente_id,
         AgenteIA.tenant_id == tenant_id
@@ -65,7 +65,7 @@ def buscar_agente_by_id(agente_id: str, db: Session = Depends(get_db), payload=D
 @router.put("/k1/lex/agentes/{agente_id}")
 def atualizar_agente_by_id(agente_id: str, body: AgenteIAUpdate, db: Session = Depends(get_db), payload=Depends(_require_admin)):
     """Atualiza um agente via PUT"""
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     agente = db.query(AgenteIA).filter(
         AgenteIA.id == agente_id,
         AgenteIA.tenant_id == tenant_id
@@ -99,7 +99,7 @@ def atualizar_agente_by_id(agente_id: str, body: AgenteIAUpdate, db: Session = D
 @router.delete("/k1/lex/agentes/{agente_id}")
 def deletar_agente_by_id(agente_id: str, db: Session = Depends(get_db), payload=Depends(_require_admin)):
     """Deleta um agente via DELETE"""
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     agente = db.query(AgenteIA).filter(
         AgenteIA.id == agente_id,
         AgenteIA.tenant_id == tenant_id
@@ -121,7 +121,7 @@ def buscar_agente(body: dict, db: Session = Depends(get_db), payload=Depends(ver
     if not agente_id:
         raise HTTPException(400, "ID do agente obrigatorio")
     
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     agente = db.query(AgenteIA).filter(
         AgenteIA.id == agente_id,
         AgenteIA.tenant_id == tenant_id
@@ -149,7 +149,7 @@ def criar_agente(body: AgenteIACreate, db: Session = Depends(get_db), payload=De
     if body.provider == "groq" and not (body.api_key.startswith("gsk-") or body.api_key.startswith("gsk_")):
         raise HTTPException(400, "API key Groq deve comecar com 'gsk-' ou 'gsk_'")
     
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     escritorio_id = payload.get("escritorio_id")
     
     novo_agente = AgenteIA(
@@ -172,7 +172,7 @@ def atualizar_agente(body: dict, db: Session = Depends(get_db), payload=Depends(
     if not agente_id:
         raise HTTPException(400, "ID do agente obrigatorio")
     
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     agente = db.query(AgenteIA).filter(
         AgenteIA.id == agente_id,
         AgenteIA.tenant_id == tenant_id
@@ -214,7 +214,7 @@ def deletar_agente(body: dict, db: Session = Depends(get_db), payload=Depends(_r
     if not agente_id:
         raise HTTPException(400, "ID do agente obrigatorio")
     
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     agente = db.query(AgenteIA).filter(
         AgenteIA.id == agente_id,
         AgenteIA.tenant_id == tenant_id

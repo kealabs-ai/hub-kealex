@@ -1,12 +1,20 @@
+import os
 from datetime import datetime, timedelta
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 from app.core.config import KEALEX_DATABASE_URL, TRIAL_DAYS
 from app.infrastructure.database.models.auth_models import Base, Tenant, Usuario, RoleEnum
 from app.infrastructure.security.bcrypt_hasher import hash_password
+from prometheus_client import Gauge
 
-engine = create_engine(KEALEX_DATABASE_URL, pool_pre_ping=True, pool_recycle=280, pool_size=5, max_overflow=10)
+engine = create_engine(KEALEX_DATABASE_URL, pool_pre_ping=True, pool_recycle=280,
+                       pool_size=int(os.getenv("KEALEX_DB_POOL_SIZE", "3")),
+                       max_overflow=int(os.getenv("KEALEX_DB_MAX_OVERFLOW", "2")),
+                       pool_timeout=int(os.getenv("KEALEX_DB_POOL_TIMEOUT", "10")))
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+DB_POOL_CHECKED_OUT = Gauge("kealex_auth_db_pool_checked_out", "Checked out SQLAlchemy connections in svc-auth")
+event.listen(engine.pool, "checkout", lambda *args: DB_POOL_CHECKED_OUT.inc())
+event.listen(engine.pool, "checkin", lambda *args: DB_POOL_CHECKED_OUT.dec())
 
 def get_db():
     db = SessionLocal()

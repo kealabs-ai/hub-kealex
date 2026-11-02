@@ -11,7 +11,7 @@ router = APIRouter()
 
 @router.get("/v1/lex/clientes")
 def list_clientes(db: Session = Depends(get_db), payload=Depends(client_access_guard)):
-    tid  = payload.get("tenant_id") or payload.get("sub")
+    tid  = payload.get("tenant_id")
     role = payload.get("role")
     uid  = payload.get("sub")
     q = db.query(Cliente).filter_by(tenant_id=tid)
@@ -22,7 +22,7 @@ def list_clientes(db: Session = Depends(get_db), payload=Depends(client_access_g
 
 @router.post("/v1/lex/clientes/get")
 def get_cliente(body: ClienteGetIn, db: Session = Depends(get_db), payload=Depends(client_access_guard)):
-    tid = payload.get("tenant_id") or payload.get("sub")
+    tid = payload.get("tenant_id")
     q = db.query(Cliente).filter_by(id=body.id, tenant_id=tid)
     if payload.get("role") == "advogado":
         q = q.filter_by(advogado_id=payload.get("sub"))
@@ -34,7 +34,7 @@ def get_cliente(body: ClienteGetIn, db: Session = Depends(get_db), payload=Depen
 
 @router.post("/v1/lex/clientes", status_code=201)
 def create_cliente(body: ClienteIn, db: Session = Depends(get_db), payload=Depends(client_access_guard)):
-    tid = payload.get("tenant_id") or payload.get("sub")
+    tid = payload.get("tenant_id")
     uid = payload.get("sub")
     if db.query(Cliente).filter_by(email=body.email, tenant_id=tid).first():
         raise HTTPException(409, "Email já cadastrado")
@@ -49,7 +49,7 @@ def create_cliente(body: ClienteIn, db: Session = Depends(get_db), payload=Depen
 
 @router.post("/v1/lex/clientes/update")
 def update_cliente(body: ClienteUpdate, db: Session = Depends(get_db), payload=Depends(client_access_guard)):
-    tid = payload.get("tenant_id") or payload.get("sub")
+    tid = payload.get("tenant_id")
     q = db.query(Cliente).filter_by(id=body.id, tenant_id=tid)
     if payload.get("role") == "advogado":
         q = q.filter_by(advogado_id=payload.get("sub"))
@@ -68,7 +68,7 @@ def update_cliente(body: ClienteUpdate, db: Session = Depends(get_db), payload=D
 
 @router.post("/v1/lex/clientes/delete")
 def delete_cliente(body: ClienteDeleteIn, db: Session = Depends(get_db), payload=Depends(client_access_guard)):
-    tid = payload.get("tenant_id") or payload.get("sub")
+    tid = payload.get("tenant_id")
     q = db.query(Cliente).filter_by(id=body.id, tenant_id=tid)
     if payload.get("role") == "advogado":
         q = q.filter_by(advogado_id=payload.get("sub"))

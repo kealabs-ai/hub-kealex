@@ -44,7 +44,7 @@ router = APIRouter()
 
 @router.get("/k1/lex/configuracoes/ia")
 def get_ia(db: Session = Depends(get_db), payload=Depends(_require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     active = _get_or_create_cfg_ia(db, tenant_id, user_id)
     provider_cfg = db.get(CfgIaProvider, (tenant_id, active.provider))
@@ -61,7 +61,7 @@ def get_modelos_disponiveis():
 
 @router.get("/k1/lex/configuracoes/ia/ativa")
 def get_ia_ativa(db: Session = Depends(get_db), payload=Depends(verify_token)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     active = _get_or_create_cfg_ia(db, tenant_id, user_id)
     provider_cfg = db.get(CfgIaProvider, (tenant_id, active.provider))
@@ -74,26 +74,26 @@ def get_ia_ativa(db: Session = Depends(get_db), payload=Depends(verify_token)):
 @router.post("/k1/lex/configuracoes/ia")
 def save_ia(body: IaIn, db: Session = Depends(get_db), payload=Depends(_require_admin)):
     data = body.model_dump(exclude_none=True)
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     current = db.get(CfgIa, tenant_id)
     if "provider" in data or "modelo" in data:
         _validate_model_provider(data.get("provider") or (current.provider if current else "cerebras"), data.get("modelo") or (current.modelo if current else IA_DEFAULT_MODELS["cerebras"]))
     if "api_key" in data and data["api_key"]:
-        tenant_id = payload.get("tenant_id") or payload.get("sub")
+        tenant_id = payload.get("tenant_id")
         existing = db.get(CfgIa, tenant_id)
         provider = data.get("provider") or (existing.provider if existing else "cerebras")
         if provider == "cerebras" and not data["api_key"].startswith("csk-"):
             raise HTTPException(400, "API key Cerebras deve comecar com 'csk-'")
         if provider == "groq" and not (data["api_key"].startswith("gsk-") or data["api_key"].startswith("gsk_")):
             raise HTTPException(400, "API key Groq deve comecar com 'gsk-' ou 'gsk_'")
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     return _row(_upsert_cfg_ia(db, tenant_id, user_id, data))
 
 
 @router.get("/k1/lex/configuracoes/ia/provedores")
 def get_ia_provedores(db: Session = Depends(get_db), payload=Depends(_require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     active = _get_or_create_cfg_ia(db, tenant_id, user_id)
     rows = db.query(CfgIaProvider).filter_by(tenant_id=tenant_id).all()
@@ -119,7 +119,7 @@ def get_ia_provedores(db: Session = Depends(get_db), payload=Depends(_require_ad
 def save_ia_provedor(provider: str, body: IaProviderIn, db: Session = Depends(get_db), payload=Depends(_require_admin)):
     if provider not in MODELOS_DISPONIVEIS:
         raise HTTPException(400, "Provider inválido")
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     data = body.model_dump(exclude_none=True)
     current = db.get(CfgIaProvider, (tenant_id, provider))
@@ -154,7 +154,7 @@ def save_ia_provedor(provider: str, body: IaProviderIn, db: Session = Depends(ge
 def set_ia_provedor_ativo(provider: str, db: Session = Depends(get_db), payload=Depends(_require_admin)):
     if provider not in MODELOS_DISPONIVEIS:
         raise HTTPException(400, "Provider inválido")
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     config = db.get(CfgIaProvider, (tenant_id, provider))
     if config is None or not config.api_key:
@@ -222,7 +222,7 @@ def get_effective_ai_policy(db: Session = Depends(get_db), payload=Depends(verif
 
 @router.get("/k1/lex/ia/admin/politicas")
 def list_ai_plan_policies(db: Session = Depends(get_db), payload=Depends(_require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     saved = {
         row.plan_key: row
         for row in db.query(AIPlanPolicy).filter_by(tenant_id=tenant_id).all()
@@ -262,7 +262,7 @@ def save_ai_plan_policy(
     db: Session = Depends(get_db),
     payload=Depends(_require_admin),
 ):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     plan_key = plan_key.strip().lower()
     if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,39}", plan_key):
         raise HTTPException(400, "Identificador de plano inválido.")
@@ -297,7 +297,7 @@ def get_ai_user_policy(
     db: Session = Depends(get_db),
     payload=Depends(_require_admin),
 ):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_exists = db.execute(
         sql_text("SELECT 1 FROM usuarios WHERE id=:user_id AND tenant_id=:tenant_id LIMIT 1"),
         {"user_id": user_id, "tenant_id": tenant_id},
@@ -331,7 +331,7 @@ def save_ai_user_policy(
     db: Session = Depends(get_db),
     payload=Depends(_require_admin),
 ):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_exists = db.execute(
         sql_text("SELECT 1 FROM usuarios WHERE id=:user_id AND tenant_id=:tenant_id LIMIT 1"),
         {"user_id": user_id, "tenant_id": tenant_id},

@@ -29,14 +29,14 @@ router = APIRouter()
 @router.get("/k1/lex/agentes")
 def listar_agentes(db: Session = Depends(get_db), payload=Depends(require_admin)):
     """Lista todos os agentes do tenant (apenas admin)"""
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     agentes = db.query(AgenteIA).filter(AgenteIA.tenant_id == tenant_id).order_by(AgenteIA.created_at.desc()).all()
     return [{**_row(a)} for a in agentes]
 
 @router.get("/k1/lex/agentes/publicos")
 def listar_agentes_publicos(db: Session = Depends(get_db), payload=Depends(verify_token)):
     """Lista agentes pÃºblicos e ativos (disponÃ­veis para todos)"""
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     agentes = db.query(AgenteIA).filter(
         AgenteIA.tenant_id == tenant_id,
         AgenteIA.ativo == True,
@@ -61,7 +61,7 @@ def get_effective_ai_policy(db: Session = Depends(get_db), payload=Depends(verif
 
 @router.get("/k1/lex/ia/admin/politicas")
 def list_ai_plan_policies(db: Session = Depends(get_db), payload=Depends(require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     saved = {row.plan_key: row for row in db.query(AIPlanPolicy).filter_by(tenant_id=tenant_id).all()}
     plans = [("trial", "Trial"), ("starter", "Starter"), ("professional", "Professional"), ("enterprise", "Enterprise")]
     known_plans = db.execute(sql_text("SELECT DISTINCT plano FROM tenants WHERE plano IS NOT NULL")).scalars().all()
@@ -73,7 +73,7 @@ def list_ai_plan_policies(db: Session = Depends(get_db), payload=Depends(require
 
 @router.put("/k1/lex/ia/admin/politicas/{plan_key}")
 def save_ai_plan_policy(plan_key: str, body: AIPlanPolicyIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     plan_key = plan_key.strip().lower()
     if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,39}", plan_key):
         raise HTTPException(400, "Identificador de plano invÃ¡lido.")
@@ -100,7 +100,7 @@ def save_ai_plan_policy(plan_key: str, body: AIPlanPolicyIn, db: Session = Depen
 
 @router.get("/k1/lex/ia/admin/usuarios/{user_id}")
 def get_ai_user_policy(user_id: str, db: Session = Depends(get_db), payload=Depends(require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_exists = db.execute(
         sql_text("SELECT 1 FROM usuarios WHERE id=:user_id AND tenant_id=:tenant_id LIMIT 1"),
         {"user_id": user_id, "tenant_id": tenant_id},
@@ -112,7 +112,7 @@ def get_ai_user_policy(user_id: str, db: Session = Depends(get_db), payload=Depe
 
 @router.put("/k1/lex/ia/admin/usuarios/{user_id}")
 def save_ai_user_policy(user_id: str, body: AIUserPolicyIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_exists = db.execute(
         sql_text("SELECT 1 FROM usuarios WHERE id=:user_id AND tenant_id=:tenant_id LIMIT 1"),
         {"user_id": user_id, "tenant_id": tenant_id},
@@ -181,7 +181,7 @@ def delete_my_agent(agente_id: str, db: Session = Depends(get_db), payload=Depen
 @router.get("/k1/lex/agentes/{agente_id}")
 def buscar_agente(agente_id: str, db: Session = Depends(get_db), payload=Depends(verify_token)):
     """Busca um agente especÃ­fico"""
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     agente = db.query(AgenteIA).filter(
         AgenteIA.id == agente_id,
         AgenteIA.tenant_id == tenant_id
@@ -208,7 +208,7 @@ def criar_agente(body: AgenteIACreate, db: Session = Depends(get_db), payload=De
     if body.provider == "groq" and not (body.api_key.startswith("gsk-") or body.api_key.startswith("gsk_")):
         raise HTTPException(400, "API key Groq deve comeÃ§ar com 'gsk-' ou 'gsk_'")
     
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     escritorio_id = payload.get("escritorio_id")
     
     novo_agente = AgenteIA(
@@ -226,7 +226,7 @@ def criar_agente(body: AgenteIACreate, db: Session = Depends(get_db), payload=De
 @router.put("/k1/lex/agentes/{agente_id}")
 def atualizar_agente(agente_id: str, body: AgenteIAUpdate, db: Session = Depends(get_db), payload=Depends(require_admin)):
     """Atualiza um agente existente (apenas admin)"""
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     agente = db.query(AgenteIA).filter(
         AgenteIA.id == agente_id,
         AgenteIA.tenant_id == tenant_id
@@ -260,7 +260,7 @@ def atualizar_agente(agente_id: str, body: AgenteIAUpdate, db: Session = Depends
 @router.delete("/k1/lex/agentes/{agente_id}", status_code=204)
 def deletar_agente(agente_id: str, db: Session = Depends(get_db), payload=Depends(require_admin)):
     """Deleta um agente (apenas admin)"""
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     agente = db.query(AgenteIA).filter(
         AgenteIA.id == agente_id,
         AgenteIA.tenant_id == tenant_id
