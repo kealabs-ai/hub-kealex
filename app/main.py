@@ -2,7 +2,7 @@ import os, re, uuid, enum, logging, base64, hashlib
 import urllib.error
 import urllib.request
 from datetime import date, datetime, timedelta
-from typing import Optional, List
+from typing import Optional, List, Literal
 from urllib.parse import quote_plus
 from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -334,6 +334,26 @@ class Audiencia(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
+class Intimacao(Base):
+    __tablename__ = "intimacoes"
+    __table_args__ = (
+        Index("ix_intimacoes_tenant_publicacao", "tenant_id", "data_publicacao"),
+    )
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id = Column(String(36), nullable=False, index=True)
+    user_id = Column(String(36), nullable=False)
+    processo_id = Column(String(36), nullable=True)
+    processo_numero = Column(String(50), nullable=True)
+    processo_titulo = Column(String(255), nullable=True)
+    diario = Column(String(255), nullable=False)
+    data_publicacao = Column(String(40), nullable=False)
+    conteudo = Column(Text, nullable=False)
+    resumo_ia = Column(Text, nullable=True)
+    prazo_calculado = Column(String(40), nullable=True)
+    status = Column(String(20), nullable=False, default="nova")
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
 class Fase(Base):
     __tablename__ = "fases"
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -598,6 +618,28 @@ class AudienciaIn(BaseModel):
 
 class AudienciaUpdateIn(AudienciaIn):
     id: str
+
+class IntimacaoIn(BaseModel):
+    processoId: Optional[str] = None
+    processoNumero: Optional[str] = Field(default=None, max_length=50)
+    processoTitulo: Optional[str] = Field(default=None, max_length=255)
+    diario: str = Field(min_length=1, max_length=255)
+    dataPublicacao: str = Field(min_length=1, max_length=40)
+    conteudo: str
+    resumoIA: Optional[str] = None
+    prazoCalculado: Optional[str] = Field(default=None, max_length=40)
+    status: Literal["nova", "lida", "respondida", "ignorada"] = "nova"
+
+class IntimacaoUpdateIn(BaseModel):
+    processoId: Optional[str] = None
+    processoNumero: Optional[str] = Field(default=None, max_length=50)
+    processoTitulo: Optional[str] = Field(default=None, max_length=255)
+    diario: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    dataPublicacao: Optional[str] = Field(default=None, min_length=1, max_length=40)
+    conteudo: Optional[str] = None
+    resumoIA: Optional[str] = None
+    prazoCalculado: Optional[str] = Field(default=None, max_length=40)
+    status: Optional[Literal["nova", "lida", "respondida", "ignorada"]] = None
 
 class IaIn(BaseModel):
     provider: Optional[str] = None
@@ -1696,6 +1738,97 @@ def prazos_vencendo(body: dict = None, db: Session = Depends(get_db), payload=De
         Prazo.status == "pendente"
     ).all()
     return [{"id": p.id, "titulo": p.titulo, "dataVencimento": p.data_vencimento, "diasRestantes": (date.fromisoformat(p.data_vencimento) - date.today()).days} for p in prazos]
+
+def _intimacao_to_dict(row: Intimacao) -> dict:
+    return {
+        "id": row.id,
+        "processoId": row.processo_id,
+        "processoNumero": row.processo_numero,
+        "processoTitulo": row.processo_titulo,
+        "diario": row.diario,
+        "dataPublicacao": row.data_publicacao,
+        "conteudo": row.conteudo,
+        "resumoIA": row.resumo_ia,
+        "prazoCalculado": row.prazo_calculado,
+        "status": row.status,
+        "createdAt": row.created_at.isoformat(),
+        "updatedAt": row.updated_at.isoformat(),
+    }
+
+@app.get("/intimacoes")
+@app.get("/k1/lex/intimacoes")
+def list_intimacoes(db: Session = Depends(get_db), payload=Depends(verify_token)):
+    rows = db.query(Intimacao).filter_by(
+        tenant_id=payload.get("tenant_id"),
+    ).order_by(Intimacao.data_publicacao.desc(), Intimacao.created_at.desc()).all()
+    return [_intimacao_to_dict(row) for row in rows]
+
+@app.post("/intimacoes", status_code=201)
+@app.post("/k1/lex/intimacoes", status_code=201)
+def create_intimacao(body: IntimacaoIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    data = body.model_dump()
+    row = Intimacao(
+        id=str(uuid.uuid4()),
+        tenant_id=payload.get("tenant_id"),
+        user_id=payload.get("sub"),
+        processo_id=data["processoId"],
+        processo_numero=data["processoNumero"],
+        processo_titulo=data["processoTitulo"],
+        diario=data["diario"].strip(),
+        data_publicacao=data["dataPublicacao"],
+        conteudo=data["conteudo"],
+        resumo_ia=data["resumoIA"],
+        prazo_calculado=data["prazoCalculado"],
+        status=data["status"],
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _intimacao_to_dict(row)
+
+@app.patch("/intimacoes/{intimacao_id}")
+@app.patch("/k1/lex/intimacoes/{intimacao_id}")
+def update_intimacao(intimacao_id: str, body: IntimacaoUpdateIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    row = db.query(Intimacao).filter_by(
+        id=intimacao_id,
+        tenant_id=payload.get("tenant_id"),
+    ).first()
+    if not row:
+        raise HTTPException(404, "Intimação não encontrada")
+    data = body.model_dump(exclude_unset=True)
+    if not data:
+        raise HTTPException(400, "Informe ao menos um campo para atualizar")
+    fields = {
+        "processoId": "processo_id",
+        "processoNumero": "processo_numero",
+        "processoTitulo": "processo_titulo",
+        "dataPublicacao": "data_publicacao",
+        "resumoIA": "resumo_ia",
+        "prazoCalculado": "prazo_calculado",
+    }
+    for name, value in data.items():
+        if name in {"diario", "dataPublicacao", "conteudo", "status"} and value is None:
+            raise HTTPException(400, f"O campo {name} não pode ser nulo")
+        if name == "diario":
+            value = value.strip()
+        setattr(row, fields.get(name, name), value)
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    return _intimacao_to_dict(row)
+
+@app.delete("/intimacoes/{intimacao_id}")
+@app.delete("/k1/lex/intimacoes/{intimacao_id}")
+def delete_intimacao(intimacao_id: str, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    row = db.query(Intimacao).filter_by(
+        id=intimacao_id,
+        tenant_id=payload.get("tenant_id"),
+    ).first()
+    if not row:
+        raise HTTPException(404, "Intimação não encontrada")
+    db.delete(row)
+    db.commit()
+    return {"ok": True}
 
 def _audiencia_to_dict(row: Audiencia) -> dict:
     return {
