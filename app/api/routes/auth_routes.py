@@ -1,3 +1,5 @@
+import httpx
+
 from fastapi import APIRouter
 
 from app.legacy_context import (
@@ -36,7 +38,6 @@ from app.legacy_context import (
     _verify_webhook_token,
     datetime,
     get_db,
-    httpx,
     jwt,
     logging,
     timedelta,
