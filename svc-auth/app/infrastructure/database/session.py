@@ -8,9 +8,9 @@ from app.infrastructure.security.bcrypt_hasher import hash_password
 from prometheus_client import Gauge
 
 engine = create_engine(KEALEX_DATABASE_URL, pool_pre_ping=True, pool_recycle=280,
-                       pool_size=int(os.getenv("KEALEX_DB_POOL_SIZE", "3")),
-                       max_overflow=int(os.getenv("KEALEX_DB_MAX_OVERFLOW", "2")),
-                       pool_timeout=int(os.getenv("KEALEX_DB_POOL_TIMEOUT", "10")))
+                       pool_size=int((os.getenv("KEALEX_DB_POOL_SIZE") or "3")),
+                       max_overflow=int((os.getenv("KEALEX_DB_MAX_OVERFLOW") or "2")),
+                       pool_timeout=int((os.getenv("KEALEX_DB_POOL_TIMEOUT") or "10")))
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 DB_POOL_CHECKED_OUT = Gauge("kealex_auth_db_pool_checked_out", "Checked out SQLAlchemy connections in svc-auth")
 event.listen(engine.pool, "checkout", lambda *args: DB_POOL_CHECKED_OUT.inc())
