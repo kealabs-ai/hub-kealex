@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_activity_owner
 from app.api.schemas.activity_schema import ActivityCreate, ActivityUpdate, ActivityColumnCreate, ActivityColumnUpdate, ActivityDelete, ActivityColumnDelete
 from app.application.use_cases.activity_support import ensure_activity_columns, activity_column_to_dict, activity_to_dict
-from app.infrastructure.database.models.activity_model import Activity, ActivityColumn
+from app.infrastructure.database.models.activity_model import Activity, ActivityColumn, ActivityStatusHistory
 from app.infrastructure.database.session import get_db
 from app.infrastructure.security.jwt_provider import verify_token
 
@@ -113,16 +113,27 @@ def create_activity(body: ActivityCreate, token: dict = Depends(verify_token), d
     title = body.title.strip()
     if not title:
         raise HTTPException(400, "O título da atividade é obrigatório")
+    now = datetime.utcnow()
     row = Activity(
         user_id=user_id,
         tenant_id=tenant_id,
         title=title,
         description=body.description.strip(),
         status=body.status,
+        status_entered_at=now,
         priority=body.priority,
         due_date=body.dueDate,
     )
     db.add(row)
+    db.flush()
+    db.add(ActivityStatusHistory(
+        activity_id=row.id,
+        user_id=user_id,
+        tenant_id=tenant_id,
+        from_status=None,
+        to_status=body.status,
+        moved_at=now,
+    ))
     db.commit()
     db.refresh(row)
     return activity_to_dict(row)
@@ -141,6 +152,7 @@ def update_activity(body: ActivityUpdate, token: dict = Depends(verify_token), d
     ).first()
     if not row:
         raise HTTPException(404, "Atividade não encontrada")
+    previous_status = row.status
     for api_name, value in body.model_dump(exclude_unset=True, exclude={"id"}).items():
         if api_name != "dueDate" and value is None:
             raise HTTPException(400, f"O campo {api_name} não pode ser nulo")
@@ -156,7 +168,18 @@ def update_activity(body: ActivityUpdate, token: dict = Depends(verify_token), d
         elif api_name == "description" and value is not None:
             value = value.strip()
         setattr(row, column, value)
-    row.updated_at = datetime.utcnow()
+    now = datetime.utcnow()
+    if row.status != previous_status:
+        row.status_entered_at = now
+        db.add(ActivityStatusHistory(
+            activity_id=row.id,
+            user_id=user_id,
+            tenant_id=tenant_id,
+            from_status=previous_status,
+            to_status=row.status,
+            moved_at=now,
+        ))
+    row.updated_at = now
     db.commit()
     db.refresh(row)
     return activity_to_dict(row)

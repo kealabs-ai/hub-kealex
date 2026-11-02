@@ -27,12 +27,13 @@ class ActivitySerializationTests(unittest.TestCase):
         now = datetime(2026, 10, 31, 12, 0, 0)
         activity = SimpleNamespace(
             id="activity-1", user_id="user-1", title="Revisar contrato",
-            description="", status="todo", priority="media", due_date=None,
+            description="", status="todo", status_entered_at=now, priority="media", due_date=None,
             created_at=now, updated_at=now,
         )
         result = activity_to_dict(activity)
         self.assertEqual(result["userId"], "user-1")
         self.assertEqual(result["dueDate"], None)
+        self.assertEqual(result["statusEnteredAt"], "2026-10-31T12:00:00Z")
         self.assertIn("createdAt", result)
         self.assertNotIn("user_id", result)
 

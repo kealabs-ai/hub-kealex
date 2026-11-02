@@ -20,10 +20,26 @@ class Activity(Base):
     title = Column(String(180), nullable=False)
     description = Column(Text, nullable=False, default="")
     status = Column(String(36), nullable=False, default="todo")
+    status_entered_at = Column(DateTime, nullable=True)
     priority = Column(String(20), nullable=False, default="media")
     due_date = Column(Date, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class ActivityStatusHistory(Base):
+    __tablename__ = "activity_status_history"
+    __table_args__ = (
+        Index("ix_activity_status_history_activity_moved_at", "tenant_id", "user_id", "activity_id", "moved_at"),
+    )
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    # Keep movement metrics after an activity is deleted.
+    activity_id = Column(String(36), nullable=False)
+    user_id = Column(String(36), nullable=False)
+    tenant_id = Column(String(36), nullable=False)
+    from_status = Column(String(36), nullable=True)
+    to_status = Column(String(36), nullable=False)
+    moved_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 class ActivityColumn(Base):
     __tablename__ = "activity_columns"
