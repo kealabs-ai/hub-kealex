@@ -38,7 +38,7 @@ def require_lawyer(payload=Depends(_guard)):
 
 def _owner(payload):
     user_id = payload.get("sub")
-    tenant_id = payload.get("tenant_id") or user_id
+    tenant_id = payload.get("tenant_id")
     if not user_id or not tenant_id:
         raise HTTPException(401, "Sessão inválida.")
     return str(tenant_id), str(user_id)

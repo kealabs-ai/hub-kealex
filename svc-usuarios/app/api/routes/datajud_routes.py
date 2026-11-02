@@ -17,7 +17,7 @@ def consultar_processo_datajud(
     payload=Depends(base_guard),
 ):
     user_id = payload.get("sub")
-    tenant_id = payload.get("tenant_id") or user_id
+    tenant_id = payload.get("tenant_id")
     user = db.query(Usuario.id).filter_by(id=user_id, tenant_id=tenant_id).first()
     if not user:
         raise HTTPException(404, "Usuário não encontrado")

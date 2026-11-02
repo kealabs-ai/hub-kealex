@@ -15,7 +15,7 @@ router = APIRouter()
 
 @router.get("/v1/lex/escritorios")
 def list_escritorios(db: Session = Depends(get_db), payload=Depends(verify_token)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     query = db.query(Escritorio).filter_by(tenant_id=tenant_id)
     if payload.get("role") == "escritorio":
         query = query.filter_by(id=payload.get("escritorio_id"))
@@ -29,7 +29,7 @@ def list_escritorios(db: Session = Depends(get_db), payload=Depends(verify_token
 
 @router.post("/v1/lex/escritorios/get")
 def get_escritorio(body: EscritorioGetIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     role = payload.get("role")
     if role == "advogado":
         membership = db.execute(
@@ -52,7 +52,7 @@ def get_escritorio(body: EscritorioGetIn, db: Session = Depends(get_db), payload
 
 @router.post("/v1/lex/escritorios/criar-acesso", status_code=201)
 def create_escritorio_access(body: CriarAcessoIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     if len(body.senhaInicial) < 6:
         raise HTTPException(400, "A senha inicial precisa ter pelo menos 6 caracteres")
     office = db.query(Escritorio).filter_by(id=body.escritorioId, tenant_id=tenant_id).first()
@@ -75,7 +75,7 @@ def create_escritorio_access(body: CriarAcessoIn, db: Session = Depends(get_db),
 
 @router.post("/v1/lex/escritorios", status_code=201)
 def create_escritorio(body: EscritorioIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     if payload.get("role") == "admin":
         if not body.emailAcesso or not body.senhaInicial:
             raise HTTPException(400, "Informe o e-mail e a senha inicial da conta do escritÃ³rio")
@@ -126,7 +126,7 @@ def create_escritorio(body: EscritorioIn, db: Session = Depends(get_db), payload
 
 @router.post("/v1/lex/escritorios/update")
 def update_escritorio(body: EscritorioUpdate, db: Session = Depends(get_db), payload=Depends(require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     e = db.query(Escritorio).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not e:
         raise HTTPException(404, "Não encontrado")
@@ -146,7 +146,7 @@ def update_escritorio(body: EscritorioUpdate, db: Session = Depends(get_db), pay
 
 @router.post("/v1/lex/escritorios/delete")
 def delete_escritorio(body: EscritorioDeleteIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     e = db.query(Escritorio).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not e:
         raise HTTPException(404, "Não encontrado")
@@ -156,7 +156,7 @@ def delete_escritorio(body: EscritorioDeleteIn, db: Session = Depends(get_db), p
 @router.post("/v1/lex/escritorios/associar-membro")
 def associar_membro(body: MembroIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
     """Associa ou desassocia um usuário a um escritório, respeitando a quota."""
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user = db.execute(
         text("SELECT id, escritorio_id, ativo FROM usuarios WHERE id = :uid AND tenant_id = :tid"),
         {"uid": body.usuarioId, "tid": tenant_id},
@@ -193,7 +193,7 @@ def associar_membro(body: MembroIn, db: Session = Depends(get_db), payload=Depen
 def associar_por_codigo(body: AssociarCodigoIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
     if payload.get("role") != "advogado":
         raise HTTPException(403, "Somente advogados autônomos podem usar um código de associação")
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     usuario_id = payload.get("sub")
     codigo = body.codigo.strip().upper()
     if not codigo or len(codigo) > 16:

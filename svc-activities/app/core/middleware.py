@@ -1,7 +1,5 @@
-import json
-
 class ActivityConsoleLogMiddleware:
-    """Registra o JSON recebido e a resposta das rotas de activities no stdout."""
+    """Registra somente metadados HTTP, sem copiar conteúdo sensível."""
 
     _ACTIVITY_PREFIXES = (
         "/activities",
@@ -23,52 +21,20 @@ class ActivityConsoleLogMiddleware:
             await self.application(scope, receive, send)
             return
 
-        request_messages = []
-        request_body = bytearray()
-        while True:
-            message = await receive()
-            request_messages.append(message)
-            if message["type"] == "http.request":
-                request_body.extend(message.get("body", b""))
-                if not message.get("more_body", False):
-                    break
-            elif message["type"] == "http.disconnect":
-                break
-
-        async def replay_receive():
-            if request_messages:
-                return request_messages.pop(0)
-            return await receive()
-
         response_status = None
-        response_body = bytearray()
 
         async def capture_send(message):
             nonlocal response_status
             if message["type"] == "http.response.start":
                 response_status = message["status"]
-            elif message["type"] == "http.response.body":
-                response_body.extend(message.get("body", b""))
             await send(message)
 
-        def _display_json(raw: bytes):
-            if not raw:
-                return "<empty>"
-            try:
-                return json.dumps(json.loads(raw), ensure_ascii=False, default=str)
-            except (json.JSONDecodeError, UnicodeDecodeError):
-                return raw.decode("utf-8", errors="replace")
-
         method = scope.get("method", "")
-        query = scope.get("query_string", b"").decode("latin-1")
-        url = path + (f"?{query}" if query else "")
-        print(f"[svc-activities][request] {method} {url} json={_display_json(bytes(request_body))}", flush=True)
+        url = path
+        print(f"[svc-activities][request] {method} {url}", flush=True)
         try:
-            await self.application(scope, replay_receive, capture_send)
+            await self.application(scope, receive, capture_send)
         except Exception as exc:
-            print(f"[svc-activities][error] {method} {url} {type(exc).__name__}: {exc}", flush=True)
+            print(f"[svc-activities][error] {method} {url} {type(exc).__name__}", flush=True)
             raise
-        print(
-            f"[svc-activities][response] {method} {url} status={response_status} body={_display_json(bytes(response_body))}",
-            flush=True,
-        )
+        print(f"[svc-activities][response] {method} {url} status={response_status}", flush=True)

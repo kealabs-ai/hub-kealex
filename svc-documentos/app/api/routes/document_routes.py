@@ -11,12 +11,12 @@ router = APIRouter()
 
 @router.get("/v1/lex/documentos")
 def list_docs(db: Session = Depends(get_db), payload=Depends(auth_guard)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     return [_to_dict(d) for d in db.query(Documento).filter_by(tenant_id=tenant_id).all()]
 
 @router.post("/v1/lex/documentos/get")
 def get_doc(body: DocumentoGetIn, db: Session = Depends(get_db), payload=Depends(auth_guard)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     d = db.query(Documento).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not d:
         raise HTTPException(404, "Não encontrado")
@@ -24,13 +24,13 @@ def get_doc(body: DocumentoGetIn, db: Session = Depends(get_db), payload=Depends
 
 @router.post("/v1/lex/documentos/by-processo")
 def by_processo(body: DocumentoByProcessoIn, db: Session = Depends(get_db), payload=Depends(auth_guard)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     return [_to_dict(d) for d in db.query(Documento).filter_by(
         tenant_id=tenant_id, processo_id=body.processoId).all()]
 
 @router.post("/v1/lex/documentos", status_code=201)
 def create_doc(body: DocumentoIn, db: Session = Depends(get_db), payload=Depends(auth_guard)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     processo = db.execute(
         text("SELECT id, escritorio_id FROM processos WHERE id = :pid AND tenant_id = :tid"),
         {"pid": body.processoId, "tid": tenant_id},
@@ -45,7 +45,7 @@ def create_doc(body: DocumentoIn, db: Session = Depends(get_db), payload=Depends
 
 @router.post("/v1/lex/documentos/update")
 def update_doc(body: DocumentoUpdate, db: Session = Depends(get_db), payload=Depends(auth_guard)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     d = db.query(Documento).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not d:
         raise HTTPException(404, "Não encontrado")
@@ -60,7 +60,7 @@ def update_doc(body: DocumentoUpdate, db: Session = Depends(get_db), payload=Dep
 
 @router.post("/v1/lex/documentos/delete")
 def delete_doc(body: DocumentoDeleteIn, db: Session = Depends(get_db), payload=Depends(auth_guard)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     d = db.query(Documento).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not d:
         raise HTTPException(404, "Não encontrado")

@@ -13,7 +13,7 @@ router = APIRouter()
 @router.get("/v1/lex/usuarios/me/chaves-publicas")
 def list_my_public_keys(db: Session = Depends(get_db), payload=Depends(base_guard)):
     user_id = payload.get("sub")
-    tenant_id = payload.get("tenant_id") or user_id
+    tenant_id = payload.get("tenant_id")
     user = db.query(Usuario.id).filter_by(id=user_id, tenant_id=tenant_id).first()
     if not user:
         raise HTTPException(404, "UsuÃ¡rio nÃ£o encontrado")
@@ -25,7 +25,7 @@ def list_my_public_keys(db: Session = Depends(get_db), payload=Depends(base_guar
 @router.post("/v1/lex/usuarios/me/chaves-publicas")
 def save_my_public_key(body: ChavePublicaIn, db: Session = Depends(get_db), payload=Depends(base_guard)):
     user_id = payload.get("sub")
-    tenant_id = payload.get("tenant_id") or user_id
+    tenant_id = payload.get("tenant_id")
     user = db.query(Usuario.id).filter_by(id=user_id, tenant_id=tenant_id).first()
     if not user:
         raise HTTPException(404, "UsuÃ¡rio nÃ£o encontrado")
@@ -51,7 +51,7 @@ def save_my_public_key(body: ChavePublicaIn, db: Session = Depends(get_db), payl
 @router.post("/v1/lex/usuarios/me/chaves-publicas/{key_id}")
 def update_my_public_key(key_id: str, body: ChavePublicaIn, db: Session = Depends(get_db), payload=Depends(base_guard)):
     user_id = payload.get("sub")
-    tenant_id = payload.get("tenant_id") or user_id
+    tenant_id = payload.get("tenant_id")
     if not db.query(Usuario.id).filter_by(id=user_id, tenant_id=tenant_id).first():
         raise HTTPException(404, "UsuÃ¡rio nÃ£o encontrado")
 
@@ -83,7 +83,7 @@ def update_my_public_key(key_id: str, body: ChavePublicaIn, db: Session = Depend
 @router.delete("/v1/lex/usuarios/me/chaves-publicas/{key_id}")
 def delete_my_public_key(key_id: str, db: Session = Depends(get_db), payload=Depends(base_guard)):
     user_id = payload.get("sub")
-    tenant_id = payload.get("tenant_id") or user_id
+    tenant_id = payload.get("tenant_id")
     if not db.query(Usuario.id).filter_by(id=user_id, tenant_id=tenant_id).first():
         raise HTTPException(404, "UsuÃ¡rio nÃ£o encontrado")
     item = db.query(UsuarioChavePublica).filter_by(id=key_id, user_id=user_id).first()

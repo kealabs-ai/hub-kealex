@@ -19,7 +19,7 @@ router = APIRouter()
 
 @router.get("/k1/lex/configuracoes/database")
 def get_database(db: Session = Depends(get_db), payload=Depends(_require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     row = db.get(CfgDatabase, tenant_id)
     if not row:
@@ -32,7 +32,7 @@ def get_database(db: Session = Depends(get_db), payload=Depends(_require_admin))
 
 @router.post("/k1/lex/configuracoes/database")
 def save_database(body: dict, db: Session = Depends(get_db), payload=Depends(_require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     row = db.get(CfgDatabase, tenant_id)
     if not row:
@@ -49,7 +49,7 @@ def save_database(body: dict, db: Session = Depends(get_db), payload=Depends(_re
 
 @router.get("/k1/lex/configuracoes/cdn")
 def get_cdn(db: Session = Depends(get_db), payload=Depends(_require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     row = db.get(CfgCdn, tenant_id)
     if not row:
@@ -62,7 +62,7 @@ def get_cdn(db: Session = Depends(get_db), payload=Depends(_require_admin)):
 
 @router.post("/k1/lex/configuracoes/cdn")
 def save_cdn(body: dict, db: Session = Depends(get_db), payload=Depends(_require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     row = db.get(CfgCdn, tenant_id)
     if not row:
@@ -79,7 +79,7 @@ def save_cdn(body: dict, db: Session = Depends(get_db), payload=Depends(_require
 
 @router.get("/k1/lex/configuracoes/usuarios")
 def get_usuarios_cfg(db: Session = Depends(get_db), payload=Depends(_require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     row = db.get(CfgUsuarios, tenant_id)
     if not row:
@@ -92,7 +92,7 @@ def get_usuarios_cfg(db: Session = Depends(get_db), payload=Depends(_require_adm
 
 @router.post("/k1/lex/configuracoes/usuarios")
 def save_usuarios_cfg(body: dict, db: Session = Depends(get_db), payload=Depends(_require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     row = db.get(CfgUsuarios, tenant_id)
     if not row:
@@ -109,7 +109,7 @@ def save_usuarios_cfg(body: dict, db: Session = Depends(get_db), payload=Depends
 
 @router.get("/k1/lex/configuracoes/seguranca")
 def get_seguranca(db: Session = Depends(get_db), payload=Depends(_require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     row = db.get(CfgSeguranca, tenant_id)
     if not row:
@@ -122,7 +122,7 @@ def get_seguranca(db: Session = Depends(get_db), payload=Depends(_require_admin)
 
 @router.post("/k1/lex/configuracoes/seguranca")
 def save_seguranca(body: dict, db: Session = Depends(get_db), payload=Depends(_require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     row = db.get(CfgSeguranca, tenant_id)
     if not row:
@@ -139,7 +139,7 @@ def save_seguranca(body: dict, db: Session = Depends(get_db), payload=Depends(_r
 
 @router.get("/k1/lex/configuracoes/notificacoes")
 def get_notificacoes(db: Session = Depends(get_db), payload=Depends(_require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     row = db.get(CfgNotificacoes, tenant_id)
     if not row:
@@ -152,7 +152,7 @@ def get_notificacoes(db: Session = Depends(get_db), payload=Depends(_require_adm
 
 @router.post("/k1/lex/configuracoes/notificacoes")
 def save_notificacoes(body: dict, db: Session = Depends(get_db), payload=Depends(_require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     row = db.get(CfgNotificacoes, tenant_id)
     if not row:

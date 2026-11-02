@@ -12,18 +12,18 @@ router = APIRouter()
 
 @router.get("/v1/lex/financeiro")
 def list_honorarios(db: Session = Depends(get_db), payload=Depends(auth_guard)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     return [_to_dict(h) for h in db.query(Honorario).filter_by(tenant_id=tenant_id).all()]
 
 @router.get("/v1/lex/financeiro/dashboard")
 def dashboard(db: Session = Depends(get_db), payload=Depends(auth_guard)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     rows = db.query(Honorario).filter_by(tenant_id=tenant_id).all()
     return calculate_totals(rows)
 
 @router.post("/v1/lex/financeiro/get")
 def get_honorario(body: HonorarioGetIn, db: Session = Depends(get_db), payload=Depends(auth_guard)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     h = db.query(Honorario).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not h:
         raise HTTPException(404, "Não encontrado")
@@ -31,7 +31,7 @@ def get_honorario(body: HonorarioGetIn, db: Session = Depends(get_db), payload=D
 
 @router.post("/v1/lex/financeiro", status_code=201)
 def create_honorario(body: HonorarioIn, db: Session = Depends(get_db), payload=Depends(auth_guard)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     h = Honorario(tenant_id=tenant_id, user_id=payload["sub"], escritorio_id=body.escritorioId,
                   processo_id=body.processoId, cliente_id=body.clienteId, advogado_id=payload["sub"],
                   descricao=body.descricao, valor_centavos=body.valorCentavos,
@@ -41,7 +41,7 @@ def create_honorario(body: HonorarioIn, db: Session = Depends(get_db), payload=D
 
 @router.post("/v1/lex/financeiro/update")
 def update_honorario(body: HonorarioUpdate, db: Session = Depends(get_db), payload=Depends(auth_guard)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     h = db.query(Honorario).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not h:
         raise HTTPException(404, "Não encontrado")
@@ -55,7 +55,7 @@ def update_honorario(body: HonorarioUpdate, db: Session = Depends(get_db), paylo
 
 @router.post("/v1/lex/financeiro/delete")
 def delete_honorario(body: HonorarioDeleteIn, db: Session = Depends(get_db), payload=Depends(auth_guard)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     h = db.query(Honorario).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not h:
         raise HTTPException(404, "Não encontrado")

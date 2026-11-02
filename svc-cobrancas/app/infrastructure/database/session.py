@@ -1,3 +1,4 @@
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -7,8 +8,9 @@ engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
     pool_recycle=280,
-    pool_size=5,
-    max_overflow=10,
+    pool_size=int(os.getenv("KEALEX_DB_POOL_SIZE", "3")),
+    max_overflow=int(os.getenv("KEALEX_DB_MAX_OVERFLOW", "2")),
+    pool_timeout=int(os.getenv("KEALEX_DB_POOL_TIMEOUT", "10")),
 )
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 

@@ -66,7 +66,7 @@ def _buscar_arquivos_drive(service, pasta_id: str, tipos: list = None) -> list:
 @router.post("/k1/lex/drive-sources", status_code=201)
 def criar_drive_source(body: DriveSourceCreate, db: Session = Depends(get_db), payload=Depends(require_admin)):
     """Cria uma nova source de Drive (pasta)"""
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     
     _get_drive_service(body.service_account)
     
@@ -85,14 +85,14 @@ def criar_drive_source(body: DriveSourceCreate, db: Session = Depends(get_db), p
 @router.get("/k1/lex/drive-sources")
 def listar_drive_sources(db: Session = Depends(get_db), payload=Depends(require_admin)):
     """Lista todas as drive sources do tenant"""
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     sources = db.query(DriveSource).filter(DriveSource.tenant_id == tenant_id).all()
     return [{**_row(s)} for s in sources]
 
 @router.put("/k1/lex/drive-sources/{source_id}")
 def atualizar_drive_source(source_id: str, body: DriveSourceUpdate, db: Session = Depends(get_db), payload=Depends(require_admin)):
     """Atualiza uma drive source"""
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     source = db.query(DriveSource).filter(
         DriveSource.id == source_id,
         DriveSource.tenant_id == tenant_id
@@ -112,7 +112,7 @@ def atualizar_drive_source(source_id: str, body: DriveSourceUpdate, db: Session 
 @router.post("/k1/lex/drive-sources/{source_id}/sincronizar")
 def sincronizar_drive_source(source_id: str, db: Session = Depends(get_db), payload=Depends(require_admin)):
     """Sincroniza arquivos de uma drive source"""
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     source = db.query(DriveSource).filter(
         DriveSource.id == source_id,
         DriveSource.tenant_id == tenant_id
@@ -155,7 +155,7 @@ def sincronizar_drive_source(source_id: str, db: Session = Depends(get_db), payl
 @router.get("/k1/lex/drive-sources/{source_id}/arquivos")
 def listar_arquivos_indexados(source_id: str, db: Session = Depends(get_db), payload=Depends(verify_token)):
     """Lista arquivos indexados de uma source"""
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     arquivos = db.query(IndexacaoArquivos).filter(
         IndexacaoArquivos.source_id == source_id,
         IndexacaoArquivos.tenant_id == tenant_id
@@ -165,7 +165,7 @@ def listar_arquivos_indexados(source_id: str, db: Session = Depends(get_db), pay
 @router.get("/k1/lex/agentes/{agente_id}/drive-contexto")
 def obter_drive_contexto(agente_id: str, prompt: str = "", db: Session = Depends(get_db), payload=Depends(verify_token)):
     """ObtÃ©m contexto do Drive para enriquecer prompt do agente (busca por palavras-chave)"""
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     
     agente = db.query(AgenteIA).filter(
         AgenteIA.id == agente_id,

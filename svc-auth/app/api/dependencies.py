@@ -5,6 +5,7 @@ from app.infrastructure.database.models.auth_models import Tenant
 from app.infrastructure.database.session import get_db
 from app.infrastructure.security.jwt_provider import verify_token
 from app.application.use_cases.check_tenant_access import check_tenant_access, TenantAccessDenied
+from app.infrastructure.messaging.access_events import publish_access_event
 
 
 def require_active_trial(payload=Depends(verify_token), db: Session = Depends(get_db)):
@@ -14,5 +15,7 @@ def require_active_trial(payload=Depends(verify_token), db: Session = Depends(ge
     try:
         check_tenant_access(tenant, role)
     except TenantAccessDenied as error:
+        publish_access_event.delay(tenant_id=tenant_id, user_id=payload.get("sub"), decision="denied")
         raise HTTPException(403, str(error)) from error
+    publish_access_event.delay(tenant_id=tenant_id, user_id=payload.get("sub"), decision="allowed")
     return payload

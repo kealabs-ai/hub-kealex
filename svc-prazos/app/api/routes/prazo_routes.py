@@ -13,12 +13,12 @@ router = APIRouter()
 
 @router.get("/v1/lex/prazos")
 def list_prazos(db: Session = Depends(get_db), payload=Depends(auth_guard)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     return [_to_dict(p) for p in db.query(Prazo).filter_by(tenant_id=tenant_id).all()]
 
 @router.post("/v1/lex/prazos/get")
 def get_prazo(body: PrazoGetIn, db: Session = Depends(get_db), payload=Depends(auth_guard)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     p = db.query(Prazo).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not p:
         raise HTTPException(404, "Não encontrado")
@@ -26,7 +26,7 @@ def get_prazo(body: PrazoGetIn, db: Session = Depends(get_db), payload=Depends(a
 
 @router.post("/v1/lex/prazos/vencendo")
 def vencendo(body: PrazoVencendoIn, db: Session = Depends(get_db), payload=Depends(auth_guard)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     hoje, limite = due_date_window(body.dias)
     rows = db.query(Prazo).filter(
         Prazo.tenant_id == tenant_id,
@@ -38,13 +38,13 @@ def vencendo(body: PrazoVencendoIn, db: Session = Depends(get_db), payload=Depen
 
 @router.post("/v1/lex/prazos/by-processo")
 def by_processo(body: PrazoByProcessoIn, db: Session = Depends(get_db), payload=Depends(auth_guard)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     return [_to_dict(p) for p in db.query(Prazo).filter_by(
         tenant_id=tenant_id, processo_id=body.processoId).all()]
 
 @router.post("/v1/lex/prazos", status_code=201)
 def create_prazo(body: PrazoIn, db: Session = Depends(get_db), payload=Depends(auth_guard)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     processo = db.execute(
         text("SELECT id, advogado_id, escritorio_id FROM processos WHERE id = :pid AND tenant_id = :tid"),
         {"pid": body.processoId, "tid": tenant_id},
@@ -59,7 +59,7 @@ def create_prazo(body: PrazoIn, db: Session = Depends(get_db), payload=Depends(a
 
 @router.post("/v1/lex/prazos/update")
 def update_prazo(body: PrazoUpdate, db: Session = Depends(get_db), payload=Depends(auth_guard)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     p = db.query(Prazo).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not p:
         raise HTTPException(404, "Não encontrado")
@@ -74,7 +74,7 @@ def update_prazo(body: PrazoUpdate, db: Session = Depends(get_db), payload=Depen
 
 @router.post("/v1/lex/prazos/delete")
 def delete_prazo(body: PrazoDeleteIn, db: Session = Depends(get_db), payload=Depends(auth_guard)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     p = db.query(Prazo).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not p:
         raise HTTPException(404, "Não encontrado")

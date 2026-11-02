@@ -27,13 +27,13 @@ router = APIRouter()
 
 @router.get("/k1/lex/configuracoes/geral")
 def get_geral(db: Session = Depends(get_db), payload=Depends(require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     return _row(_get_or_create(db, CfgGeral, tenant_id, user_id))
 
 @router.post("/k1/lex/configuracoes/geral")
 def save_geral(body: GeralIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     return _row(_upsert(db, CfgGeral, tenant_id, user_id, body.model_dump(exclude_none=True)))
 
@@ -42,13 +42,13 @@ def save_geral(body: GeralIn, db: Session = Depends(get_db), payload=Depends(req
 
 @router.get("/k1/lex/configuracoes/cdn")
 def get_cdn(db: Session = Depends(get_db), payload=Depends(require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     return _row(_get_or_create(db, CfgCdn, tenant_id, user_id))
 
 @router.post("/k1/lex/configuracoes/cdn")
 def save_cdn(body: CdnIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     return _row(_upsert(db, CfgCdn, tenant_id, user_id, body.model_dump(exclude_none=True)))
 
@@ -70,13 +70,13 @@ def get_database_env(payload=Depends(require_admin)):
 
 @router.get("/k1/lex/configuracoes/database")
 def get_database(db: Session = Depends(get_db), payload=Depends(require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     return _row(_get_or_create(db, CfgDatabase, tenant_id, user_id))
 
 @router.post("/k1/lex/configuracoes/database")
 def save_database(body: DatabaseIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     return _row(_upsert(db, CfgDatabase, tenant_id, user_id, body.model_dump(exclude_none=True)))
 
@@ -149,7 +149,7 @@ def delete_my_ia_key(key_id: str, db: Session = Depends(get_db), payload=Depends
 
 @router.get("/k1/lex/configuracoes/ia")
 def get_ia(db: Session = Depends(get_db), payload=Depends(require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     active = _get_or_create(db, CfgIa, tenant_id, user_id)
     provider_cfg = db.get(CfgIaProvider, (tenant_id, active.provider))
@@ -168,7 +168,7 @@ def get_modelos_disponiveis():
 @router.get("/k1/lex/configuracoes/ia/ativa")
 def get_ia_ativa(db: Session = Depends(get_db), payload=Depends(verify_token)):
     """Retorna a configuraÃ§Ã£o de IA ativa para o tenant (nÃ£o requer admin)"""
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     active = _get_or_create(db, CfgIa, tenant_id, user_id)
     provider_cfg = db.get(CfgIaProvider, (tenant_id, active.provider))
@@ -181,7 +181,7 @@ def get_ia_ativa(db: Session = Depends(get_db), payload=Depends(verify_token)):
 def save_ia(body: IaIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
     data = body.model_dump(exclude_none=True)
     
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     current = db.get(CfgIa, tenant_id)
     if "provider" in data or "modelo" in data:
         _validate_model_provider(data.get("provider") or (current.provider if current else "cerebras"), data.get("modelo") or (current.modelo if current else IA_DEFAULT_MODELS["cerebras"]))
@@ -191,7 +191,7 @@ def save_ia(body: IaIn, db: Session = Depends(get_db), payload=Depends(require_a
     
     # Validar prefixo da API key
     if "api_key" in data and data["api_key"]:
-        tenant_id = payload.get("tenant_id") or payload.get("sub")
+        tenant_id = payload.get("tenant_id")
         existing = db.get(CfgIa, tenant_id)
         provider = data.get("provider") or (existing.provider if existing else "cerebras")
         if provider == "cerebras" and not data["api_key"].startswith("csk-"):
@@ -199,14 +199,14 @@ def save_ia(body: IaIn, db: Session = Depends(get_db), payload=Depends(require_a
         if provider == "groq" and not (data["api_key"].startswith("gsk-") or data["api_key"].startswith("gsk_")):
             raise HTTPException(400, "API key Groq deve comeÃ§ar com 'gsk-' ou 'gsk_'")
     
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     return _row(_upsert(db, CfgIa, tenant_id, user_id, data))
 
 
 @router.get("/k1/lex/configuracoes/ia/provedores")
 def get_ia_provedores(db: Session = Depends(get_db), payload=Depends(require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     active = _get_or_create(db, CfgIa, tenant_id, user_id)
     rows = db.query(CfgIaProvider).filter_by(tenant_id=tenant_id).all()
@@ -234,7 +234,7 @@ def get_ia_provedores(db: Session = Depends(get_db), payload=Depends(require_adm
 def save_ia_provedor(provider: str, body: IaProviderIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
     if provider not in MODELOS_DISPONIVEIS:
         raise HTTPException(400, "Provider invÃ¡lido")
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     data = body.model_dump(exclude_none=True)
     current = db.get(CfgIaProvider, (tenant_id, provider))
@@ -272,7 +272,7 @@ def save_ia_provedor(provider: str, body: IaProviderIn, db: Session = Depends(ge
 def set_ia_provedor_ativo(provider: str, db: Session = Depends(get_db), payload=Depends(require_admin)):
     if provider not in MODELOS_DISPONIVEIS:
         raise HTTPException(400, "Provider invÃ¡lido")
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     provider_cfg = db.get(CfgIaProvider, (tenant_id, provider))
     if provider_cfg is None or not provider_cfg.api_key:
@@ -420,13 +420,13 @@ def chat_ia(body: IaChatIn, db: Session = Depends(get_db), payload=Depends(verif
 
 @router.get("/k1/lex/configuracoes/usuarios")
 def get_usuarios(db: Session = Depends(get_db), payload=Depends(require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     return _row(_get_or_create(db, CfgUsuarios, tenant_id, user_id))
 
 @router.post("/k1/lex/configuracoes/usuarios")
 def save_usuarios(body: UsuariosIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     return _row(_upsert(db, CfgUsuarios, tenant_id, user_id, body.model_dump(exclude_none=True)))
 
@@ -435,13 +435,13 @@ def save_usuarios(body: UsuariosIn, db: Session = Depends(get_db), payload=Depen
 
 @router.get("/k1/lex/configuracoes/seguranca")
 def get_seguranca(db: Session = Depends(get_db), payload=Depends(require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     return _row(_get_or_create(db, CfgSeguranca, tenant_id, user_id))
 
 @router.post("/k1/lex/configuracoes/seguranca")
 def save_seguranca(body: SegurancaIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     return _row(_upsert(db, CfgSeguranca, tenant_id, user_id, body.model_dump(exclude_none=True)))
 
@@ -450,13 +450,13 @@ def save_seguranca(body: SegurancaIn, db: Session = Depends(get_db), payload=Dep
 
 @router.get("/k1/lex/configuracoes/notificacoes")
 def get_notificacoes(db: Session = Depends(get_db), payload=Depends(require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     return _row(_get_or_create(db, CfgNotificacoes, tenant_id, user_id))
 
 @router.post("/k1/lex/configuracoes/notificacoes")
 def save_notificacoes(body: NotificacoesIn, db: Session = Depends(get_db), payload=Depends(require_admin)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     user_id = payload.get("sub")
     return _row(_upsert(db, CfgNotificacoes, tenant_id, user_id, body.model_dump(exclude_none=True)))
 

@@ -26,7 +26,10 @@ if not KEALEX_DATABASE_URL:
     raise RuntimeError("KEALEX_DATABASE_URL precisa estar configurada no ambiente")
 
 _engine = create_engine(
-    KEALEX_DATABASE_URL, pool_pre_ping=True, pool_recycle=280, pool_size=3, max_overflow=5)
+    KEALEX_DATABASE_URL, pool_pre_ping=True, pool_recycle=280,
+    pool_size=int(os.getenv("KEALEX_DB_POOL_SIZE", "3")),
+    max_overflow=int(os.getenv("KEALEX_DB_MAX_OVERFLOW", "2")),
+    pool_timeout=int(os.getenv("KEALEX_DB_POOL_TIMEOUT", "10")))
 _SessionLocal = sessionmaker(bind=_engine, autocommit=False, autoflush=False)
 _bearer       = HTTPBearer()
 

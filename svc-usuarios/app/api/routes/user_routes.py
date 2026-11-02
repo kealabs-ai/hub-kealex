@@ -16,7 +16,7 @@ router = APIRouter()
 
 @router.get("/v1/lex/usuarios")
 def list_usuarios(db: Session = Depends(get_db), payload=Depends(team_guard)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     q = db.query(Usuario).filter_by(tenant_id=tenant_id)
     if payload.get("role") == "escritorio":
         q = q.filter_by(escritorio_id=payload.get("escritorio_id"), role=RoleEnum.advogado)
@@ -25,7 +25,7 @@ def list_usuarios(db: Session = Depends(get_db), payload=Depends(team_guard)):
 
 @router.post("/v1/lex/usuarios/list")
 def list_usuarios_filtered(body: UsuarioListIn, db: Session = Depends(get_db), payload=Depends(team_guard)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     q = db.query(Usuario).filter_by(tenant_id=tenant_id)
     if body.role:
         q = q.filter_by(role=body.role)
@@ -36,7 +36,7 @@ def list_usuarios_filtered(body: UsuarioListIn, db: Session = Depends(get_db), p
 
 @router.post("/v1/lex/usuarios/get")
 def get_usuario(body: UsuarioGetIn, db: Session = Depends(get_db), payload=Depends(team_guard)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     u = db.query(Usuario).filter_by(id=body.id, tenant_id=tenant_id).first()
     if payload.get("role") == "escritorio" and (u is None or u.escritorio_id != payload.get("escritorio_id") or u.role != RoleEnum.advogado):
         raise HTTPException(404, "NÃ£o encontrado")
@@ -47,7 +47,7 @@ def get_usuario(body: UsuarioGetIn, db: Session = Depends(get_db), payload=Depen
 
 @router.post("/v1/lex/usuarios", status_code=201)
 def create_usuario(body: UsuarioIn, db: Session = Depends(get_db), payload=Depends(team_guard)):
-    tid = payload.get("tenant_id") or payload.get("sub")
+    tid = payload.get("tenant_id")
     escritorio_id = body.escritorioId
     if payload.get("role") == "escritorio":
         escritorio_id = payload.get("escritorio_id")
@@ -75,7 +75,7 @@ def create_usuario(body: UsuarioIn, db: Session = Depends(get_db), payload=Depen
 
 @router.post("/v1/lex/usuarios/update")
 def update_usuario(body: UsuarioUpdate, db: Session = Depends(get_db), payload=Depends(team_guard)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     u = db.query(Usuario).filter_by(id=body.id, tenant_id=tenant_id).first()
     if payload.get("role") == "escritorio" and u and (u.escritorio_id != payload.get("escritorio_id") or u.role != RoleEnum.advogado):
         raise HTTPException(404, "UsuÃ¡rio nÃ£o encontrado")
@@ -117,7 +117,7 @@ def update_usuario(body: UsuarioUpdate, db: Session = Depends(get_db), payload=D
 
 @router.post("/v1/lex/usuarios/delete")
 def delete_usuario(body: UsuarioDeleteIn, db: Session = Depends(get_db), payload=Depends(admin_guard)):
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     u = db.query(Usuario).filter_by(id=body.id, tenant_id=tenant_id).first()
     if not u:
         raise HTTPException(404, "Não encontrado")
@@ -128,7 +128,7 @@ def delete_usuario(body: UsuarioDeleteIn, db: Session = Depends(get_db), payload
 @router.post("/v1/lex/usuarios/modalidade")
 def set_modalidade(body: ModalidadeIn, db: Session = Depends(get_db), payload=Depends(base_guard)):
     """Admin gerencia membros; advogado pode alterar apenas o próprio vínculo."""
-    tenant_id = payload.get("tenant_id") or payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     uid = body.usuarioId
     if payload.get("role") != "admin" and (payload.get("role") != "advogado" or uid != payload.get("sub")):
         raise HTTPException(403, "Você só pode alterar sua própria modalidade")
