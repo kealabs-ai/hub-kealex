@@ -33,6 +33,7 @@ def activity_to_dict(activity: Activity):
         "title": activity.title,
         "description": activity.description,
         "status": activity.status,
+        "statusEnteredAt": activity.status_entered_at.isoformat() + "Z" if activity.status_entered_at else None,
         "priority": activity.priority,
         "dueDate": activity.due_date.isoformat() if activity.due_date else None,
         "createdAt": activity.created_at.isoformat(),
