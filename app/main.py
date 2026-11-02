@@ -164,6 +164,18 @@ class Usuario(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class UsuarioChavePublica(Base):
+    __tablename__ = "usuarios_chaves_publicas"
+    __table_args__ = (
+        UniqueConstraint("user_id", "orgao", name="uq_usuario_chave_publica_orgao"),
+    )
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True)
+    orgao = Column(String(120), nullable=False)
+    chave_publica = Column(Text, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 class Cliente(Base):
     __tablename__ = "clientes"
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -1973,6 +1985,85 @@ class UserApiKeyUpdate(BaseModel):
     model: Optional[str] = None
     api_key: Optional[str] = None
     is_active: Optional[bool] = None
+
+class ChavePublicaIn(BaseModel):
+    orgao: str
+    chavePublica: str
+
+def _public_key_to_dict(row: UsuarioChavePublica) -> dict:
+    return {
+        "id": row.id,
+        "userId": row.user_id,
+        "orgao": row.orgao,
+        "chavePublica": row.chave_publica,
+        "createdAt": row.created_at.isoformat(),
+        "updatedAt": row.updated_at.isoformat(),
+    }
+
+def _validated_public_key(body: ChavePublicaIn) -> tuple[str, str]:
+    orgao = body.orgao.strip()
+    chave_publica = body.chavePublica.strip()
+    if not orgao or len(orgao) > 120:
+        raise HTTPException(422, "Informe um órgão válido (até 120 caracteres).")
+    if not chave_publica or len(chave_publica) > 10000:
+        raise HTTPException(422, "Informe uma chave pública válida (até 10.000 caracteres).")
+    return orgao, chave_publica
+
+@app.get("/v1/lex/usuarios/chaves-publicas")
+@app.get("/v1/lex/usuarios/me/chaves-publicas")
+def list_my_public_keys(db: Session = Depends(get_db), payload=Depends(verify_token)):
+    user_id, _ = _current_api_key_owner(db, payload)
+    rows = db.query(UsuarioChavePublica).filter_by(user_id=user_id).order_by(UsuarioChavePublica.orgao).all()
+    return [_public_key_to_dict(row) for row in rows]
+
+@app.post("/v1/lex/usuarios/chaves-publicas")
+@app.post("/v1/lex/usuarios/me/chaves-publicas")
+def save_my_public_key(body: ChavePublicaIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    user_id, _ = _current_api_key_owner(db, payload)
+    orgao, chave_publica = _validated_public_key(body)
+    row = db.query(UsuarioChavePublica).filter_by(user_id=user_id, orgao=orgao).with_for_update().first()
+    if row:
+        row.chave_publica = chave_publica
+        row.updated_at = datetime.utcnow()
+    else:
+        row = UsuarioChavePublica(user_id=user_id, orgao=orgao, chave_publica=chave_publica)
+        db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _public_key_to_dict(row)
+
+@app.post("/v1/lex/usuarios/chaves-publicas/{key_id}")
+@app.post("/v1/lex/usuarios/me/chaves-publicas/{key_id}")
+def update_my_public_key(key_id: str, body: ChavePublicaIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    user_id, _ = _current_api_key_owner(db, payload)
+    row = db.query(UsuarioChavePublica).filter_by(id=key_id, user_id=user_id).first()
+    if not row:
+        raise HTTPException(404, "Chave pública não encontrada")
+    orgao, chave_publica = _validated_public_key(body)
+    duplicate = db.query(UsuarioChavePublica.id).filter(
+        UsuarioChavePublica.user_id == user_id,
+        UsuarioChavePublica.orgao == orgao,
+        UsuarioChavePublica.id != key_id,
+    ).first()
+    if duplicate:
+        raise HTTPException(409, "Já existe uma chave cadastrada para este órgão.")
+    row.orgao = orgao
+    row.chave_publica = chave_publica
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    return _public_key_to_dict(row)
+
+@app.delete("/v1/lex/usuarios/chaves-publicas/{key_id}")
+@app.delete("/v1/lex/usuarios/me/chaves-publicas/{key_id}")
+def delete_my_public_key(key_id: str, db: Session = Depends(get_db), payload=Depends(verify_token)):
+    user_id, _ = _current_api_key_owner(db, payload)
+    row = db.query(UsuarioChavePublica).filter_by(id=key_id, user_id=user_id).first()
+    if not row:
+        raise HTTPException(404, "Chave pública não encontrada")
+    db.delete(row)
+    db.commit()
+    return {"ok": True}
 
 @app.get("/k1/lex/configuracoes/ia/minhas-chaves")
 def list_my_ia_keys(db: Session = Depends(get_db), payload=Depends(verify_token)):
