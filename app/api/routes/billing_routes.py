@@ -1,3 +1,5 @@
+import httpx
+
 from fastapi import APIRouter
 
 from app.legacy_context import (
@@ -13,7 +15,6 @@ from app.legacy_context import (
     _digits,
     datetime,
     get_db,
-    httpx,
     uuid,
     verify_token,
 )

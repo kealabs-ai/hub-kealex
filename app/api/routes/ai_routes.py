@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter
 
 from app.legacy_context import (
@@ -32,7 +34,6 @@ from app.legacy_context import (
     _validate_model_provider,
     datetime,
     get_db,
-    json,
     re,
     sql_text,
     verify_token,
