@@ -10,7 +10,17 @@ The configured backend is MySQL/PyMySQL. MySQL does not provide PostgreSQL-style
 
 ## Connection budget
 
-SQLAlchemy pools default to 3 persistent connections plus 2 overflow connections per process and wait up to 10 seconds. Set `KEALEX_DB_POOL_SIZE`, `KEALEX_DB_MAX_OVERFLOW`, and `KEALEX_DB_POOL_TIMEOUT` consistently across services. Budget worst-case connections as `(pool_size + max_overflow) × service replicas × worker processes`, then reserve headroom for migrations, administration, and other consumers. `svc-auth` exposes Prometheus metrics at `/metrics` for access decisions and checked-out DB connections.
+SQLAlchemy pools default to 2 persistent connections plus 1 overflow connection per process and wait up to 10 seconds. Set `KEALEX_DB_POOL_SIZE`, `KEALEX_DB_MAX_OVERFLOW`, and `KEALEX_DB_POOL_TIMEOUT` consistently across services. Budget worst-case connections as `(pool_size + max_overflow) × service replicas × worker processes`; for the eight database-backed services in the primary Compose file, one process each can use up to 24 connections. Reserve headroom for migrations, administration, and other consumers, and lower or raise these defaults only after checking the MySQL connection limit and observed pool metrics. `svc-auth` exposes Prometheus metrics at `/metrics` for access decisions and checked-out DB connections.
+
+## Authorization across services
+
+The signed JWT establishes user and tenant identity. Each business API then checks the current tenant entitlement in MySQL and fails closed for missing, inactive, expired, or unpaid tenants. `svc-auth` keeps identity-only validation on login and subscription-recovery routes so an expired tenant can still restore service. These request-time checks are synchronous by design; RabbitMQ carries audit events to a separate worker and is not the source of truth for granting access.
+
+## Scale-out routing
+
+The primary `docker-compose.yml` routes `hubkealex` and `svc-cobrancas` through Traefik and does not publish per-container host ports or fixed container names. This permits multiple replicas on the same Docker host. Docker Compose's local named volumes and a single RabbitMQ broker remain single-host components; multi-host availability requires shared file storage and a broker deployment designed for multiple nodes.
+
+Example for the primary Compose file: `docker compose up -d --scale hubkealex=3 --scale svc-cobrancas=3`. Scale the independent audit worker separately with `docker compose up -d --scale kealex-svc-auth-worker=2`. Do not scale RabbitMQ by increasing the replica count of the current single-node service; broker clustering needs a deliberate multi-node deployment.
 
 ## Shared file storage
 

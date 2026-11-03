@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
+import os
 import requests
 import json
 
 # Fazer login para obter token
 login_data = {
-    "email": "admin@kealex.com",
-    "senha": "admin123"
+    "email": os.getenv("KEALEX_LOGIN_EMAIL"),
+    "senha": os.getenv("KEALEX_LOGIN_PASSWORD")
 }
+
+if not all(login_data.values()):
+    raise SystemExit("Configure KEALEX_LOGIN_EMAIL e KEALEX_LOGIN_PASSWORD para executar este script.")
 
 try:
     # Login
@@ -17,7 +21,6 @@ try:
     if response.status_code == 200:
         auth_data = response.json()
         token = auth_data["accessToken"]
-        print(f"Token obtido: {token[:50]}...")
         print(f"Tenant ID: {auth_data['tenantId']}")
         
         # Testar endpoint de processos

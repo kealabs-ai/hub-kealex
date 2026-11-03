@@ -491,7 +491,7 @@ EOF
                         RESPONSE=\$(curl -s -w "%{http_code}" --connect-timeout 10 --max-time 15 \
                             -X POST http://localhost:8000/v1/lex/auth/login \
                             -H "Content-Type: application/json" \
-                            -d '{"email": "admin@kealex.com", "senha": "admin123"}' 2>/dev/null || echo "000")
+                            -d '{"email": "${KEALEX_LOGIN_EMAIL}", "senha": "${KEALEX_LOGIN_PASSWORD}"}' 2>/dev/null || echo "000")
                         
                         HTTP_CODE="\${RESPONSE: -3}"
                         BODY="\${RESPONSE%???}"
@@ -542,7 +542,7 @@ EOF
             echo "[SUCESSO] Pipeline executado com sucesso!"
             echo "[INFO] API disponÃ­vel em: http://localhost:8000/v1/lex/"
             echo "[INFO] DocumentaÃ§Ã£o: http://localhost:8000/docs"
-            echo "[INFO] Credenciais padrÃ£o: admin@kealex.com / admin123"
+            echo "[INFO] Credenciais padrÃ£o: ${KEALEX_LOGIN_EMAIL} / ${KEALEX_LOGIN_PASSWORD}"
         }
         failure {
             echo "[ERRO] Pipeline falhou - coletando diagnÃ³stico..."

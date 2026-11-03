@@ -100,7 +100,7 @@ curl http://localhost:8000/v1/lex/auth/me
 ```bash
 curl -X POST http://localhost:8000/v1/lex/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email": "admin@kealex.com", "senha": "admin123"}'
+  -d '{"email": "<email-da-conta>", "senha": "<senha-da-conta>"}'
 ```
 
 - Testa o fluxo completo: nginx → svc-auth → banco de dados
@@ -211,7 +211,7 @@ curl http://localhost:8000/v1/lex/auth/me
 # Testar login
 curl -X POST http://localhost:8000/v1/lex/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email": "admin@kealex.com", "senha": "admin123"}'
+  -d '{"email": "<email-da-conta>", "senha": "<senha-da-conta>"}'
 ```
 
 ### 3. Usar script de teste

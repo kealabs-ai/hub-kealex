@@ -20,17 +20,19 @@ O serviço usa SQLAlchemy com MySQL/PyMySQL. O banco é compartilhado com os dem
 | `app/domain/exceptions.py` | Exceções de domínio para acesso negado. |
 | `app/infrastructure/database/` | Sessões e modelos SQLAlchemy. |
 | `app/infrastructure/security/` | Hash de senha e JWT. |
+| `app/infrastructure/messaging/access_worker.py` | Worker independente que consome a fila durável de eventos de auditoria de acesso. |
 | `app/core/` | Configuração de ambiente e normalização. |
 | `main.py` | Compatibilidade com `uvicorn main:app` usado pelo Docker. |
 | `requirements.txt` | Dependências Python fixadas em versões específicas. |
 | `Dockerfile` | Imagem Python 3.12, instalação de dependências e inicialização via Uvicorn na porta 8000. |
 | `scripts/seed_users.py` | Script auxiliar para inserir usuários de teste. |
-| `scripts/fix_hash.py` | Utilitário de manutenção de hash de senha. |
+| `scripts/create_admin.py` | Criação interativa e explícita de administrador para um tenant existente. |
+| `scripts/set_admin_password.py` | Rotação interativa de senha de uma conta administrativa existente. |
 | `tests/` | Testes unitários e de integração. |
 
 ## 3. Inicialização e configuração
 
-O módulo carrega `.env` com `python-dotenv`. Na inicialização da aplicação, `startup_event` chama `_init_db()`, que executa `Base.metadata.create_all()` e garante a existência do tenant `kealex` e do usuário administrador padrão. Falhas de conexão ou criação de tabelas impedem o serviço de iniciar.
+O módulo carrega `.env` com `python-dotenv`. Na inicialização da aplicação, `startup_event` chama `_init_db()`, que executa `Base.metadata.create_all()` e garante a existência do tenant base `kealex`. Não cria usuário administrador nem define senha padrão. Falhas de conexão ou criação de tabelas impedem o serviço de iniciar.
 
 Configurações lidas pelo serviço:
 
@@ -48,7 +50,7 @@ Configurações lidas pelo serviço:
 | `KEALEX_ASAAS_API_KEY` | Para cobrança | Chave enviada ao Asaas no header `access_token`. O código declara valor vazio se não configurada, mas operações de cobrança não funcionarão corretamente. |
 | `KEALEX_ASAAS_WEBHOOK_TOKEN` | Para webhook | Valor esperado no header `asaas-access-token`; webhook é rejeitado se não configurado. |
 
-Não registrar valores de segredo, tokens ou dados de cobrança em logs. Configure valores fortes e diferentes por ambiente. A inicialização cria `admin@kealex.com` com senha `admin123` quando o usuário não existe; altere a credencial imediatamente e trate isso como comportamento de bootstrap a revisar antes de produção.
+Não registrar valores de segredo, tokens ou dados de cobrança em logs. Configure valores fortes e diferentes por ambiente. Crie um administrador explicitamente com `python scripts/create_admin.py` dentro do container `kealex-svc-auth`; a senha é solicitada sem eco e não é criada de novo em cada inicialização. Para rotacionar uma conta existente, use `python scripts/set_admin_password.py`. Ambientes que já executaram versões antigas devem revisar e rotacionar credenciais administrativas existentes.
 
 ## 4. Modelo de domínio
 
@@ -64,7 +66,7 @@ Papéis declarados: `admin`, `escritorio`, `advogado`, `juridico` e `cliente`. N
 - Senhas novas são armazenadas com bcrypt; comparação inválida ou hash corrompido resulta em falha de autenticação.
 - JWT usa `HS256`, expira após 8 horas e contém `sub` (ID do usuário), `role`, `tenant_id`, `escritorio_id` e `exp`.
 - Rotas protegidas recebem `Authorization: Bearer <accessToken>`. Token inválido/expirado gera HTTP 401.
-- `verify_token` verifica assinatura e validade do JWT. `require_active_trial` também carrega o tenant e aplica a regra de acesso à plataforma.
+- `verify_token` verifica identidade, assinatura e validade do JWT. `require_active_trial` também carrega o tenant e aplica a regra de acesso à plataforma.
 - Usuário `admin` ignora a checagem de assinatura. Para demais papéis, tenant ausente/inativo, trial expirado ou assinatura não ativa gera HTTP 403 nas rotas que exigem acesso.
 - Login não bloqueia contas cujo trial venceu: permite obter token para consultar/regularizar cobrança. Endpoints de cobrança usam `verify_token`, enquanto `/me` exige tenant com acesso liberado.
 
@@ -95,7 +97,7 @@ FastAPI também publica documentação OpenAPI nos caminhos padrão (`/docs`, `/
 ## 7. Trial, planos e webhook
 
 - Trial padrão: 7 dias (`TRIAL_DAYS`). Cadastro inicia trial imediatamente.
-- A criação do banco garante tenant inicial `kealex` e administrador padrão, se ausentes.
+- A criação do banco garante apenas o tenant inicial `kealex`; contas são provisionadas pelo fluxo de cadastro ou por operação administrativa explícita. `scripts/create_admin.py` cria um administrador apenas para um tenant informado e rejeita e-mails já cadastrados.
 - O guard de acesso permite plano `trial` enquanto não expirado e planos `starter`, `professional` ou `enterprise` quando `subscription_status == active` e não expirados.
 - `grant_subscription_period` evita conceder período repetido para o mesmo `payment_id`; ciclo trimestral concede 90 dias, os demais ciclos considerados concedem 30.
 - Webhook exige header `asaas-access-token`, registra o ID do evento e ignora duplicatas. `PAYMENT_CONFIRMED`/`PAYMENT_RECEIVED` concedem período; `PAYMENT_OVERDUE` marca `past_due` e desativa tenant; `SUBSCRIPTION_DELETED` marca `canceled` e desativa tenant.

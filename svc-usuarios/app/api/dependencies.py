@@ -1,12 +1,7 @@
 from fastapi import Depends, HTTPException
 from app.infrastructure.security.jwt_provider import verify_token
 
-try:
-    from trial_guard import require_active_trial
-except (ImportError, RuntimeError):
-    require_active_trial = None
-
-base_guard = require_active_trial or verify_token
+base_guard = verify_token
 
 def admin_guard(payload=Depends(base_guard)):
     if payload.get("role") != "admin":

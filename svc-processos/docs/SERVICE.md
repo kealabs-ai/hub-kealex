@@ -27,7 +27,7 @@ Gerenciar processos jurídicos por tenant, incluindo vínculo com cliente/advoga
 
 - MySQL/PyMySQL via `KEALEX_DATABASE_URL` ou `KEALEX_DB_*`.
 - JWT HS256 via `KEALEX_SECRET_KEY` ou `KEALEX_JWT_SECRET`.
-- `trial_guard` opcional para validação do estado de acesso do tenant.
+- Validação de JWT e do estado de acesso do tenant no MySQL em todas as rotas protegidas.
 - Tabelas compartilhadas `clientes` e demais serviços consumidores de `processos`.
 
 ## Regras

@@ -6,8 +6,8 @@ POST http://localhost:8000/auth/login
 Content-Type: application/json
 
 {
-  "email": "admin@kealex.com",
-  "senha": "admin123"
+  "email": "<email-da-conta>",
+  "senha": "<senha-da-conta>"
 }
 ```
 

@@ -42,6 +42,7 @@ from app.legacy_context import (
     logging,
     timedelta,
     uuid,
+    verify_identity_token,
     verify_token,
 )
 
@@ -73,7 +74,7 @@ def pre_register(body: PreRegisterIn, db: Session = Depends(get_db)):
 
 
 @router.post("/k1/lex/auth/criar-cliente-asaas")
-def criar_cliente_asaas(body: HolderInfoIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def criar_cliente_asaas(body: HolderInfoIn, db: Session = Depends(get_db), payload=Depends(verify_identity_token)):
     if not ASAAS_BASE:
         raise HTTPException(503, "Integracao Asaas nao configurada")
     tenant = db.query(Tenant).filter_by(id=payload.get("tenant_id")).first()
@@ -114,7 +115,7 @@ def criar_cliente_asaas(body: HolderInfoIn, db: Session = Depends(get_db), paylo
 
 
 @router.post("/k1/lex/auth/assinar/preview", response_model=AssinarPreviewOut)
-def assinar_preview(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def assinar_preview(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(verify_identity_token)):
     plano_cfg = PLANOS.get(body.plano)
     if not plano_cfg: raise HTTPException(400, f"Plano invalido: {body.plano}")
     tenant = db.query(Tenant).filter_by(id=payload.get("tenant_id")).first()
@@ -143,7 +144,7 @@ def assinar_preview(body: AssinarIn, db: Session = Depends(get_db), payload=Depe
 
 
 @router.post("/k1/lex/auth/assinar", response_model=AssinarOut)
-def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(verify_identity_token)):
     if not ASAAS_BASE:
         raise HTTPException(503, "Integracao Asaas nao configurada")
     plano_cfg = PLANOS.get(body.plano)
@@ -216,7 +217,7 @@ def assinar(body: AssinarIn, db: Session = Depends(get_db), payload=Depends(veri
 
 
 @router.post("/k1/lex/auth/assinar-pix", response_model=AssinarPixOut)
-def assinar_pix(body: AssinarPixIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def assinar_pix(body: AssinarPixIn, db: Session = Depends(get_db), payload=Depends(verify_identity_token)):
     if not ASAAS_BASE:
         raise HTTPException(503, "Integracao Asaas nao configurada")
     plano_cfg = PLANOS.get(body.plano)
@@ -364,7 +365,7 @@ async def asaas_webhook(
 
 
 @router.get("/k1/lex/auth/billing-status")
-def billing_status(db: Session = Depends(get_db), payload=Depends(verify_token)):
+def billing_status(db: Session = Depends(get_db), payload=Depends(verify_identity_token)):
     tenant = db.query(Tenant).filter_by(id=payload.get("tenant_id")).first()
     if not tenant: raise HTTPException(404, "Tenant nao encontrado")
     now = datetime.utcnow()
@@ -382,7 +383,7 @@ def billing_status(db: Session = Depends(get_db), payload=Depends(verify_token))
 
 
 @router.get("/k1/lex/auth/billing-profile")
-def billing_profile_v2(db: Session = Depends(get_db), payload=Depends(verify_token)):
+def billing_profile_v2(db: Session = Depends(get_db), payload=Depends(verify_identity_token)):
     tenant = db.query(Tenant).filter_by(id=payload.get("tenant_id")).first()
     if not tenant: raise HTTPException(404, "Tenant nao encontrado")
     return {
@@ -402,7 +403,7 @@ def billing_profile_v2(db: Session = Depends(get_db), payload=Depends(verify_tok
 
 
 @router.patch("/k1/lex/auth/billing-profile")
-def update_billing_profile(body: HolderInfoIn, db: Session = Depends(get_db), payload=Depends(verify_token)):
+def update_billing_profile(body: HolderInfoIn, db: Session = Depends(get_db), payload=Depends(verify_identity_token)):
     """Atualiza dados do titular sem criar novo registro."""
     tenant = db.query(Tenant).filter_by(id=payload.get("tenant_id")).first()
     if not tenant: raise HTTPException(404, "Tenant nao encontrado")

@@ -22,7 +22,7 @@ Os contratos usam nomes camelCase; valores monetários são centavos inteiros. P
 
 ## Autorização e configuração
 
-As rotas autenticadas usam JWT. O tenant vem de `tenant_id` ou, no token legado, de `sub`. O `trial_guard` é opcional no ambiente e, quando disponível, substitui o guard JWT simples.
+As rotas protegidas exigem `tenant_id` e `sub` no JWT assinado e consultam o estado atual do tenant no MySQL. O tenant nunca é inferido de `sub`; falhas de consulta não liberam acesso.
 
 Configure banco por `KEALEX_DATABASE_URL` ou `KEALEX_DB_HOST`, `KEALEX_DB_NAME`, `KEALEX_DB_USER`, `KEALEX_DB_PASSWORD` e `KEALEX_DB_PORT` opcional. O segredo JWT obrigatório é `KEALEX_SECRET_KEY` ou `KEALEX_JWT_SECRET`.
 

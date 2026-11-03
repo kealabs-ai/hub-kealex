@@ -1,4 +1,4 @@
-"""Best-effort asynchronous tenant access audit events via RabbitMQ."""
+"""Publish tenant access decision events for asynchronous processing."""
 import json
 import asyncio
 import logging
@@ -53,9 +53,8 @@ class _DeferredPublisher:
                 password=os.getenv("KEALEX_RABBITMQ_PASSWORD", ""),
                 virtualhost=os.getenv("KEALEX_RABBITMQ_VHOST", "/"),
             )
-            self._channel = await self._connection.channel()
-            queue = await self._channel.declare_queue("kealex.access.audit", durable=True)
-            await queue.consume(self._consume, no_ack=False)
+            self._channel = await self._connection.channel(publisher_confirms=True)
+            await self._channel.declare_queue("kealex.access.audit", durable=True)
             await self._flush()
         except Exception:
             logger.exception("RabbitMQ access audit unavailable")
@@ -63,16 +62,6 @@ class _DeferredPublisher:
     async def close(self):
         if self._connection and not self._connection.is_closed:
             await self._connection.close()
-
-    async def _consume(self, message):
-        async with message.process():
-            try:
-                event = json.loads(message.body)
-                logger.info("tenant_access decision=%s tenant_id=%s user_id=%s event_id=%s",
-                            event.get("decision"), event.get("tenant_id"),
-                            event.get("user_id"), event.get("event_id"))
-            except (ValueError, TypeError):
-                logger.warning("Discarding malformed tenant access audit event")
 
     async def _flush(self):
         if not self._channel:
@@ -88,6 +77,7 @@ class _DeferredPublisher:
                     aio_pika.Message(json.dumps(event).encode(), delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
                                      content_type="application/json"),
                     routing_key="kealex.access.audit",
+                    mandatory=True,
                 )
             except Exception:
                 with _lock:

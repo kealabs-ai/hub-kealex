@@ -22,7 +22,7 @@ Os requests e respostas usam campos camelCase; os valores de data são strings `
 
 ## Autorização e configuração
 
-As rotas usam JWT e o guard `trial_guard` quando disponível. O tenant é obtido de `tenant_id` ou do claim legado `sub`.
+As rotas protegidas exigem `tenant_id` e `sub` no JWT assinado e consultam o estado atual do tenant no MySQL. O tenant nunca é inferido de `sub`.
 
 Configure o banco via `KEALEX_DATABASE_URL` ou `KEALEX_DB_HOST`, `KEALEX_DB_NAME`, `KEALEX_DB_USER`, `KEALEX_DB_PASSWORD` e `KEALEX_DB_PORT` opcional. Configure `KEALEX_SECRET_KEY` ou `KEALEX_JWT_SECRET` para validar JWT.
 

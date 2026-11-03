@@ -20,7 +20,7 @@ Gerenciar cobranças, suas fases e histórico, iniciar pagamentos pelo Asaas e p
 - `AsaasWebhookEvent`: controle de idempotência dos eventos do Asaas.
 - `cobrancas_routes`: criação, consulta, pagamento, atualização de fase, cancelamento, timeline e webhook.
 - `cobranca_support`: serialização, montagem de payload para o Asaas e ações disponíveis para a cobrança.
-- `verify_token` e `auth_guard`: validação JWT e integração opcional com `trial_guard`.
+- `verify_token` e `auth_guard`: validação JWT e entitlement ativo do tenant consultado no MySQL.
 
 ## Dependências
 

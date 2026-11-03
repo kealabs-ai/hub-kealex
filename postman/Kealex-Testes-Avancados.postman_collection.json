@@ -53,7 +53,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"admin@kealex.com\",\n  \"senha\": \"admin123\"\n}"
+              "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"senha\": \"{{admin_password}}\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/auth/login",

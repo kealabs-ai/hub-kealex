@@ -7,6 +7,9 @@ from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
+from sqlalchemy.orm import Session
+from app.infrastructure.database.session import get_db
+from app.infrastructure.security.tenant_access import enforce_active_tenant
 
 app = FastAPI(title="svc-arquivos")
 bearer = HTTPBearer()
@@ -15,7 +18,7 @@ UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "/data/uploads")).resolve()
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", "104857600"))
 
 
-def current_owner(credentials: HTTPAuthorizationCredentials = Depends(bearer)):
+def current_owner(credentials: HTTPAuthorizationCredentials = Depends(bearer), db: Session = Depends(get_db)):
     if not SECRET:
         raise HTTPException(503, "Autenticação não configurada")
     try:
@@ -25,6 +28,7 @@ def current_owner(credentials: HTTPAuthorizationCredentials = Depends(bearer)):
     tenant_id, user_id = claims.get("tenant_id"), claims.get("sub")
     if not tenant_id or not user_id:
         raise HTTPException(401, "Token sem tenant ou usuário")
+    enforce_active_tenant(claims, db)
     return str(tenant_id), str(user_id)
 
 

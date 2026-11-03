@@ -25,7 +25,7 @@ Gerenciar prazos jurídicos vinculados a processos, advogados, escritórios e te
 
 - MySQL via SQLAlchemy/PyMySQL, configurado por `KEALEX_DATABASE_URL` ou `KEALEX_DB_*`.
 - JWT HS256 via `KEALEX_SECRET_KEY` ou `KEALEX_JWT_SECRET`.
-- Integração opcional com `trial_guard` para controle de acesso do tenant.
+- Validação obrigatória do estado atual do tenant no MySQL para controle de acesso.
 - A tabela compartilhada `processos` é consultada na criação do prazo.
 
 ## Regras

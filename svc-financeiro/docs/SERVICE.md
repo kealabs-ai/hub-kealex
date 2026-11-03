@@ -25,7 +25,7 @@ Gerenciar honorários vinculados a processos, clientes, advogados e escritórios
 
 - MySQL via SQLAlchemy/PyMySQL, usando `KEALEX_DATABASE_URL` ou variáveis `KEALEX_DB_*`.
 - JWT HS256 usando `KEALEX_SECRET_KEY` ou `KEALEX_JWT_SECRET`.
-- Integração opcional com `trial_guard` para limitar o acesso conforme o estado do tenant.
+- Validação obrigatória do estado atual do tenant no MySQL para limitar o acesso.
 
 ## Regras
 

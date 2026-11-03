@@ -24,7 +24,7 @@ from app.infrastructure.database.models import *
 from app.api.schemas.schemas import *
 from app.infrastructure.database.session import *
 from app.infrastructure.security.password_hasher import _hash, _verify
-from app.infrastructure.security.jwt_provider import _make_token, verify_token
+from app.infrastructure.security.jwt_provider import _make_token, verify_identity_token, verify_token
 from app.api.dependencies import _require_admin
 from app.application.use_cases.serialization import *
 from app.application.use_cases.activities import *
