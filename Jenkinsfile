@@ -103,25 +103,36 @@ pipeline {
                 sh '''
                     echo "▶ Aguardando containers ficarem healthy..."
 
-                    for CONTAINER in hubkealex svc-cobrancas; do
-                        echo "  Verificando $CONTAINER..."
+                    cd "$DEPLOY_PATH"
+                    COMPOSE_FILE="docker-compose.yml"
+                    SERVICES="rabbitmq hubkealex kealex-svc-auth kealex-svc-auth-worker kealex-svc-usuarios kealex-svc-escritorios svc-activities svc-cobrancas kealex-svc-configuracoes svc-arquivos"
+
+                    for SERVICE in $SERVICES; do
+                        echo "Verificando serviço Compose $SERVICE..."
+                        SERVICE_READY=0
                         for i in 1 2 3 4 5 6 7 8 9 10; do
-                            HEALTH_STATUS=$($DOCKER inspect --format="{{.State.Health.Status}}" $CONTAINER 2>/dev/null || echo "none")
-                            echo "    Tentativa $i/10: $CONTAINER = $HEALTH_STATUS"
-                            if [ "$HEALTH_STATUS" = "healthy" ]; then
-                                echo "  ✔ $CONTAINER → HEALTHY"
-                                break
+                            CONTAINER_IDS=$($DOCKER compose -f "$COMPOSE_FILE" -p "$PROJETO" ps -q "$SERVICE")
+                            ALL_READY=1
+                            if [ -z "$CONTAINER_IDS" ]; then
+                                ALL_READY=0
+                            else
+                                for CONTAINER_ID in $CONTAINER_IDS; do
+                                    CONTAINER_STATE=$($DOCKER inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$CONTAINER_ID" 2>/dev/null || echo "missing")
+                                    echo "    Tentativa $i/10: $SERVICE ($CONTAINER_ID) = $CONTAINER_STATE"
+                                    if [ "$CONTAINER_STATE" != "healthy" ] && [ "$CONTAINER_STATE" != "running" ]; then ALL_READY=0; fi
+                                done
                             fi
-                            if [ $i -eq 10 ]; then
-                                echo "  ✘ $CONTAINER não ficou healthy"
-                                $DOCKER logs $CONTAINER | tail -20
-                                exit 1
-                            fi
+                            if [ "$ALL_READY" -eq 1 ]; then SERVICE_READY=1; break; fi
                             sleep 3
                         done
+                        if [ "$SERVICE_READY" -ne 1 ]; then
+                            echo "Serviço $SERVICE não iniciou corretamente"
+                            $DOCKER compose -f "$COMPOSE_FILE" -p "$PROJETO" ps "$SERVICE" || true
+                            $DOCKER compose -f "$COMPOSE_FILE" -p "$PROJETO" logs --no-color --tail=80 "$SERVICE" || true
+                            exit 1
+                        fi
                     done
-
-                    echo "✅ Todos os containers healthy"
+                    echo "Todos os serviços estão saudáveis ou em execução"
                 '''
             }
         }
