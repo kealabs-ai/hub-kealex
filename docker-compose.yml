@@ -21,17 +21,14 @@ services:
   # â”€â”€ HUBKEALEX â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   hubkealex:
     build: .
-    container_name: hubkealex
-    ports:
-      - "8000:8000"
     environment:
       - KEALEX_DB_HOST=${KEALEX_DB_HOST}
       - KEALEX_DB_PORT=${KEALEX_DB_PORT}
       - KEALEX_DB_NAME=${KEALEX_DB_NAME}
       - KEALEX_DB_USER=${KEALEX_DB_USER}
       - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
-      - KEALEX_DB_POOL_SIZE=${KEALEX_DB_POOL_SIZE:-3}
-      - KEALEX_DB_MAX_OVERFLOW=${KEALEX_DB_MAX_OVERFLOW:-2}
+      - KEALEX_DB_POOL_SIZE=${KEALEX_DB_POOL_SIZE:-2}
+      - KEALEX_DB_MAX_OVERFLOW=${KEALEX_DB_MAX_OVERFLOW:-1}
       - KEALEX_DB_POOL_TIMEOUT=${KEALEX_DB_POOL_TIMEOUT:-10}
       - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
       - KEALEX_JWT_SECRET=${KEALEX_JWT_SECRET}
@@ -43,6 +40,7 @@ services:
       - KEALEX_CEREBRAS_API_KEY=${KEALEX_CEREBRAS_API_KEY:-}
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=easypanel"
       - "traefik.http.routers.hubkealex.rule=Host(`${KEALEX_PUBLIC_API_HOST}`) || Host(`${KEALEX_PUBLIC_LEGACY_DOMAIN}`) || Host(`${KEALEX_PUBLIC_LEGACY_WWW_DOMAIN}`)"
       - "traefik.http.routers.hubkealex.entrypoints=https"
       - "traefik.http.routers.hubkealex.tls=true"
@@ -99,8 +97,8 @@ services:
       - KEALEX_DB_NAME=${KEALEX_DB_NAME}
       - KEALEX_DB_USER=${KEALEX_DB_USER}
       - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
-      - KEALEX_DB_POOL_SIZE=${KEALEX_DB_POOL_SIZE:-3}
-      - KEALEX_DB_MAX_OVERFLOW=${KEALEX_DB_MAX_OVERFLOW:-2}
+      - KEALEX_DB_POOL_SIZE=${KEALEX_DB_POOL_SIZE:-2}
+      - KEALEX_DB_MAX_OVERFLOW=${KEALEX_DB_MAX_OVERFLOW:-1}
       - KEALEX_DB_POOL_TIMEOUT=${KEALEX_DB_POOL_TIMEOUT:-10}
       - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
       - KEALEX_ASAAS_API_KEY=${KEALEX_ASAAS_API_KEY:-}
@@ -145,6 +143,23 @@ services:
       retries: 3
       start_period: 40s
 
+  kealex-svc-auth-worker:
+    build: ./svc-auth
+    image: kealex/svc-auth:latest
+    command: ["python", "-m", "app.infrastructure.messaging.access_worker"]
+    environment:
+      - KEALEX_RABBITMQ_HOST=rabbitmq
+      - KEALEX_RABBITMQ_PORT=5672
+      - KEALEX_RABBITMQ_USER=${KEALEX_RABBITMQ_USER:-kealex}
+      - KEALEX_RABBITMQ_PASSWORD=${KEALEX_RABBITMQ_PASSWORD}
+      - KEALEX_RABBITMQ_VHOST=${KEALEX_RABBITMQ_VHOST:-/}
+    restart: unless-stopped
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - kealex-internal
+
   kealex-svc-usuarios:
     build: ./svc-usuarios
     image: kealex/svc-usuarios:latest
@@ -155,8 +170,8 @@ services:
       - KEALEX_DB_NAME=${KEALEX_DB_NAME}
       - KEALEX_DB_USER=${KEALEX_DB_USER}
       - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
-      - KEALEX_DB_POOL_SIZE=${KEALEX_DB_POOL_SIZE:-3}
-      - KEALEX_DB_MAX_OVERFLOW=${KEALEX_DB_MAX_OVERFLOW:-2}
+      - KEALEX_DB_POOL_SIZE=${KEALEX_DB_POOL_SIZE:-2}
+      - KEALEX_DB_MAX_OVERFLOW=${KEALEX_DB_MAX_OVERFLOW:-1}
       - KEALEX_DB_POOL_TIMEOUT=${KEALEX_DB_POOL_TIMEOUT:-10}
       - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
     labels:
@@ -194,8 +209,8 @@ services:
       - KEALEX_DB_NAME=${KEALEX_DB_NAME}
       - KEALEX_DB_USER=${KEALEX_DB_USER}
       - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
-      - KEALEX_DB_POOL_SIZE=${KEALEX_DB_POOL_SIZE:-3}
-      - KEALEX_DB_MAX_OVERFLOW=${KEALEX_DB_MAX_OVERFLOW:-2}
+      - KEALEX_DB_POOL_SIZE=${KEALEX_DB_POOL_SIZE:-2}
+      - KEALEX_DB_MAX_OVERFLOW=${KEALEX_DB_MAX_OVERFLOW:-1}
       - KEALEX_DB_POOL_TIMEOUT=${KEALEX_DB_POOL_TIMEOUT:-10}
       - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
     labels:
@@ -232,8 +247,8 @@ services:
       - KEALEX_DB_NAME=${KEALEX_DB_NAME}
       - KEALEX_DB_USER=${KEALEX_DB_USER}
       - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
-      - KEALEX_DB_POOL_SIZE=${KEALEX_DB_POOL_SIZE:-3}
-      - KEALEX_DB_MAX_OVERFLOW=${KEALEX_DB_MAX_OVERFLOW:-2}
+      - KEALEX_DB_POOL_SIZE=${KEALEX_DB_POOL_SIZE:-2}
+      - KEALEX_DB_MAX_OVERFLOW=${KEALEX_DB_MAX_OVERFLOW:-1}
       - KEALEX_DB_POOL_TIMEOUT=${KEALEX_DB_POOL_TIMEOUT:-10}
       - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
       - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY:-${KEALEX_JWT_SECRET}}
@@ -265,17 +280,14 @@ services:
 
   svc-cobrancas:
     build: ./svc-cobrancas
-    container_name: svc-cobrancas
-    ports:
-      - "8001:8000"
     environment:
       - KEALEX_DB_HOST=${KEALEX_DB_HOST}
       - KEALEX_DB_PORT=${KEALEX_DB_PORT}
       - KEALEX_DB_NAME=${KEALEX_DB_NAME}
       - KEALEX_DB_USER=${KEALEX_DB_USER}
       - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
-      - KEALEX_DB_POOL_SIZE=${KEALEX_DB_POOL_SIZE:-3}
-      - KEALEX_DB_MAX_OVERFLOW=${KEALEX_DB_MAX_OVERFLOW:-2}
+      - KEALEX_DB_POOL_SIZE=${KEALEX_DB_POOL_SIZE:-2}
+      - KEALEX_DB_MAX_OVERFLOW=${KEALEX_DB_MAX_OVERFLOW:-1}
       - KEALEX_DB_POOL_TIMEOUT=${KEALEX_DB_POOL_TIMEOUT:-10}
       - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
       - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY:-${KEALEX_JWT_SECRET}}
@@ -283,6 +295,7 @@ services:
       - KEALEX_ASAAS_BASE_URL=${KEALEX_ASAAS_BASE_URL:-https://api-sandbox.asaas.com/v3}
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=easypanel"
       - "traefik.http.routers.svc-cobrancas.rule=(Host(`${KEALEX_PUBLIC_API_HOST}`) || Host(`${KEALEX_PUBLIC_LEGACY_DOMAIN}`) || Host(`${KEALEX_PUBLIC_LEGACY_WWW_DOMAIN}`)) && (PathPrefix(`/v1/lex/cobrancas`) || PathPrefix(`/k1/lex/cobrancas`))"
       - "traefik.http.routers.svc-cobrancas.entrypoints=https"
       - "traefik.http.routers.svc-cobrancas.tls=true"
@@ -321,8 +334,8 @@ services:
       - KEALEX_DB_NAME=${KEALEX_DB_NAME}
       - KEALEX_DB_USER=${KEALEX_DB_USER}
       - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
-      - KEALEX_DB_POOL_SIZE=${KEALEX_DB_POOL_SIZE:-3}
-      - KEALEX_DB_MAX_OVERFLOW=${KEALEX_DB_MAX_OVERFLOW:-2}
+      - KEALEX_DB_POOL_SIZE=${KEALEX_DB_POOL_SIZE:-2}
+      - KEALEX_DB_MAX_OVERFLOW=${KEALEX_DB_MAX_OVERFLOW:-1}
       - KEALEX_DB_POOL_TIMEOUT=${KEALEX_DB_POOL_TIMEOUT:-10}
       - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
       - KEALEX_PUBLIC_APP_URL=${KEALEX_PUBLIC_APP_URL:-}
@@ -357,6 +370,15 @@ services:
     image: kealex/svc-arquivos:latest
     environment:
       - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY:-${KEALEX_JWT_SECRET}}
+      - KEALEX_DB_HOST=${KEALEX_DB_HOST}
+      - KEALEX_DB_PORT=${KEALEX_DB_PORT:-3306}
+      - KEALEX_DB_NAME=${KEALEX_DB_NAME}
+      - KEALEX_DB_USER=${KEALEX_DB_USER}
+      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
+      - KEALEX_DB_POOL_SIZE=${KEALEX_DB_POOL_SIZE:-2}
+      - KEALEX_DB_MAX_OVERFLOW=${KEALEX_DB_MAX_OVERFLOW:-1}
+      - KEALEX_DB_POOL_TIMEOUT=${KEALEX_DB_POOL_TIMEOUT:-10}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
       - UPLOAD_DIR=/data/uploads
       - MAX_UPLOAD_BYTES=${KEALEX_MAX_UPLOAD_BYTES:-104857600}
     volumes:

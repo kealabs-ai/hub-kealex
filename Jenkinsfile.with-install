@@ -292,7 +292,7 @@ pipeline {
                         echo 'Testando login...'
                         RESPONSE=\\$(curl -s -w "%{http_code}" -X POST http://localhost:8000/v1/lex/auth/login \\
                             -H "Content-Type: application/json" \\
-                            -d '{"email": "admin@kealex.com", "senha": "admin123"}')
+                            -d '{"email": "${KEALEX_LOGIN_EMAIL}", "senha": "${KEALEX_LOGIN_PASSWORD}"}')
                         
                         if echo "\\$RESPONSE" | grep -q "200"; then
                             echo '[OK] Login funcionando!'

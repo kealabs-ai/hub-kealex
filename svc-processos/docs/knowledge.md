@@ -24,7 +24,7 @@ As respostas usam camelCase nos campos públicos. A criação verifica o cliente
 
 ## Autorização
 
-As rotas usam JWT e, se instalado, o guard `trial_guard`. O escopo do processo depende do papel: administradores têm acesso no tenant, advogados aos processos de sua autoria/atribuição e clientes aos próprios processos. Não remova o filtro por tenant.
+As rotas validam JWT e o estado atual do tenant no MySQL. O escopo do processo depende do papel: administradores têm acesso no tenant, advogados aos processos de sua autoria/atribuição e clientes aos próprios processos. Não remova o filtro por tenant.
 
 ## Configuração e execução
 

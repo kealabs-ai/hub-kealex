@@ -93,7 +93,7 @@ echo 8. TESTE DE LOGIN
 echo =================
 curl -s -X POST http://localhost:8000/k1/lex/auth/login ^
     -H "Content-Type: application/json" ^
-    -d "{\"email\": \"admin@kealex.com\", \"senha\": \"admin123\"}" > temp_login.json
+    -d "{\"email\": \"%KEALEX_LOGIN_EMAIL%\", \"senha\": \"%KEALEX_LOGIN_PASSWORD%\"}" > temp_login.json
 
 type temp_login.json
 echo.

@@ -5,6 +5,7 @@ Script de diagnóstico para verificar o status do servidor Kealex
 
 import requests
 import json
+import os
 from urllib.parse import urlparse
 
 def test_url(url, description):
@@ -37,9 +38,12 @@ def test_login(base_url):
     
     login_url = f"{base_url}/v1/lex/auth/login"
     login_data = {
-        "email": "admin@kealex.com",
-        "senha": "admin123"
+        "email": os.getenv("KEALEX_LOGIN_EMAIL"),
+        "senha": os.getenv("KEALEX_LOGIN_PASSWORD")
     }
+    if not all(login_data.values()):
+        print("[AVISO] Configure KEALEX_LOGIN_EMAIL e KEALEX_LOGIN_PASSWORD para testar o login.")
+        return
     
     try:
         response = requests.post(

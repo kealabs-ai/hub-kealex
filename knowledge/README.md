@@ -21,10 +21,9 @@ docker compose up --build
 
 A aplicação estará disponível em `http://localhost:8000`.
 
-## Usuário padrão
+## Primeiro acesso
 
-- Email: `admin@kealex.com`
-- Senha: `admin123`
+Não existe mais usuário ou senha padrão de administrador. Crie a conta pelo fluxo de cadastro; revise e rotacione credenciais em instalações que usaram versões antigas.
 
 ## Arquitetura
 

@@ -217,7 +217,7 @@ EOF
                         RESPONSE=\$(curl -s -w "%{http_code}" --connect-timeout 5 --max-time 10 \\
                             -X POST http://localhost:8000/v1/lex/auth/login \\
                             -H "Content-Type: application/json" \\
-                            -d '{"email": "admin@kealex.com", "senha": "admin123"}' 2>/dev/null || echo "000")
+                            -d '{"email": "${KEALEX_LOGIN_EMAIL}", "senha": "${KEALEX_LOGIN_PASSWORD}"}' 2>/dev/null || echo "000")
                         
                         HTTP_CODE="\${RESPONSE: -3}"
                         
@@ -253,7 +253,6 @@ EOF
             echo "[SUCESSO] Deploy concluÃ­do na Hostinger!"
             echo "[INFO] API: http://localhost:8000/v1/lex/"
             echo "[INFO] Docs: http://localhost:8000/docs"
-            echo "[INFO] Login: admin@kealex.com / admin123"
         }
         failure {
             echo "[ERRO] Deploy falhou - diagnÃ³stico:"

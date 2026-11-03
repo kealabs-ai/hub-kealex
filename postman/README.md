@@ -30,7 +30,7 @@ Esta pasta contém as coleções do Postman para testar todas as APIs do sistema
 
 1. **🔐 Autenticação > Login**
    - Executa o login e salva o token automaticamente
-   - Credenciais padrão: `admin@kealex.com` / `admin123`
+   - Preencha `admin_email` e `admin_password` com uma conta de teste criada para o seu ambiente.
 
 2. **📋 Processos - CRUD > Listar Processos**
    - Lista processos existentes

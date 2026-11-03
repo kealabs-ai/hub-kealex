@@ -13,7 +13,7 @@
 | `app/api/routes/public_key_routes.py` | Gestão das chaves públicas do usuário. |
 | `app/api/routes/datajud_routes.py` | Consulta processual externa ao DataJud. |
 | `app/api/schemas/user_schema.py` | Schemas de entrada e validação Pydantic. |
-| `app/api/dependencies.py` | Guardas de administrador/equipe e integração opcional com `trial_guard`. |
+| `app/api/dependencies.py` | Guardas de administrador/equipe após validação JWT e entitlement atual do tenant. |
 | `app/application/use_cases/office_capacity.py` | Regra do limite de advogados por escritório. |
 | `app/application/use_cases/user_presenter.py` | Serialização dos contratos de resposta. |
 | `app/domain/entities/role.py` | Enum de papéis (`RoleEnum`). |
@@ -40,7 +40,7 @@ As respostas expõem camelCase, por exemplo `tenantId`, `escritorioId`, `codigoE
 ## Autorização
 
 - JWT Bearer é validado com HS256 e `KEALEX_SECRET_KEY` ou `KEALEX_JWT_SECRET`.
-- Se `trial_guard.require_active_trial` estiver disponível, ele é usado como guarda comum; caso contrário, as rotas usam apenas a validação JWT.
+- Todas as rotas protegidas consultam o entitlement atual do tenant no MySQL; falha de consulta não concede acesso.
 - `admin_guard` limita exclusão a administradores.
 - `team_guard` permite administradores e escritórios, restringindo escritório aos próprios advogados associados.
 - Um advogado pode alterar sua própria modalidade, mas não a de outro usuário.

@@ -107,7 +107,7 @@ curl http://localhost:8000/v1/lex/auth/me
 # Teste de login via nginx
 curl -X POST http://localhost:8000/v1/lex/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email": "admin@kealex.com", "senha": "admin123"}'
+  -d '{"email": "<email-da-conta>", "senha": "<senha-da-conta>"}'
 ```
 
 ## Possíveis Causas do Exit Code 125

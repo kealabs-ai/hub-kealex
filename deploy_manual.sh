@@ -77,7 +77,7 @@ echo "8. TESTE DE LOGIN"
 echo "================"
 RESPONSE=$(curl -s -w "%{http_code}" -X POST http://localhost:8000/k1/lex/auth/login \
     -H "Content-Type: application/json" \
-    -d '{"email": "admin@kealex.com", "senha": "admin123"}')
+    -d '{"email": "${KEALEX_LOGIN_EMAIL}", "senha": "${KEALEX_LOGIN_PASSWORD}"}')
 
 if echo "$RESPONSE" | grep -q "200"; then
     echo "[OK] Login funcionando!"

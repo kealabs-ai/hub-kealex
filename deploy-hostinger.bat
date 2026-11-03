@@ -74,7 +74,7 @@ for /l %%i in (1,1,10) do (
 REM Teste de login
 echo.
 echo === TESTE DE LOGIN ===
-curl -s -w "%%{http_code}" --connect-timeout 5 --max-time 10 -X POST http://localhost:8000/k1/lex/auth/login -H "Content-Type: application/json" -d "{\"email\": \"admin@kealex.com\", \"senha\": \"admin123\"}" >temp_response.txt 2>nul
+curl -s -w "%%{http_code}" --connect-timeout 5 --max-time 10 -X POST http://localhost:8000/k1/lex/auth/login -H "Content-Type: application/json" -d "{\"email\": \"%KEALEX_LOGIN_EMAIL%\", \"senha\": \"%KEALEX_LOGIN_PASSWORD%\"}" >temp_response.txt 2>nul
 
 set /p RESPONSE=<temp_response.txt
 set HTTP_CODE=%RESPONSE:~-3%
@@ -90,7 +90,6 @@ echo.
 echo === DEPLOY CONCLUÍDO ===
 echo 🌐 API: http://localhost:8000/k1/lex/
 echo 📚 Docs: http://localhost:8000/docs
-echo 👤 Login: admin@kealex.com / admin123
 echo.
 echo Para ver logs: docker-compose -f %COMPOSE_FILE% -p %PROJECT_NAME% logs -f [serviço]
 echo Para parar: docker-compose -f %COMPOSE_FILE% -p %PROJECT_NAME% down

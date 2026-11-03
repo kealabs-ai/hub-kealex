@@ -90,7 +90,7 @@ pipeline {
                         echo "Testando endpoint de autenticação..."
                         curl -i -X POST http://localhost:8000/k1/lex/auth/login \\
                             -H "Content-Type: application/json" \\
-                            -d '{"email": "admin@kealex.com", "senha": "admin123"}' || true
+                            -d '{"email": "${KEALEX_LOGIN_EMAIL}", "senha": "${KEALEX_LOGIN_PASSWORD}"}' || true
                     """
                 }
             }

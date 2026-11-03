@@ -11,7 +11,7 @@
 | `app/main.py` | Aplicação FastAPI, CORS, router, startup do banco e health check. |
 | `app/api/routes/clientes_routes.py` | Endpoints de listagem, cadastro, consulta, atualização e exclusão. |
 | `app/api/schemas/client_schema.py` | Schemas Pydantic de entrada. |
-| `app/api/dependencies.py` | Validação JWT, integração opcional com `trial_guard` e autorização por papel. |
+| `app/api/dependencies.py` | Validação JWT, entitlement atual do tenant no MySQL e autorização por papel. |
 | `app/application/use_cases/client_presenter.py` | Conversão de modelo para resposta camelCase. |
 | `app/infrastructure/database/models/client_model.py` | Modelo SQLAlchemy `Cliente`. |
 | `app/infrastructure/database/session.py` | Engine, sessões e dependência `get_db`. |
@@ -44,7 +44,7 @@ O cadastro impede e-mail duplicado dentro do tenant. Respostas mantêm nomes cam
 ## Autorização
 
 - JWT Bearer é validado com HS256 e `KEALEX_SECRET_KEY` ou `KEALEX_JWT_SECRET`.
-- Se `trial_guard.require_active_trial` estiver disponível, ele é aplicado antes da autorização por papel; caso contrário, usa-se validação JWT.
+- Todas as rotas protegidas verificam o entitlement atual do tenant no MySQL antes da autorização por papel; falha de consulta não concede acesso.
 - Papéis aceitos: `admin` e `advogado`.
 - `admin` pode acessar clientes do tenant. `advogado` pode acessar apenas os clientes cujo `advogado_id` corresponde a `sub`.
 
