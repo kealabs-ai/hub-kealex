@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Text as SAText, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, Enum as SAEnum, ForeignKey, String, Text as SAText, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase
 from app.domain.entities.role import RoleEnum
 
