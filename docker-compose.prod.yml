@@ -151,6 +151,12 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
       - "traefik.http.routers.kealex-documentos.rule=(Host(`${KEALEX_PUBLIC_API_HOST}`) || Host(`${KEALEX_PUBLIC_ROOT_DOMAIN}`) || Host(`${KEALEX_PUBLIC_WWW_DOMAIN}`)) && PathPrefix(`/v1/lex/documentos`)"
+      - "traefik.http.routers.kealex-documentos-analysis.rule=(Host(`${KEALEX_PUBLIC_API_HOST}`) || Host(`${KEALEX_PUBLIC_ROOT_DOMAIN}`) || Host(`${KEALEX_PUBLIC_WWW_DOMAIN}`)) && PathPrefix(`/k1/lex/analise-documentos`)"
+      - "traefik.http.routers.kealex-documentos-analysis.entrypoints=https"
+      - "traefik.http.routers.kealex-documentos-analysis.tls=true"
+      - "traefik.http.routers.kealex-documentos-analysis.service=kealex-documentos"
+      - "traefik.http.routers.kealex-documentos-analysis.middlewares=kealex-cors"
+      - "traefik.http.routers.kealex-documentos-analysis.priority=300"
       - "traefik.http.routers.kealex-documentos.entrypoints=https"
       - "traefik.http.routers.kealex-documentos.tls=true"
       - "traefik.http.routers.kealex-documentos.service=kealex-documentos"
@@ -159,8 +165,10 @@ services:
       - "traefik.http.routers.kealex-documentos.middlewares=kealex-doc-strip,kealex-cors"
       - "traefik.http.routers.kealex-documentos.priority=100"
     networks:
-      - easypanel
-      - kealex-internal
+      easypanel: {}
+      kealex-internal:
+        aliases:
+          - svc-documentos
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
@@ -480,6 +488,7 @@ services:
     depends_on:
       - kealex-svc-auth
       - kealex-svc-configuracoes
+      - kealex-svc-documentos
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
