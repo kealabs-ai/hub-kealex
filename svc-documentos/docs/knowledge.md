@@ -21,8 +21,14 @@ As rotas autenticadas usam JWT e o guard de acesso/trial disponível no ambiente
 
 As chaves pessoais de IA são obtidas do banco compartilhado e descriptografadas conforme `KEALEX_API_KEYS_ENCRYPTION_KEY`, `KEALEX_JWT_SECRET` ou `KEALEX_SECRET_KEY`, com o sufixo legado `:user-api-keys:v1` quando derivadas. Nunca registrar chaves, JWTs ou conteúdo confidencial dos documentos.
 
+Uploads da análise documental exigem configuração individual do Google Drive. O serviço aceita JSON `authorized_user` (OAuth2 com `client_id`, `client_secret` e `refresh_token`) e `service_account`; credenciais são criptografadas antes de persistir e nunca são devolvidas pela API. `KEALEX_GOOGLE_DRIVE_ENCRYPTION_KEY` pode fornecer uma chave Fernet dedicada. Se não estiver definida, a chave é derivada de `KEALEX_SECRET_KEY`/`KEALEX_JWT_SECRET`; mantenha esse segredo estável entre réplicas e implantações. O arquivo original é enviado ao Drive e sua referência é salva junto dos trechos extraídos. Remover o documento da análise também remove o arquivo do Drive.
+
+O chat usa processamento Python controlado no backend (extração/OCR, divisão em trechos, recuperação contextual e chamada ao provedor de IA). Não é exposto um servidor Jupyter nem execução de notebook/código arbitrário. Habilite a Google Drive API no projeto Google. Para conta de serviço, compartilhe a pasta de destino com o e-mail da conta; para OAuth2, use credencial de usuário autorizado com refresh token e escopo `drive.file`.
+
 ## Configuração e operação
 
 O banco usa `KEALEX_DATABASE_URL` ou `KEALEX_DB_HOST`, `KEALEX_DB_NAME`, `KEALEX_DB_USER`, `KEALEX_DB_PASSWORD` e `KEALEX_DB_PORT` opcional. O segredo JWT obrigatório é `KEALEX_SECRET_KEY` ou `KEALEX_JWT_SECRET`.
+
+Antes do deploy, aplique `migrations/add_google_drive_analysis.sql` uma vez em cada banco existente. A migration adiciona as referências do Drive à tabela de arquivos e cria o armazenamento de credenciais criptografadas. Em instalações novas, o SQLAlchemy também cria essas estruturas no startup.
 
 Use Python 3.12, conforme o Dockerfile. Instale `requirements.txt`, rode `python -m unittest discover -s tests -v` e gere a imagem com `docker build -t svc-documentos:teste .` no diretório do serviço.

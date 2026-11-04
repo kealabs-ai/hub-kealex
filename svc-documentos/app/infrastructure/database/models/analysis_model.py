@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, DateTime, Index, Integer, String, Text
+from sqlalchemy import Column, DateTime, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.mysql import LONGTEXT
 from app.infrastructure.database.models.document_model import Base
 LONG_TEXT = Text().with_variant(LONGTEXT(), "mysql")
@@ -26,7 +26,23 @@ class AnaliseDocumento(Base):
     tamanho_bytes = Column(Integer, nullable=False)
     paginas = Column(Integer, nullable=True)
     chunks_json = Column(LONG_TEXT, nullable=False)
+    drive_file_id = Column(String(255), nullable=True)
+    drive_web_view_link = Column(String(1000), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class GoogleDriveCredential(Base):
+    __tablename__ = "analise_google_drive_credentials"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "user_id", name="uq_analysis_google_drive_owner"),
+    )
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id = Column(String(36), nullable=False, index=True)
+    user_id = Column(String(36), nullable=False, index=True)
+    encrypted_credentials = Column(Text, nullable=False)
+    drive_folder_id = Column(String(255), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class AnaliseMensagem(Base):

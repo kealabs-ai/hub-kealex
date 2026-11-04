@@ -111,6 +111,7 @@ services:
     container_name: kealex-svc-documentos
     environment:
       - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_GOOGLE_DRIVE_ENCRYPTION_KEY=${KEALEX_GOOGLE_DRIVE_ENCRYPTION_KEY:-}
       - KEALEX_DB_HOST=${KEALEX_DB_HOST}
       - KEALEX_DB_PORT=${KEALEX_DB_PORT}
       - KEALEX_DB_NAME=${KEALEX_DB_NAME}

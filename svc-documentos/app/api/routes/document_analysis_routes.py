@@ -2,6 +2,7 @@ import io
 import json
 import base64
 import hashlib
+import logging
 import os
 import re
 import subprocess
@@ -14,15 +15,26 @@ from typing import Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from starlette.concurrency import run_in_threadpool
 from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from app.api.dependencies import auth_guard as _guard
 from app.api.schemas.analysis_schema import MessageIn
-from app.infrastructure.database.models.analysis_model import AnaliseConversa, AnaliseDocumento, AnaliseMensagem
+from app.api.schemas.google_drive_schema import GoogleDriveCredentialIn
+from app.infrastructure.database.models.analysis_model import AnaliseConversa, AnaliseDocumento, AnaliseMensagem, GoogleDriveCredential
 from app.infrastructure.database.session import get_db
+from app.infrastructure.google_drive import (
+    GoogleDriveClient,
+    GoogleDriveError,
+    decrypt_credentials,
+    encrypt_credentials,
+    validate_credentials_json,
+)
 
 router = APIRouter(prefix="/k1/lex/analise-documentos", tags=["análise documental"])
+logger = logging.getLogger(__name__)
 MAX_FILE_BYTES = 10 * 1024 * 1024
 MAX_DOCUMENT_CHARS = 900_000
 MAX_PDF_PAGES = 250
@@ -42,6 +54,25 @@ def _owner(payload):
     if not user_id or not tenant_id:
         raise HTTPException(401, "Sessão inválida.")
     return str(tenant_id), str(user_id)
+
+
+def _google_drive_connection(db: Session, tenant_id: str, user_id: str) -> GoogleDriveCredential:
+    connection = db.query(GoogleDriveCredential).filter_by(tenant_id=tenant_id, user_id=user_id).first()
+    if not connection:
+        raise HTTPException(400, "Configure o Google Drive no seu Perfil antes de enviar documentos.")
+    return connection
+
+
+def _google_drive_client(connection: GoogleDriveCredential) -> GoogleDriveClient:
+    try:
+        credentials_json = decrypt_credentials(connection.encrypted_credentials)
+        return GoogleDriveClient(credentials_json, connection.drive_folder_id)
+    except GoogleDriveError as exc:
+        raise HTTPException(500, str(exc)) from exc
+
+
+def _google_drive_error(exc: GoogleDriveError):
+    raise HTTPException(502, str(exc)) from exc
 
 
 def _conversation(db: Session, conversation_id: str, tenant_id: str, user_id: str):
@@ -70,6 +101,7 @@ def _document_dict(document: AnaliseDocumento):
         "tamanhoBytes": document.tamanho_bytes,
         "paginas": document.paginas,
         "status": "processado",
+        "driveUrl": document.drive_web_view_link,
         "createdAt": document.created_at.isoformat(),
     }
 
@@ -352,6 +384,105 @@ def _request_ai(db: Session, tenant_id: str, user_id: str, history, documents, q
     except (URLError, TimeoutError) as exc: raise HTTPException(502, "Não foi possível conectar ao provedor de IA.") from exc
     except (KeyError, IndexError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc: raise HTTPException(502, "O provedor retornou uma resposta inválida.") from exc
 
+
+def _google_drive_config_dict(connection: GoogleDriveCredential | None):
+    if not connection:
+        return {"configurado": False, "tipo": None, "driveFolderId": None, "updatedAt": None}
+    credentials_json = decrypt_credentials(connection.encrypted_credentials)
+    credentials = validate_credentials_json(credentials_json)
+    return {
+        "configurado": True,
+        "tipo": credentials["type"],
+        "driveFolderId": connection.drive_folder_id,
+        "updatedAt": connection.updated_at.isoformat(),
+    }
+
+
+@router.get("/configuracoes/google-drive")
+def get_google_drive_config(db: Session = Depends(get_db), payload=Depends(require_lawyer)):
+    tenant_id, user_id = _owner(payload)
+    connection = db.query(GoogleDriveCredential).filter_by(tenant_id=tenant_id, user_id=user_id).first()
+    return _google_drive_config_dict(connection)
+
+
+@router.put("/configuracoes/google-drive")
+def save_google_drive_config(body: GoogleDriveCredentialIn, db: Session = Depends(get_db), payload=Depends(require_lawyer)):
+    tenant_id, user_id = _owner(payload)
+    connection = db.query(GoogleDriveCredential).filter_by(tenant_id=tenant_id, user_id=user_id).first()
+    credential_json = body.credential_json.strip() if body.credential_json else None
+    if not credential_json and not connection:
+        raise HTTPException(422, "Informe as credenciais do Google Drive.")
+    if credential_json:
+        try:
+            credentials = validate_credentials_json(credential_json)
+            encrypted_credentials = encrypt_credentials(credential_json)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(500, str(exc)) from exc
+    else:
+        credentials = json.loads(decrypt_credentials(connection.encrypted_credentials))
+        encrypted_credentials = connection.encrypted_credentials
+
+    if connection:
+        stored_credentials = json.loads(decrypt_credentials(connection.encrypted_credentials))
+        existing_drive_files = db.query(AnaliseDocumento.id).filter(
+            AnaliseDocumento.tenant_id == tenant_id,
+            AnaliseDocumento.user_id == user_id,
+            AnaliseDocumento.drive_file_id.isnot(None),
+        ).count()
+        if existing_drive_files and stored_credentials != credentials:
+            raise HTTPException(
+                409,
+                "Remova os documentos enviados ao Drive antes de trocar as credenciais, para evitar arquivos órfãos.",
+            )
+        connection.encrypted_credentials = encrypted_credentials
+        connection.drive_folder_id = body.drive_folder_id.strip() if body.drive_folder_id and body.drive_folder_id.strip() else None
+        connection.updated_at = datetime.utcnow()
+    else:
+        connection = GoogleDriveCredential(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            encrypted_credentials=encrypted_credentials,
+            drive_folder_id=body.drive_folder_id.strip() if body.drive_folder_id and body.drive_folder_id.strip() else None,
+        )
+        db.add(connection)
+    db.commit()
+    db.refresh(connection)
+    return _google_drive_config_dict(connection)
+
+
+@router.post("/configuracoes/google-drive/testar")
+def test_google_drive_config(db: Session = Depends(get_db), payload=Depends(require_lawyer)):
+    tenant_id, user_id = _owner(payload)
+    connection = _google_drive_connection(db, tenant_id, user_id)
+    client = _google_drive_client(connection)
+    try:
+        account = client.test_connection()
+    except GoogleDriveError as exc:
+        _google_drive_error(exc)
+    return {"ok": True, "email": account["email"], "nome": account["displayName"]}
+
+
+@router.delete("/configuracoes/google-drive")
+def delete_google_drive_config(db: Session = Depends(get_db), payload=Depends(require_lawyer)):
+    tenant_id, user_id = _owner(payload)
+    connection = _google_drive_connection(db, tenant_id, user_id)
+    existing_drive_files = db.query(AnaliseDocumento.id).filter(
+        AnaliseDocumento.tenant_id == tenant_id,
+        AnaliseDocumento.user_id == user_id,
+        AnaliseDocumento.drive_file_id.isnot(None),
+    ).count()
+    if existing_drive_files:
+        raise HTTPException(
+            409,
+            "Remova os documentos enviados ao Drive antes de desconectar a conta.",
+        )
+    db.delete(connection)
+    db.commit()
+    return {"ok": True}
+
+
 @router.get("/conversas")
 def list_conversations(db: Session = Depends(get_db), payload=Depends(require_lawyer)):
     tenant_id, user_id = _owner(payload)
@@ -380,6 +511,15 @@ def get_conversation(conversation_id: str, db: Session = Depends(get_db), payloa
 def delete_conversation(conversation_id: str, db: Session = Depends(get_db), payload=Depends(require_lawyer)):
     tenant_id, user_id = _owner(payload)
     conversation = _conversation(db, conversation_id, tenant_id, user_id)
+    documents = _chunks_for(db, conversation.id, tenant_id, user_id)
+    drive_documents = [document for document in documents if document.drive_file_id]
+    if drive_documents:
+        client = _google_drive_client(_google_drive_connection(db, tenant_id, user_id))
+        try:
+            for document in drive_documents:
+                client.delete(document.drive_file_id)
+        except GoogleDriveError as exc:
+            _google_drive_error(exc)
     db.query(AnaliseDocumento).filter_by(conversa_id=conversation.id, tenant_id=tenant_id, user_id=user_id).delete(synchronize_session=False)
     db.query(AnaliseMensagem).filter_by(conversa_id=conversation.id, tenant_id=tenant_id, user_id=user_id).delete(synchronize_session=False)
     db.delete(conversation)
@@ -391,6 +531,7 @@ def delete_conversation(conversation_id: str, db: Session = Depends(get_db), pay
 async def upload_document(conversation_id: str, file: UploadFile = File(...), db: Session = Depends(get_db), payload=Depends(require_lawyer)):
     tenant_id, user_id = _owner(payload)
     conversation = _conversation(db, conversation_id, tenant_id, user_id)
+    connection = _google_drive_connection(db, tenant_id, user_id)
     raw_name = os.path.basename((file.filename or "documento").replace("\\", "/"))
     name = "".join(char for char in raw_name if char.isprintable() and char not in "/\\")[:255].strip()
     extension = name.rsplit(".", 1)[-1].lower() if "." in name else ""
@@ -400,14 +541,50 @@ async def upload_document(conversation_id: str, file: UploadFile = File(...), db
     await file.close()
     if not data or len(data) > MAX_FILE_BYTES:
         raise HTTPException(413, "Cada documento deve ter até 10 MB.")
-    chunks, page_count = _extract_file(extension, data)
-    document = AnaliseDocumento(id=str(uuid.uuid4()), tenant_id=tenant_id, user_id=user_id, conversa_id=conversation.id, nome=name or f"documento.{extension}", extensao=extension, tamanho_bytes=len(data), paginas=page_count, chunks_json=json.dumps(chunks, ensure_ascii=False))
+    chunks, page_count = await run_in_threadpool(_extract_file, extension, data)
+    mime_types = {
+        "pdf": "application/pdf",
+        "doc": "application/msword",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "txt": "text/plain",
+        "md": "text/markdown",
+    }
+    drive_client = _google_drive_client(connection)
+    try:
+        drive_file = await run_in_threadpool(drive_client.upload, name or f"documento.{extension}", mime_types[extension], data)
+    except GoogleDriveError as exc:
+        _google_drive_error(exc)
+    document = AnaliseDocumento(
+        id=str(uuid.uuid4()),
+        tenant_id=tenant_id,
+        user_id=user_id,
+        conversa_id=conversation.id,
+        nome=name or f"documento.{extension}",
+        extensao=extension,
+        tamanho_bytes=len(data),
+        paginas=page_count,
+        chunks_json=json.dumps(chunks, ensure_ascii=False),
+        drive_file_id=drive_file["id"],
+        drive_web_view_link=drive_file["webViewLink"] or None,
+    )
     db.add(document)
     if conversation.titulo == "Nova análise documental":
         conversation.titulo = (name or "Nova análise documental")[:255]
     conversation.updated_at = datetime.utcnow()
-    db.commit()
-    db.refresh(document)
+    try:
+        db.commit()
+        db.refresh(document)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        try:
+            await run_in_threadpool(drive_client.delete, drive_file["id"])
+        except GoogleDriveError:
+            logger.exception("Could not clean up uploaded Google Drive file after database failure.")
+            raise HTTPException(
+                502,
+                "O arquivo chegou ao Google Drive, mas o Kealex não conseguiu registrar a análise. Verifique a pasta configurada.",
+            ) from exc
+        raise HTTPException(500, "Não foi possível registrar o documento na análise.") from exc
     return _document_dict(document)
 
 
@@ -418,6 +595,12 @@ def delete_document(conversation_id: str, document_id: str, db: Session = Depend
     document = db.query(AnaliseDocumento).filter_by(id=document_id, conversa_id=conversation_id, tenant_id=tenant_id, user_id=user_id).first()
     if not document:
         raise HTTPException(404, "Documento não encontrado nesta análise.")
+    if document.drive_file_id:
+        client = _google_drive_client(_google_drive_connection(db, tenant_id, user_id))
+        try:
+            client.delete(document.drive_file_id)
+        except GoogleDriveError as exc:
+            _google_drive_error(exc)
     db.delete(document)
     db.commit()
     return {"ok": True}
@@ -448,4 +631,3 @@ def send_message(conversation_id: str, body: MessageIn, db: Session = Depends(ge
     db.add_all([user_message, assistant_message])
     db.commit()
     return _message_dict(assistant_message)
-
