@@ -64,8 +64,8 @@ class GoogleDriveRouteTests(unittest.TestCase):
                     self.assertEqual(client.get(config_path).json()["configurado"], False)
 
                     saved = client.put(config_path, json={
-                        "credential_json": json.dumps(credentials),
-                        "drive_folder_id": "folder-1",
+                        "credentialJson": json.dumps(credentials),
+                        "driveFolderId": "folder-1",
                     })
                     self.assertEqual(saved.status_code, 200)
                     self.assertEqual(saved.json()["tipo"], "authorized_user")
