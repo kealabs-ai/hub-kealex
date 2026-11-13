@@ -17,7 +17,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import auth_guard
-from app.api.schemas.google_drive_oauth_schema import GoogleOAuthCompletionIn
+from app.api.schemas.google_drive_oauth_schema import GoogleOAuthCompletionIn, GoogleUploadOAuthCompletionIn, GoogleUploadOAuthStartIn
 from app.infrastructure.database.models.analysis_model import GoogleDriveOAuthConnection
 from app.infrastructure.database.session import get_db
 from app.infrastructure.google_drive_read_service import (
@@ -36,25 +36,36 @@ logger = logging.getLogger(__name__)
 def _owner(payload: dict) -> tuple[str, str]:
     tenant_id, user_id = payload.get("tenant_id"), payload.get("sub")
     if not tenant_id or not user_id:
-        raise HTTPException(401, "Sessão inválida.")
+        raise HTTPException(401, "SessÃ£o invÃ¡lida.")
     return str(tenant_id), str(user_id)
 
 
 def _require_lawyer(payload=Depends(auth_guard)):
     if payload.get("role") != "advogado":
-        raise HTTPException(403, "A integração com Google Drive está disponível somente para usuários com perfil advogado.")
+        raise HTTPException(403, "A integraÃ§Ã£o com Google Drive estÃ¡ disponÃ­vel somente para usuÃ¡rios com perfil advogado.")
     return payload
+
+
+def _oauth_state_secret() -> str:
+    state_secret = os.getenv("KEALEX_SECRET_KEY") or os.getenv("KEALEX_JWT_SECRET")
+    if not state_secret:
+        raise HTTPException(503, "A chave de sessão OAuth não está configurada no servidor.")
+    return state_secret
+
+
+def _oauth_redirect_uri() -> str:
+    redirect_uri = os.getenv("KEALEX_GOOGLE_OAUTH_REDIRECT_URI", "").strip()
+    if not redirect_uri:
+        raise HTTPException(503, "Configure a URL de callback OAuth do Google Drive no servidor.")
+    return redirect_uri
 
 
 def _oauth_config() -> tuple[str, str, str, str]:
     client_id = os.getenv("KEALEX_GOOGLE_OAUTH_CLIENT_ID", "").strip()
     client_secret = os.getenv("KEALEX_GOOGLE_OAUTH_CLIENT_SECRET", "").strip()
-    redirect_uri = os.getenv("KEALEX_GOOGLE_OAUTH_REDIRECT_URI", "").strip()
-    state_secret = os.getenv("KEALEX_SECRET_KEY") or os.getenv("KEALEX_JWT_SECRET")
-    if not all((client_id, client_secret, redirect_uri, state_secret)):
-        raise HTTPException(503, "A autenticação OAuth do Google Drive não está configurada no servidor.")
-    return client_id, client_secret, redirect_uri, state_secret
-
+    if not client_id or not client_secret:
+        raise HTTPException(503, "A conexão de leitura do Google Drive não está configurada no servidor.")
+    return client_id, client_secret, _oauth_redirect_uri(), _oauth_state_secret()
 
 def _encode_state(payload: dict, secret: str, purpose: str = "readonly") -> str:
     claims = {
@@ -80,7 +91,7 @@ def _decode_state(state: str, secret: str, purpose: str = "readonly") -> dict:
             raise ValueError("expired state")
         return claims
     except (ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
-        raise HTTPException(400, "A autorização do Google expirou ou é inválida. Inicie novamente.") from exc
+        raise HTTPException(400, "A autorizaÃ§Ã£o do Google expirou ou Ã© invÃ¡lida. Inicie novamente.") from exc
 
 
 def _connection(db: Session, tenant_id: str, user_id: str) -> GoogleDriveOAuthConnection:
@@ -118,52 +129,55 @@ def _authorization_url(payload: dict) -> str:
     })
 
 
-@router.get("/upload/auth/url")
-def google_upload_auth_url(payload=Depends(_require_lawyer)):
-    client_id, _, redirect_uri, secret = _oauth_config()
-    state = _encode_state(payload, secret, purpose="upload")
-    return {"authorizationUrl": "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode({
-        "client_id": client_id,
-        "redirect_uri": redirect_uri,
-        "response_type": "code",
-        "scope": "https://www.googleapis.com/auth/drive.file",
-        "access_type": "offline",
-        "prompt": "consent",
-        "state": state,
-    })}
+@router.post("/upload/auth/url")
+def google_upload_auth_url(body: GoogleUploadOAuthStartIn, payload=Depends(_require_lawyer)):
+    from google_auth_oauthlib.flow import Flow
+
+    state = _encode_state(payload, _oauth_state_secret(), purpose="upload")
+    flow = Flow.from_client_config(
+        {"web": {"client_id": body.client_id, "client_secret": body.client_secret, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token"}},
+        scopes=["https://www.googleapis.com/auth/drive.file"],
+        redirect_uri=_oauth_redirect_uri(),
+    )
+    authorization_url, _ = flow.authorization_url(
+        access_type="offline",
+        prompt="consent",
+        state=state,
+    )
+    return {"authorizationUrl": authorization_url}
 
 
 @router.post("/upload/callback")
-def complete_google_upload_oauth(body: GoogleOAuthCompletionIn, payload=Depends(_require_lawyer)):
+def complete_google_upload_oauth(body: GoogleUploadOAuthCompletionIn, response: Response, payload=Depends(_require_lawyer)):
     from google_auth_oauthlib.flow import Flow
 
-    client_id, client_secret, redirect_uri, secret = _oauth_config()
-    claims = _decode_state(body.state, secret, purpose="upload")
+    claims = _decode_state(body.state, _oauth_state_secret(), purpose="upload")
     tenant_id, user_id = _owner(payload)
     if (claims.get("tenant_id"), claims.get("user_id")) != (tenant_id, user_id):
-        raise HTTPException(403, "Esta autoriza\u00e7\u00e3o foi iniciada por outra sess\u00e3o.")
+        raise HTTPException(403, "Esta autorização foi iniciada por outra sessão.")
 
     flow = Flow.from_client_config(
-        {"web": {"client_id": client_id, "client_secret": client_secret, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token"}},
+        {"web": {"client_id": body.client_id, "client_secret": body.client_secret, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token"}},
         scopes=["https://www.googleapis.com/auth/drive.file"],
-        redirect_uri=redirect_uri,
+        redirect_uri=_oauth_redirect_uri(),
     )
     try:
         flow.fetch_token(code=body.code)
         credentials = flow.credentials
         if not credentials.refresh_token:
-            raise HTTPException(400, "O Google n\u00e3o retornou refresh_token. Revogue o acesso anterior e autorize novamente.")
+            raise HTTPException(400, "O Google não retornou refresh_token. Revogue o acesso anterior e autorize novamente.")
+        response.headers["Cache-Control"] = "no-store"
         return {
             "type": "authorized_user",
-            "client_id": client_id,
-            "client_secret": client_secret,
+            "client_id": body.client_id,
+            "client_secret": body.client_secret,
             "refresh_token": credentials.refresh_token,
         }
     except HTTPException:
         raise
     except Exception as exc:
         logger.exception("Google Drive upload OAuth exchange failed")
-        raise HTTPException(502, "N\u00e3o foi poss\u00edvel gerar as credenciais do Google Drive.") from exc
+        raise HTTPException(502, "Não foi possível gerar as credenciais do Google Drive.") from exc
 
 @router.get("/auth/url")
 def google_auth_url(payload=Depends(_require_lawyer)):
@@ -176,14 +190,14 @@ def google_callback(code: str = "", state: str = "", error: str = ""):
     """Relay Google's one-time authorization code to the authenticated SPA completion step."""
     app_url = os.getenv("KEALEX_PUBLIC_APP_URL", "").strip().rstrip("/")
     if not app_url:
-        raise HTTPException(503, "Configure KEALEX_PUBLIC_APP_URL para concluir a autorização Google.")
+        raise HTTPException(503, "Configure KEALEX_PUBLIC_APP_URL para concluir a autorizaÃ§Ã£o Google.")
     if error or not code or not state:
         params = {"google_drive_oauth_error": "1"}
     else:
         params = {"google_drive_oauth_code": code, "google_drive_oauth_state": state}
         try:
-            _, _, _, secret = _oauth_config()
-            _decode_state(state, secret, purpose="upload")
+
+            _decode_state(state, _oauth_state_secret(), purpose="upload")
             params["google_drive_oauth_type"] = "upload"
         except HTTPException:
             pass
@@ -196,7 +210,7 @@ def complete_google_callback(body: GoogleOAuthCompletionIn, db: Session = Depend
     claims = _decode_state(body.state, secret)
     tenant_id, user_id = _owner(payload)
     if (claims.get("tenant_id"), claims.get("user_id")) != (tenant_id, user_id):
-        raise HTTPException(403, "Esta autorização foi iniciada por outra sessão.")
+        raise HTTPException(403, "Esta autorizaÃ§Ã£o foi iniciada por outra sessÃ£o.")
 
     token_request = Request(
         "https://oauth2.googleapis.com/token",
@@ -215,11 +229,11 @@ def complete_google_callback(body: GoogleOAuthCompletionIn, db: Session = Depend
             token_payload = json.loads(response.read().decode("utf-8"))
         refresh_token = token_payload.get("refresh_token")
         if not refresh_token:
-            raise HTTPException(400, "O Google não retornou refresh_token. Tente autorizar novamente.")
+            raise HTTPException(400, "O Google nÃ£o retornou refresh_token. Tente autorizar novamente.")
         granted_scopes_value = token_payload.get("scope")
         granted_scopes = set(str(granted_scopes_value).split())
         if granted_scopes_value and DRIVE_READONLY_SCOPE not in granted_scopes:
-            raise HTTPException(403, "A conta não concedeu a permissão de leitura do Google Drive.")
+            raise HTTPException(403, "A conta nÃ£o concedeu a permissÃ£o de leitura do Google Drive.")
 
         service = GoogleDriveService(refresh_token, client_id=client_id, client_secret=client_secret)
         account = service.get_account()
@@ -248,8 +262,8 @@ def complete_google_callback(body: GoogleOAuthCompletionIn, db: Session = Depend
         db.rollback()
         logger.exception("Google Drive OAuth exchange failed")
         if isinstance(exc, GoogleDriveReauthenticationRequired):
-            raise HTTPException(400, "O Google recusou a autorização. Revise o consentimento e tente novamente.") from exc
-        raise HTTPException(502, "Não foi possível concluir a conexão com o Google Drive.") from exc
+            raise HTTPException(400, "O Google recusou a autorizaÃ§Ã£o. Revise o consentimento e tente novamente.") from exc
+        raise HTTPException(502, "NÃ£o foi possÃ­vel concluir a conexÃ£o com o Google Drive.") from exc
 
 
 @router.get("/connection")
