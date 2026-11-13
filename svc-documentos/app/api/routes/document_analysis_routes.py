@@ -10,11 +10,13 @@ import tempfile
 import time
 import uuid
 import zipfile
+import hmac
 from datetime import datetime
 from typing import Optional
+from urllib.parse import urlencode
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
 from starlette.concurrency import run_in_threadpool
 from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy import text
@@ -403,6 +405,126 @@ def get_google_drive_config(db: Session = Depends(get_db), payload=Depends(requi
     tenant_id, user_id = _owner(payload)
     connection = db.query(GoogleDriveCredential).filter_by(tenant_id=tenant_id, user_id=user_id).first()
     return _google_drive_config_dict(connection)
+
+
+def _google_oauth_settings():
+    client_id = os.getenv("KEALEX_GOOGLE_OAUTH_CLIENT_ID", "").strip()
+    redirect_uri = os.getenv("KEALEX_GOOGLE_OAUTH_REDIRECT_URI", "").strip()
+    client_secret = os.getenv("KEALEX_GOOGLE_OAUTH_CLIENT_SECRET", "").strip()
+    secret = os.getenv("KEALEX_SECRET_KEY") or os.getenv("KEALEX_JWT_SECRET")
+    if not client_id or not client_secret or not redirect_uri or not secret:
+        raise HTTPException(503, "A conexão Google OAuth não está configurada no servidor.")
+    return client_id, client_secret, redirect_uri, secret
+
+
+def _google_oauth_state(payload, secret: str):
+    issued_at = int(time.time())
+    claims = f"{payload['tenant_id']}:{payload['sub']}:{issued_at}:{uuid.uuid4().hex}"
+    signature = hmac.new(secret.encode("utf-8"), claims.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{claims}:{signature}"
+
+
+@router.post("/configuracoes/google-drive/oauth/iniciar")
+def start_google_drive_oauth(payload=Depends(require_lawyer)):
+    client_id, _, redirect_uri, secret = _google_oauth_settings()
+    state = _google_oauth_state(payload, secret)
+    authorization_url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode({
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "https://www.googleapis.com/auth/drive.file",
+        "access_type": "offline",
+        "prompt": "consent",
+        "include_granted_scopes": "true",
+        "state": state,
+    })
+    return {"authorizationUrl": authorization_url}
+
+
+@router.get("/configuracoes/google-drive/oauth/callback")
+def google_drive_oauth_callback(code: str = "", state: str = "", error: str = ""):
+    frontend_url = os.getenv("KEALEX_PUBLIC_APP_URL", "").strip().rstrip("/")
+    if not frontend_url:
+        raise HTTPException(503, "Configure KEALEX_PUBLIC_APP_URL para concluir a autorização Google.")
+    from fastapi.responses import RedirectResponse
+    params = {"google_drive_oauth_error": "1"} if error or not code or not state else {
+        "google_drive_oauth_code": code,
+        "google_drive_oauth_state": state,
+    }
+    return RedirectResponse(f"{frontend_url}/perfil?{urlencode(params)}", status_code=303)
+
+
+@router.post("/configuracoes/google-drive/oauth/concluir")
+def complete_google_drive_oauth(body: dict = Body(...), db: Session = Depends(get_db), payload=Depends(require_lawyer)):
+    code = str(body.get("code") or "")
+    state = str(body.get("state") or "")
+    if not code or not state:
+        raise HTTPException(422, "A autorização Google está incompleta.")
+    try:
+        client_id, client_secret, redirect_uri, signing_secret = _google_oauth_settings()
+        parts = state.rsplit(":", 4)
+        if len(parts) != 5:
+            raise HTTPException(400, "A autorização Google é inválida. Inicie a conexão novamente.")
+        tenant_id, user_id, issued_at, nonce, signature = parts
+        claims = ":".join(parts[:-1])
+        expected = hmac.new(signing_secret.encode("utf-8"), claims.encode("utf-8"), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(signature, expected) or not nonce or abs(int(time.time()) - int(issued_at)) > 600:
+            raise HTTPException(400, "A autorização Google expirou. Inicie a conexão novamente.")
+        current_tenant_id, current_user_id = _owner(payload)
+        if (tenant_id, user_id) != (current_tenant_id, current_user_id):
+            raise HTTPException(403, "A autorização Google foi iniciada por outra sessão.")
+        request = Request(
+            "https://oauth2.googleapis.com/token",
+            data=urlencode({
+                "code": code,
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code",
+            }).encode("utf-8"),
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            method="POST",
+        )
+        with urlopen(request, timeout=20) as response:
+            token_data = json.loads(response.read().decode("utf-8"))
+        refresh_token = token_data.get("refresh_token") if isinstance(token_data, dict) else None
+        if not refresh_token:
+            raise HTTPException(400, "O Google não retornou autorização persistente para o Drive. Tente novamente.")
+        credentials_json = json.dumps({
+            "type": "authorized_user",
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "refresh_token": refresh_token,
+            "token_uri": "https://oauth2.googleapis.com/token",
+        })
+        encrypted_credentials = encrypt_credentials(credentials_json)
+        connection = db.query(GoogleDriveCredential).filter_by(tenant_id=tenant_id, user_id=user_id).first()
+        if connection:
+            existing_drive_files = db.query(AnaliseDocumento.id).filter(
+                AnaliseDocumento.tenant_id == tenant_id,
+                AnaliseDocumento.user_id == user_id,
+                AnaliseDocumento.drive_file_id.isnot(None),
+            ).count()
+            if existing_drive_files:
+                raise HTTPException(409, "Remova os documentos enviados ao Drive antes de trocar a conta Google.")
+            connection.encrypted_credentials = encrypted_credentials
+            connection.updated_at = datetime.utcnow()
+        else:
+            connection = GoogleDriveCredential(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                encrypted_credentials=encrypted_credentials,
+            )
+            db.add(connection)
+        db.commit()
+        return {"ok": True, "config": _google_drive_config_dict(connection)}
+    except HTTPException:
+        db.rollback()
+        raise
+    except (SQLAlchemyError, URLError, TimeoutError, UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError) as exc:
+        db.rollback()
+        logger.exception("Google Drive OAuth callback failed")
+        raise HTTPException(502, "Não foi possível concluir a autorização do Google Drive.") from exc
 
 
 @router.put("/configuracoes/google-drive")
