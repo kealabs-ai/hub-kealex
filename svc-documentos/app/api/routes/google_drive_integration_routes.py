@@ -11,7 +11,7 @@ from urllib.parse import urlencode, quote
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request as FastAPIRequest
 from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -53,11 +53,21 @@ def _oauth_state_secret() -> str:
     return state_secret
 
 
-def _oauth_redirect_uri() -> str:
-    redirect_uri = os.getenv("KEALEX_GOOGLE_OAUTH_REDIRECT_URI", "").strip()
-    if not redirect_uri:
-        raise HTTPException(503, "Configure a URL de callback OAuth do Google Drive no servidor.")
-    return redirect_uri
+def _oauth_redirect_uri(request: FastAPIRequest | None = None) -> str:
+    configured_uri = os.getenv("KEALEX_GOOGLE_OAUTH_REDIRECT_URI", "").strip()
+    if request is None:
+        if configured_uri:
+            return configured_uri
+        raise HTTPException(503, "Callback URI indisponível.")
+    host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").split(",", 1)[0].strip()
+    if not host:
+        raise HTTPException(503, "Não foi possível determinar o host público para o callback OAuth.")
+    local_host = host.startswith("localhost") or host.startswith("127.0.0.1")
+    forwarded_scheme = (request.headers.get("x-forwarded-proto") or "").split(",", 1)[0].strip().lower()
+    scheme = forwarded_scheme if forwarded_scheme in {"http", "https"} else request.url.scheme
+    if not local_host:
+        scheme = "https"
+    return f"{scheme}://{host}/api/v1/integrations/google/callback"
 
 
 def _oauth_config() -> tuple[str, str, str, str]:
@@ -130,14 +140,14 @@ def _authorization_url(payload: dict) -> str:
 
 
 @router.post("/upload/auth/url")
-def google_upload_auth_url(body: GoogleUploadOAuthStartIn, payload=Depends(_require_lawyer)):
+def google_upload_auth_url(body: GoogleUploadOAuthStartIn, request: FastAPIRequest, payload=Depends(_require_lawyer)):
     from google_auth_oauthlib.flow import Flow
 
     state = _encode_state(payload, _oauth_state_secret(), purpose="upload")
     flow = Flow.from_client_config(
         {"web": {"client_id": body.client_id, "client_secret": body.client_secret, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token"}},
         scopes=["https://www.googleapis.com/auth/drive.file"],
-        redirect_uri=_oauth_redirect_uri(),
+        redirect_uri=_oauth_redirect_uri(request),
     )
     authorization_url, _ = flow.authorization_url(
         access_type="offline",
@@ -148,7 +158,7 @@ def google_upload_auth_url(body: GoogleUploadOAuthStartIn, payload=Depends(_requ
 
 
 @router.post("/upload/callback")
-def complete_google_upload_oauth(body: GoogleUploadOAuthCompletionIn, response: Response, payload=Depends(_require_lawyer)):
+def complete_google_upload_oauth(body: GoogleUploadOAuthCompletionIn, request: FastAPIRequest, response: Response, payload=Depends(_require_lawyer)):
     from google_auth_oauthlib.flow import Flow
 
     claims = _decode_state(body.state, _oauth_state_secret(), purpose="upload")
@@ -159,7 +169,7 @@ def complete_google_upload_oauth(body: GoogleUploadOAuthCompletionIn, response: 
     flow = Flow.from_client_config(
         {"web": {"client_id": body.client_id, "client_secret": body.client_secret, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token"}},
         scopes=["https://www.googleapis.com/auth/drive.file"],
-        redirect_uri=_oauth_redirect_uri(),
+        redirect_uri=_oauth_redirect_uri(request),
     )
     try:
         flow.fetch_token(code=body.code)
