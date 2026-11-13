@@ -56,26 +56,27 @@ def _oauth_config() -> tuple[str, str, str, str]:
     return client_id, client_secret, redirect_uri, state_secret
 
 
-def _encode_state(payload: dict, secret: str) -> str:
+def _encode_state(payload: dict, secret: str, purpose: str = "readonly") -> str:
     claims = {
         "tenant_id": str(payload["tenant_id"]),
         "user_id": str(payload["sub"]),
         "iat": int(time.time()),
         "nonce": uuid.uuid4().hex,
+        "purpose": purpose,
     }
     body = base64.urlsafe_b64encode(json.dumps(claims, separators=(",", ":")).encode()).decode().rstrip("=")
     signature = hmac.new(secret.encode(), body.encode(), hashlib.sha256).hexdigest()
     return f"{body}.{signature}"
 
 
-def _decode_state(state: str, secret: str) -> dict:
+def _decode_state(state: str, secret: str, purpose: str = "readonly") -> dict:
     try:
         body, signature = state.split(".", 1)
         expected = hmac.new(secret.encode(), body.encode(), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(signature, expected):
             raise ValueError("invalid signature")
         claims = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
-        if not claims.get("nonce") or abs(int(time.time()) - int(claims["iat"])) > 600:
+        if claims.get("purpose", "readonly") != purpose or not claims.get("nonce") or abs(int(time.time()) - int(claims["iat"])) > 600:
             raise ValueError("expired state")
         return claims
     except (ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
@@ -117,6 +118,53 @@ def _authorization_url(payload: dict) -> str:
     })
 
 
+@router.get("/upload/auth/url")
+def google_upload_auth_url(payload=Depends(_require_lawyer)):
+    client_id, _, redirect_uri, secret = _oauth_config()
+    state = _encode_state(payload, secret, purpose="upload")
+    return {"authorizationUrl": "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode({
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "https://www.googleapis.com/auth/drive.file",
+        "access_type": "offline",
+        "prompt": "consent",
+        "state": state,
+    })}
+
+
+@router.post("/upload/callback")
+def complete_google_upload_oauth(body: GoogleOAuthCompletionIn, payload=Depends(_require_lawyer)):
+    from google_auth_oauthlib.flow import Flow
+
+    client_id, client_secret, redirect_uri, secret = _oauth_config()
+    claims = _decode_state(body.state, secret, purpose="upload")
+    tenant_id, user_id = _owner(payload)
+    if (claims.get("tenant_id"), claims.get("user_id")) != (tenant_id, user_id):
+        raise HTTPException(403, "Esta autoriza\u00e7\u00e3o foi iniciada por outra sess\u00e3o.")
+
+    flow = Flow.from_client_config(
+        {"web": {"client_id": client_id, "client_secret": client_secret, "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token"}},
+        scopes=["https://www.googleapis.com/auth/drive.file"],
+        redirect_uri=redirect_uri,
+    )
+    try:
+        flow.fetch_token(code=body.code)
+        credentials = flow.credentials
+        if not credentials.refresh_token:
+            raise HTTPException(400, "O Google n\u00e3o retornou refresh_token. Revogue o acesso anterior e autorize novamente.")
+        return {
+            "type": "authorized_user",
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "refresh_token": credentials.refresh_token,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Google Drive upload OAuth exchange failed")
+        raise HTTPException(502, "N\u00e3o foi poss\u00edvel gerar as credenciais do Google Drive.") from exc
+
 @router.get("/auth/url")
 def google_auth_url(payload=Depends(_require_lawyer)):
     """Return the Google URL for SPAs using bearer-token authentication."""
@@ -129,10 +177,16 @@ def google_callback(code: str = "", state: str = "", error: str = ""):
     app_url = os.getenv("KEALEX_PUBLIC_APP_URL", "").strip().rstrip("/")
     if not app_url:
         raise HTTPException(503, "Configure KEALEX_PUBLIC_APP_URL para concluir a autorização Google.")
-    params = {"google_drive_oauth_error": "1"} if error or not code or not state else {
-        "google_drive_oauth_code": code,
-        "google_drive_oauth_state": state,
-    }
+    if error or not code or not state:
+        params = {"google_drive_oauth_error": "1"}
+    else:
+        params = {"google_drive_oauth_code": code, "google_drive_oauth_state": state}
+        try:
+            _, _, _, secret = _oauth_config()
+            _decode_state(state, secret, purpose="upload")
+            params["google_drive_oauth_type"] = "upload"
+        except HTTPException:
+            pass
     return RedirectResponse(f"{app_url}/perfil?{urlencode(params)}", status_code=303)
 
 
