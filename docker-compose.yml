@@ -371,6 +371,10 @@ services:
     environment:
       - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY:-${KEALEX_JWT_SECRET}}
       - KEALEX_GOOGLE_DRIVE_ENCRYPTION_KEY=${KEALEX_GOOGLE_DRIVE_ENCRYPTION_KEY:-}
+      - KEALEX_GOOGLE_OAUTH_CLIENT_ID=${KEALEX_GOOGLE_OAUTH_CLIENT_ID:-}
+      - KEALEX_GOOGLE_OAUTH_CLIENT_SECRET=${KEALEX_GOOGLE_OAUTH_CLIENT_SECRET:-}
+      - KEALEX_GOOGLE_OAUTH_REDIRECT_URI=${KEALEX_GOOGLE_OAUTH_REDIRECT_URI:-}
+      - KEALEX_PUBLIC_APP_URL=${KEALEX_PUBLIC_APP_URL:-}
       - KEALEX_DB_HOST=${KEALEX_DB_HOST}
       - KEALEX_DB_PORT=${KEALEX_DB_PORT:-3306}
       - KEALEX_DB_NAME=${KEALEX_DB_NAME}
@@ -383,7 +387,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-document-analysis.rule=(Host(`${KEALEX_PUBLIC_API_HOST}`) || Host(`${KEALEX_PUBLIC_LEGACY_DOMAIN}`) || Host(`${KEALEX_PUBLIC_LEGACY_WWW_DOMAIN}`)) && PathPrefix(`/k1/lex/analise-documentos`)"
+      - "traefik.http.routers.kealex-document-analysis.rule=(Host(`${KEALEX_PUBLIC_API_HOST}`) || Host(`${KEALEX_PUBLIC_LEGACY_DOMAIN}`) || Host(`${KEALEX_PUBLIC_LEGACY_WWW_DOMAIN}`)) && (PathPrefix(`/k1/lex/analise-documentos`) || PathPrefix(`/api/v1/integrations/google`))"
       - "traefik.http.routers.kealex-document-analysis.entrypoints=https"
       - "traefik.http.routers.kealex-document-analysis.tls=true"
       - "traefik.http.routers.kealex-document-analysis.priority=300"

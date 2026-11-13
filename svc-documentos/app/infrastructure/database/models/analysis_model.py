@@ -45,6 +45,22 @@ class GoogleDriveCredential(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class GoogleDriveOAuthConnection(Base):
+    """Read-only OAuth connection, isolated from upload credentials and scopes."""
+    __tablename__ = "google_drive_oauth_connections"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "user_id", name="uq_google_drive_oauth_owner"),
+    )
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id = Column(String(36), nullable=False, index=True)
+    user_id = Column(String(36), nullable=False, index=True)
+    encrypted_refresh_token = Column(Text, nullable=False)
+    email = Column(String(320), nullable=True)
+    scopes = Column(Text, nullable=False, default="https://www.googleapis.com/auth/drive.readonly")
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class AnaliseMensagem(Base):
     __tablename__ = "analise_documentos_mensagens"
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
