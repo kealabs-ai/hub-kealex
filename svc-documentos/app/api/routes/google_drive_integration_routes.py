@@ -55,9 +55,9 @@ def _oauth_state_secret() -> str:
 
 def _oauth_redirect_uri(request: FastAPIRequest | None = None) -> str:
     configured_uri = os.getenv("KEALEX_GOOGLE_OAUTH_REDIRECT_URI", "").strip()
+    if configured_uri:
+        return configured_uri
     if request is None:
-        if configured_uri:
-            return configured_uri
         raise HTTPException(503, "Callback URI indisponível.")
     host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").split(",", 1)[0].strip()
     if not host:
