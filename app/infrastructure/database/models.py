@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
-    Boolean, Column, Date, DateTime, Enum as SAEnum, ForeignKey, Index,
+    Boolean, Column, Date, DateTime, Enum as SAEnum, ForeignKey, Index, LargeBinary,
     Integer, Numeric, PrimaryKeyConstraint, String, Text, UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase
@@ -339,6 +339,52 @@ class AsaasWebhookEvent(Base):
     event       = Column(String(80),  nullable=False)
     received_at = Column(DateTime,    default=datetime.utcnow, nullable=False)
 
+class CertificateRequest(Base):
+    __tablename__ = "solicitacoes_certidoes"
+    __table_args__ = (Index("ix_solicitacoes_certidoes_escopo_criado_em", "organizacao_id", "usuario_id", "criado_em"),)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id = Column("organizacao_id", String(36), nullable=False, index=True)
+    user_id = Column("usuario_id", String(36), nullable=False, index=True)
+    provider = Column("emissor", String(40), nullable=False)
+    certificate_type = Column("tipo_certidao", String(120), nullable=False)
+    subject_type = Column("tipo_titular", String(20), nullable=False)
+    subject_identifier_masked = Column("identificador_mascarado", String(32), nullable=False)
+    subject_identifier_hash = Column("hash_identificador", String(64), nullable=False)
+    request_payload = Column("dados_solicitacao", Text, nullable=False, default="{}")
+    external_protocol = Column("protocolo_externo", String(120), nullable=True)
+    status = Column(String(40), nullable=False, default="MANUAL_ACTION_REQUIRED")
+    error_code = Column("codigo_erro", String(80), nullable=True)
+    portal_url = Column("url_portal", String(500), nullable=True)
+    created_at = Column("criado_em", DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column("atualizado_em", DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    completed_at = Column("concluido_em", DateTime, nullable=True)
+
+class CertificateDocument(Base):
+    __tablename__ = "certidoes"
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    request_id = Column("solicitacao_id", String(36), ForeignKey("solicitacoes_certidoes.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    certificate_number = Column("numero_certidao", String(120), nullable=True)
+    issued_at = Column("emitida_em", DateTime, nullable=True)
+    expires_at = Column("validade_em", DateTime, nullable=True)
+    verification_code = Column("codigo_verificacao", String(120), nullable=True)
+    official_source = Column("fonte_oficial", String(500), nullable=True)
+    upload_source = Column("origem_upload", String(30), nullable=False, default="user_upload")
+    validation_status = Column("status_validacao", String(30), nullable=False, default="unverified")
+    file_hash = Column("hash_arquivo", String(64), nullable=False)
+    content_type = Column("tipo_conteudo", String(80), nullable=False, default="application/pdf")
+    filename = Column("nome_arquivo", String(180), nullable=False)
+    file_data = Column("arquivo", LargeBinary, nullable=False)
+    created_at = Column("criado_em", DateTime, nullable=False, default=datetime.utcnow)
+
+class CertificateAuditLog(Base):
+    __tablename__ = "auditoria_certidoes"
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    request_id = Column("solicitacao_id", String(36), ForeignKey("solicitacoes_certidoes.id", ondelete="CASCADE"), nullable=False, index=True)
+    tenant_id = Column("organizacao_id", String(36), nullable=False, index=True)
+    user_id = Column("usuario_id", String(36), nullable=False)
+    action = Column("acao", String(40), nullable=False)
+    status = Column(String(40), nullable=False)
+    created_at = Column("criado_em", DateTime, nullable=False, default=datetime.utcnow)
 class Honorario(Base):
     __tablename__ = "honorarios"
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
