@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import KEALEX_SECRET_KEY
 from app.infrastructure.database.models import CertificateAuditLog, CertificateDocument, CertificateRequest
+from app.application.use_cases.kea_credits import confirm_service_credits, refund_service_credits, reserve_service_credits
 
 
 PROVIDERS = {
@@ -321,6 +322,7 @@ def _apply_cnd_result(db: Session, row: CertificateRequest, response: dict, user
         row.result_message = str(api_message or "A API CND não concluiu a emissão da certidão.")[:250]
         _audit(db, row, user_id, "official_certificate_failed")
     row.updated_at = datetime.utcnow()
+    confirm_service_credits(db, row.tenant_id, f"certidao:{row.id}")
     db.commit()
     db.refresh(row)
     return serialize_request(row)
@@ -343,6 +345,8 @@ def create_request(db: Session, payload: dict, provider: str, fields: dict):
     )
     db.add(row)
     _audit(db, row, str(payload["sub"]), "request_created")
+    if mode == "OFFICIAL_API":
+        reserve_service_credits(db, row.tenant_id, row.user_id, "receita-federal", f"certidao:{row.id}")
     db.commit()
     db.refresh(row)
     if mode != "OFFICIAL_API":
@@ -351,6 +355,7 @@ def create_request(db: Session, payload: dict, provider: str, fields: dict):
     try:
         response = _consultar_cnd(identifier)
     except RuntimeError as exc:
+        refund_service_credits(db, row.tenant_id, row.user_id, f"certidao:{row.id}")
         row.status = "FAILED"
         row.error_code = "CONECTA_INDISPONIVEL"
         row.result_message = str(exc)

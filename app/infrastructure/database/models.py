@@ -339,6 +339,41 @@ class AsaasWebhookEvent(Base):
     event       = Column(String(80),  nullable=False)
     received_at = Column(DateTime,    default=datetime.utcnow, nullable=False)
 
+class KeaCreditsWallet(Base):
+    __tablename__ = "carteiras_keacreditos"
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    organizacao_id = Column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, unique=True)
+    saldo_creditos = Column(Integer, nullable=False, default=0)
+    criado_em = Column(DateTime, nullable=False, default=datetime.utcnow)
+    atualizado_em = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class KeaCreditsTransaction(Base):
+    __tablename__ = "transacoes_keacreditos"
+    __table_args__ = (
+        UniqueConstraint("organizacao_id", "chave_idempotencia", name="uq_transacoes_keacreditos_idempotencia"),
+        UniqueConstraint("asaas_pagamento_id", name="uq_transacoes_keacreditos_asaas_pagamento"),
+        Index("ix_transacoes_keacreditos_escopo_criado", "organizacao_id", "criado_em"),
+        Index("ix_transacoes_keacreditos_status", "organizacao_id", "status"),
+    )
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    organizacao_id = Column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    usuario_id = Column(String(36), ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False)
+    tipo = Column(String(20), nullable=False)
+    status = Column(String(20), nullable=False)
+    quantidade_creditos = Column(Integer, nullable=False)
+    valor_centavos = Column(Integer, nullable=True)
+    saldo_antes = Column(Integer, nullable=True)
+    saldo_depois = Column(Integer, nullable=True)
+    chave_idempotencia = Column(String(120), nullable=False)
+    pacote_id = Column(String(40), nullable=True)
+    descricao = Column(String(240), nullable=False)
+    asaas_pagamento_id = Column("asaas_pagamento_id", String(80), nullable=True)
+    codigo_qr_pix = Column("codigo_qr_pix", Text, nullable=True)
+    codigo_copia_cola_pix = Column("codigo_copia_cola_pix", Text, nullable=True)
+    pix_expira_em = Column(DateTime, nullable=True)
+    criado_em = Column(DateTime, nullable=False, default=datetime.utcnow)
+    confirmado_em = Column(DateTime, nullable=True)
+
 class CertificateRequest(Base):
     __tablename__ = "solicitacoes_certidoes"
     __table_args__ = (Index("ix_solicitacoes_certidoes_escopo_criado_em", "organizacao_id", "usuario_id", "criado_em"),)

@@ -19,7 +19,7 @@ O banco MySQL é compartilhado com os microserviços `svc-*`. Os modelos represe
 ## Componentes
 
 - `app/main.py`: composição FastAPI, CORS e registro de routers.
-- `app/api/routes/`: 10 routers separados por domínio.
+- `app/api/routes/`: routers separados por domínio.
 - `app/api/schemas/schemas.py`: contratos Pydantic existentes.
 - `app/infrastructure/database/models.py`: enums e modelos SQLAlchemy.
 - `app/infrastructure/security/jwt_provider.py`: emissão e verificação de JWT.
@@ -38,6 +38,17 @@ Os principais grupos de rotas estão em `app/api/routes/`:
 - `/health`, `/k1/lex/health` e `/debug/db-status`
 
 Os 102 handlers extraídos mantêm os decorators e aliases originais, incluindo caminhos sem prefixo e `/v1/lex/*`. Consulte os decorators para métodos e status HTTP exatos.
+
+## Carteira KeaCredits
+
+- `GET /k1/lex/kea-store/carteira`: saldo de KeaCredits da organização autenticada (`saldoKeaCredits`).
+- `GET /k1/lex/kea-store/pacotes`: pacotes disponíveis e preço em centavos.
+- `POST /k1/lex/kea-store/recargas` com `Idempotency-Key` e `{ "packageId": "essencial|escritorio|pro" }`: cria uma cobrança PIX avulsa no Asaas e retorna QR Code/copia e cola.
+- `GET /k1/lex/kea-store/recargas/{id}`: consulta situação da recarga e o saldo atualizado.
+- O saldo só é creditado ao receber `PAYMENT_RECEIVED` no webhook Asaas existente (`/k1/lex/auth/asaas-webhook`). Configure também os eventos de recebimento, estorno, vencimento e exclusão de cobrança.
+- Execute `migrations/create_kea_credits.sql` antes de publicar o backend; `create_all()` não altera bancos já existentes.
+- Pacotes iniciais: 100 KeaCredits por R$ 10, 300 por R$ 30 e 600 por R$ 60. Ajuste esses valores no caso de uso e na interface antes de qualquer alteração comercial.
+- A consulta CND oficial reserva 10 créditos antes da chamada ao Conecta; o lançamento é confirmado quando a API responde. Falha de conexão devolve a reserva. Emissores via portal manual não debitam créditos.
 
 ## Arquitetura desejada para alterações futuras
 

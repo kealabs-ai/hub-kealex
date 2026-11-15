@@ -45,6 +45,7 @@ from app.legacy_context import (
     verify_identity_token,
     verify_token,
 )
+from app.application.use_cases.kea_credits import apply_recharge_webhook
 
 router = APIRouter()
 
@@ -312,6 +313,7 @@ async def asaas_webhook(
 
     # ── Extrai subscription_id ───────────────────────────────────────────────
     payment      = event.get("payment") or {}
+    wallet_recharge_processed = apply_recharge_webhook(db, event_name, payment)
     subscription = event.get("subscription") or {}
     subscription_id = (
         payment.get("subscription")
@@ -322,7 +324,7 @@ async def asaas_webhook(
     if not subscription_id:
         logging.info("[WEBHOOK] Evento sem subscription_id ignorado: %s", event_name)
         db.commit()
-        return {"ok": True, "ignored": True}
+        return {"ok": True, "ignored": not wallet_recharge_processed, "walletRecharge": wallet_recharge_processed}
 
     tenant = db.query(Tenant).filter_by(asaas_subscription_id=subscription_id).first()
     if not tenant:
