@@ -22,6 +22,14 @@ O banco aceita `KEALEX_DATABASE_URL` ou as variáveis `KEALEX_DB_HOST`, `KEALEX_
 
 Nunca copiar valores reais de `.env` para documentação, testes ou logs. `create_all()` não migra tabelas existentes.
 
+## KeaCredits e recargas
+
+A carteira é por organização (`carteiras_keacreditos`) e mantém um razão auditável de alterações em `transacoes_keacreditos`. Execute `migrations/create_kea_credits.sql` nos bancos existentes. O saldo somente muda por operações autenticadas do backend ou pela confirmação idempotente do webhook Asaas; o navegador nunca informa o valor a creditar.
+
+As recargas PIX usam o cliente Asaas já vinculado ao tenant. O pagamento precisa chegar ao evento `PAYMENT_RECEIVED` antes de liberar os créditos; `PAYMENT_CONFIRMED` não libera saldo. O webhook deve continuar autenticado pelo `asaas-access-token` configurado no serviço.
+
+A tabela de custos por consulta fica em `app/application/use_cases/kea_credits.py`. Antes de habilitar um novo provedor, integre o débito/reserva ao caso de uso que faz a consulta e configure o custo em KeaCredits no backend; não aceite quantidade de créditos enviada pelo navegador.
+
 ## Organização do código
 
 - Composição FastAPI e CORS: `app/main.py`.
