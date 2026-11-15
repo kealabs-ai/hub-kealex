@@ -6,12 +6,17 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
-from app.application.use_cases.certificates import (PROVIDERS, availability_for, create_request, document_content, get_owned_request, list_requests, provider_catalog, requirements_for, serialize_request, upload_document)
+from app.application.use_cases.certificates import (PROVIDERS, availability_for, continue_cnd_request, create_request, document_content, get_owned_request, list_requests, provider_catalog, requirements_for, serialize_request, upload_document)
 from app.infrastructure.database.models import CertificateAuditLog, CertificateDocument
 from app.infrastructure.database.session import get_db
 from app.infrastructure.security.jwt_provider import verify_token
 
 router = APIRouter(prefix="/api/v1/certificates", tags=["certificates"])
+
+
+class CertificateContinueIn(BaseModel):
+    fields: dict[str, str] = Field(min_length=1)
+    key: str = Field(min_length=1, max_length=200)
 
 
 class CertificateRequestIn(BaseModel):
@@ -54,6 +59,13 @@ def provider_requirements(provider: str, payload=Depends(verify_token)):
 def request_certificate(body: CertificateRequestIn, payload=Depends(verify_token), db: Session = Depends(get_db)):
     _identity(payload)
     return create_request(db, payload, body.provider, body.fields)
+
+
+@router.post("/requests/{request_id}/continue")
+def continue_certificate_request(request_id: str, body: CertificateContinueIn, payload=Depends(verify_token), db: Session = Depends(get_db)):
+    tenant_id, user_id = _identity(payload)
+    row = get_owned_request(db, tenant_id, user_id, request_id)
+    return continue_cnd_request(db, row, user_id, body.fields, body.key)
 
 
 @router.get("/requests")
