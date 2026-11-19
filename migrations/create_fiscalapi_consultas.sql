@@ -1,0 +1,41 @@
+CREATE TABLE IF NOT EXISTS consultas_fiscalapi (
+    id VARCHAR(36) NOT NULL PRIMARY KEY,
+    organizacao_id VARCHAR(36) NOT NULL,
+    usuario_id VARCHAR(36) NOT NULL,
+    servico VARCHAR(50) NOT NULL,
+    fornecedor VARCHAR(40) NOT NULL,
+    chave_idempotencia VARCHAR(120) NOT NULL,
+    hash_solicitacao CHAR(64) NOT NULL,
+    tipo_identificador VARCHAR(10) NULL,
+    identificador_mascarado VARCHAR(40) NULL,
+    hash_identificador CHAR(64) NULL,
+    id_requisicao_fornecedor VARCHAR(100) NULL,
+    status VARCHAR(30) NOT NULL,
+    documento_disponivel BOOLEAN NOT NULL DEFAULT FALSE,
+    resultado_json LONGTEXT NULL,
+    resposta_original_json LONGTEXT NULL,
+    codigo_erro VARCHAR(80) NULL,
+    erro_publico VARCHAR(240) NULL,
+    codigo_http_erro INT NULL,
+    repetir_apos VARCHAR(20) NULL,
+    custo_operacional_centavos INT NULL,
+    criado_em DATETIME NOT NULL,
+    concluido_em DATETIME NULL,
+    CONSTRAINT uq_consultas_fiscalapi_idempotencia UNIQUE (organizacao_id, usuario_id, chave_idempotencia),
+    CONSTRAINT fk_consultas_fiscalapi_organizacao FOREIGN KEY (organizacao_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    CONSTRAINT fk_consultas_fiscalapi_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    INDEX ix_consultas_fiscalapi_escopo_data (organizacao_id, usuario_id, criado_em),
+    INDEX ix_consultas_fiscalapi_servico_status (organizacao_id, servico, status)
+);
+
+CREATE TABLE IF NOT EXISTS documentos_fiscalapi (
+    id VARCHAR(36) NOT NULL PRIMARY KEY,
+    consulta_id VARCHAR(36) NOT NULL,
+    hash_arquivo CHAR(64) NOT NULL,
+    nome_arquivo VARCHAR(180) NOT NULL,
+    arquivo_criptografado MEDIUMBLOB NOT NULL,
+    tamanho_bytes INT NOT NULL,
+    criado_em DATETIME NOT NULL,
+    CONSTRAINT uq_documentos_fiscalapi_consulta UNIQUE (consulta_id),
+    CONSTRAINT fk_documentos_fiscalapi_consulta FOREIGN KEY (consulta_id) REFERENCES consultas_fiscalapi(id) ON DELETE CASCADE
+);

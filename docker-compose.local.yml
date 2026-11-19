@@ -81,6 +81,35 @@ services:
       retries: 3
       start_period: 40s
 
+  kealex-svc-integracoes:
+    build: ./svc-integracoes
+    image: kealex/svc-integracoes:latest
+    container_name: kealex-svc-integracoes
+    environment:
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY}
+      - KEALEX_DB_HOST=${KEALEX_DB_HOST}
+      - KEALEX_DB_PORT=${KEALEX_DB_PORT}
+      - KEALEX_DB_NAME=${KEALEX_DB_NAME}
+      - KEALEX_DB_USER=${KEALEX_DB_USER}
+      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
+      - FISCALAPI_ENABLED=${FISCALAPI_ENABLED:-false}
+      - FISCALAPI_BASE_URL=${FISCALAPI_BASE_URL:-https://api.fiscalapi.com.br}
+      - FISCALAPI_API_KEY=${FISCALAPI_API_KEY:-}
+      - FISCALAPI_TIMEOUT=${FISCALAPI_TIMEOUT:-75}
+      - FISCALAPI_RATE_LIMIT_PER_MINUTE=${FISCALAPI_RATE_LIMIT_PER_MINUTE:-30}
+    networks:
+      kealex-network:
+        aliases:
+          - svc-integracoes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
   kealex-svc-financeiro:
     build: ./svc-financeiro
     image: kealex/svc-financeiro:latest
@@ -237,6 +266,7 @@ services:
       - kealex-svc-auth
       - kealex-svc-processos
       - kealex-svc-documentos
+      - kealex-svc-integracoes
       - kealex-svc-financeiro
       - kealex-svc-prazos
       - kealex-svc-usuarios

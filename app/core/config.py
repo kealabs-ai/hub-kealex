@@ -69,4 +69,11 @@ KEALEX_ASAAS_API_KEY = os.getenv("KEALEX_ASAAS_API_KEY", "")
 ASAAS_BASE = os.getenv("KEALEX_ASAAS_BASE_URL", "").rstrip("/")
 KEALEX_ASAAS_WEBHOOK_TOKEN = os.getenv("KEALEX_ASAAS_WEBHOOK_TOKEN", "")
 
+FISCALAPI_BASE_URL = os.getenv("FISCALAPI_BASE_URL", "https://api.fiscalapi.com.br").rstrip("/")
+FISCALAPI_API_KEY = os.getenv("FISCALAPI_API_KEY", "").strip()
+FISCALAPI_TIMEOUT = os.getenv("FISCALAPI_TIMEOUT", "75")
+FISCALAPI_ENABLED = os.getenv("FISCALAPI_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+
 __all__ = [name for name in globals() if not name.startswith("__")]
+
+FISCALAPI_RATE_LIMIT_PER_MINUTE = max(0, int(os.getenv("FISCALAPI_RATE_LIMIT_PER_MINUTE", "30")))
