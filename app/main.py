@@ -11,6 +11,7 @@ from app.api.routes.ai_routes import router as ai_router
 from app.api.routes.auth_routes import router as auth_router
 from app.api.routes.certificate_routes import router as certificate_router
 from app.api.routes.kea_credits_routes import router as kea_credits_router
+from app.api.routes.gestao_routes import router as gestao_router
 from app.api.routes.billing_routes import router as billing_router
 from app.api.routes.process_routes import router as process_router
 from app.api.routes.public_key_routes import router as public_key_router
@@ -48,5 +49,6 @@ for router in (
     admin_config_router,
     certificate_router,
     kea_credits_router,
+    gestao_router,
 ):
     app.include_router(router)
