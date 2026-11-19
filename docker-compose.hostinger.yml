@@ -17,6 +17,7 @@ services:
       - svc-escritorios
       - svc-usuarios
       - svc-documentos
+      - svc-integracoes
       - svc-configuracoes
     volumes:
       - ./api-gateway/nginx.conf:/etc/nginx/conf.d/default.conf:ro
@@ -129,6 +130,32 @@ services:
           memory: 512M
         reservations:
           memory: 256M
+
+  svc-integracoes:
+    build: ./svc-integracoes
+    container_name: kealex-svc-integracoes
+    environment:
+      - KEALEX_SECRET_KEY=${KEALEX_SECRET_KEY:-${KEALEX_JWT_SECRET}}
+      - KEALEX_DB_HOST=${KEALEX_DB_HOST}
+      - KEALEX_DB_PORT=${KEALEX_DB_PORT:-3306}
+      - KEALEX_DB_NAME=${KEALEX_DB_NAME}
+      - KEALEX_DB_USER=${KEALEX_DB_USER}
+      - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
+      - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
+      - FISCALAPI_ENABLED=${FISCALAPI_ENABLED:-false}
+      - FISCALAPI_BASE_URL=${FISCALAPI_BASE_URL:-https://api.fiscalapi.com.br}
+      - FISCALAPI_API_KEY=${FISCALAPI_API_KEY:-}
+      - FISCALAPI_TIMEOUT=${FISCALAPI_TIMEOUT:-75}
+      - FISCALAPI_RATE_LIMIT_PER_MINUTE=${FISCALAPI_RATE_LIMIT_PER_MINUTE:-30}
+    networks:
+      - kealex-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   svc-financeiro:
     build: ./svc-financeiro

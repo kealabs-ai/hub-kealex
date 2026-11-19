@@ -30,6 +30,12 @@ As recargas PIX usam o cliente Asaas já vinculado ao tenant. O pagamento precis
 
 A tabela de custos por consulta fica em `app/application/use_cases/kea_credits.py`. Antes de habilitar um novo provedor, integre o débito/reserva ao caso de uso que faz a consulta e configure o custo em KeaCredits no backend; não aceite quantidade de créditos enviada pelo navegador.
 
+## FiscalAPI
+
+A integração FiscalAPI está isolada no microserviço svc-integracoes (svc-integracoes/app/infrastructure/fiscalapi_adapter.py, svc-integracoes/app/application/use_cases/fiscalapi_certificates.py e svc-integracoes/app/api/routes/fiscalapi_routes.py). O backend central não monta mais essas rotas. Configure FISCALAPI_ENABLED, FISCALAPI_BASE_URL, FISCALAPI_API_KEY, FISCALAPI_TIMEOUT e FISCALAPI_RATE_LIMIT_PER_MINUTE no ambiente do serviço, sem registrar a chave.
+
+O histórico isolado por organização/usuário usa `consultas_fiscalapi` e PDFs cifrados em `documentos_fiscalapi`; a migration correspondente deve ser executada antes do deploy. POSTs exigem `Idempotency-Key`, sem retries automáticos ao fornecedor. O custo da assinatura depende do plano FiscalAPI e permanece nulo no histórico quando desconhecido; a integração não debita KeaCredits. Testes devem usar `httpx.MockTransport`, nunca consultar a API paga.
+
 ## Organização do código
 
 - Composição FastAPI e CORS: `app/main.py`.

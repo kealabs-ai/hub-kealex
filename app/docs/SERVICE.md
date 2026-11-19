@@ -50,6 +50,23 @@ Os 102 handlers extraídos mantêm os decorators e aliases originais, incluindo 
 - Pacotes iniciais: 100 KeaCredits por R$ 10, 300 por R$ 30 e 600 por R$ 60. Ajuste esses valores no caso de uso e na interface antes de qualquer alteração comercial.
 - A consulta CND oficial reserva 10 créditos antes da chamada ao Conecta; o lançamento é confirmado quando a API responde. Falha de conexão devolve a reserva. Emissores via portal manual não debitam créditos.
 
+## Integração FiscalAPI
+
+A integração FiscalAPI roda em svc-integracoes, publicada pelo gateway na rota /api/v1/certidoes. Habilite FISCALAPI_ENABLED=true e configure FISCALAPI_API_KEY no ambiente desse serviço. FISCALAPI_BASE_URL deve permanecer em HTTPS no host oficial api.fiscalapi.com.br; FISCALAPI_TIMEOUT aceita segundos de 1 a 120 (padrão 75). A API key nunca é retornada ao cliente nem escrita em logs.
+
+Todas as rotas exigem JWT, role autorizada e tenant autenticado. Cada POST também exige `Idempotency-Key`; reutilizar a chave com o mesmo corpo devolve a consulta armazenada, e reutilizá-la com outro corpo retorna 409 para evitar cobrança duplicada.
+
+- `POST /api/v1/certidoes/consulta-ie`: `{ "uf": "SP", "cnpj": "11222333000181" }`; informe exatamente um entre `cpf`, `cnpj` e `ie`. A rota externa documentada é `GET /api/consultar`, com uma UF por chamada e suporte às 27 UFs.
+- `POST /api/v1/certidoes/enriquecimento`: `{ "tipo": "cnpj", "cnpj": "11222333000181", "force_fresh": false }` ou `tipo: "simples_nacional"`. São expostas somente as duas modalidades documentadas nesta integração.
+- `POST /api/v1/certidoes/cnd-estadual`: `{ "uf": "SP", "cnpj": "11222333000181" }` ou CPF; a API oficial exige CPF ou CNPJ e UF.
+- `POST /api/v1/certidoes/federais`: `tipo` aceita `cndt`, `crf_fgts` e `cnd_federal`. A documentação oficial confirma a rota RFB/PGFN individual por CNPJ; `emitir_nova` só é enviado para esse tipo.
+- `POST /api/v1/certidoes/sigef`: informe exatamente um `cpf` ou `cnpj` do detentor.
+- `GET /api/v1/certidoes/consultas/{id}` e `GET /api/v1/certidoes/consultas/{id}/documento`: consulta e baixa de resultado/PDF do próprio usuário e tenant.
+
+As respostas POST seguem `{ success, data, metadata, error }`. A área `data` preserva os campos da FiscalAPI úteis ao serviço; JSON de resultado e resposta original sem PDF são cifrados em repouso e guardados para auditoria. PDFs também são cifrados e baixados somente pela rota autenticada. Identificadores de entrada são armazenados apenas mascarados e com hash HMAC. A operação, usuário, tenant, fornecedor, status, identificador externo, horário e custo conhecido (nullable) ficam registrados. Nenhum custo é assumido nem debitado em KeaCredits.
+
+Execute `migrations/create_fiscalapi_consultas.sql` uma vez nos bancos existentes antes de publicar o backend. HTTP 404 é apresentado como registro não encontrado; credenciais/limite da conta do fornecedor viram erro 503 sanitizado, 429 preserva `Retry-After`, timeout retorna 504 e falha temporária do fornecedor retorna 503. Resultados 200 com `source_status` de erro ficam salvos como `FALHA_FONTE` sem repetir a consulta.
+
 ## Arquitetura desejada para alterações futuras
 
 - API: `app/api/routes/`, `app/api/schemas/` e `app/api/dependencies.py`.
