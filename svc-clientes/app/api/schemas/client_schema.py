@@ -6,7 +6,10 @@ class ClienteIn(BaseModel):
     email:       EmailStr
     telefone:    Optional[str] = None
     cpfCnpj:     Optional[str] = None
+    cep:         Optional[str] = None
     endereco:    Optional[str] = None
+    cidade:      Optional[str] = None
+    estado:      Optional[str] = None
     observacoes: Optional[str] = None
 
 class ClienteUpdate(BaseModel):
@@ -15,7 +18,10 @@ class ClienteUpdate(BaseModel):
     email:       Optional[EmailStr] = None
     telefone:    Optional[str]      = None
     cpfCnpj:     Optional[str]      = None
+    cep:         Optional[str]      = None
     endereco:    Optional[str]      = None
+    cidade:      Optional[str]      = None
+    estado:      Optional[str]      = None
     observacoes: Optional[str]      = None
 
 class ClienteGetIn(BaseModel):

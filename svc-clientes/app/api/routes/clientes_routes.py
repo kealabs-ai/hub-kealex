@@ -1,6 +1,11 @@
+import json
+import re
+from urllib.error import HTTPError as URLHTTPError, URLError
+from urllib.request import urlopen
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from app.api.dependencies import client_access_guard
 from app.api.schemas.client_schema import ClienteIn, ClienteUpdate, ClienteGetIn, ClienteDeleteIn
 from app.application.use_cases.client_presenter import client_to_dict
@@ -8,6 +13,26 @@ from app.infrastructure.database.models.client_model import Cliente
 from app.infrastructure.database.session import get_db
 
 router = APIRouter()
+
+
+@router.get("/v1/lex/clientes/cep/{cep}")
+def lookup_cep(cep: str, payload=Depends(client_access_guard)):
+    digits = re.sub(r"\D", "", cep)
+    if len(digits) != 8:
+        raise HTTPException(422, "Informe um CEP válido com 8 dígitos")
+    try:
+        with urlopen(f"https://viacep.com.br/ws/{digits}/json/", timeout=5) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    except (URLHTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(502, "Não foi possível consultar o CEP agora") from exc
+    if result.get("erro"):
+        raise HTTPException(404, "CEP não encontrado")
+    return {
+        "cep": result.get("cep", digits),
+        "endereco": result.get("logradouro", ""),
+        "cidade": result.get("localidade", ""),
+        "estado": result.get("uf", ""),
+    }
 
 @router.get("/v1/lex/clientes")
 def list_clientes(db: Session = Depends(get_db), payload=Depends(client_access_guard)):
@@ -41,7 +66,8 @@ def create_cliente(body: ClienteIn, db: Session = Depends(get_db), payload=Depen
     c = Cliente(
         tenant_id=tid, advogado_id=uid,
         nome=body.nome, email=body.email, telefone=body.telefone,
-        cpf_cnpj=body.cpfCnpj, endereco=body.endereco, observacoes=body.observacoes,
+        cpf_cnpj=body.cpfCnpj, cep=body.cep, endereco=body.endereco,
+        cidade=body.cidade, estado=body.estado, observacoes=body.observacoes,
     )
     db.add(c); db.commit(); db.refresh(c)
     return client_to_dict(c)
@@ -56,13 +82,28 @@ def update_cliente(body: ClienteUpdate, db: Session = Depends(get_db), payload=D
     c = q.first()
     if not c:
         raise HTTPException(404, "Não encontrado")
-    data = body.model_dump(exclude_none=True, exclude={"id"})
-    if "cpfCnpj" in data:
-        c.cpf_cnpj = data.pop("cpfCnpj")
-    for k, v in data.items():
-        setattr(c, k, v)
+    data = body.model_dump(exclude_unset=True, exclude_none=True, exclude={"id"})
+    if "email" in data and data["email"] != c.email:
+        duplicate = db.query(Cliente).filter(
+            Cliente.tenant_id == tid, Cliente.email == data["email"], Cliente.id != c.id
+        ).first()
+        if duplicate:
+            raise HTTPException(409, "Este e-mail j? est? cadastrado para outro cliente.")
+
+    field_map = {"cpfCnpj": "cpf_cnpj"}
+    allowed_fields = {"nome", "email", "telefone", "cpf_cnpj", "cep", "endereco", "cidade", "estado", "observacoes"}
+    for key, value in data.items():
+        field = field_map.get(key, key)
+        if field not in allowed_fields:
+            continue
+        setattr(c, field, value)
     c.updated_at = datetime.utcnow()
-    db.commit(); db.refresh(c)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, "N?o foi poss?vel salvar: verifique se o e-mail j? est? em uso.") from exc
+    db.refresh(c)
     return client_to_dict(c)
 
 

@@ -18,7 +18,8 @@ O `main.py` da raiz mantém compatibilidade com `uvicorn main:app` no Docker e i
 
 - Listar clientes do tenant autenticado.
 - Advogados veem e alteram apenas seus próprios clientes; administradores podem gerenciar os clientes do tenant.
-- Criar cliente com validação de e-mail e campos opcionais de contato.
+- Criar cliente com validação de e-mail e campos opcionais de contato e endereço (`cep`, `endereco`, `cidade`, `estado`).
+- Consultar CEP pelo ViaCEP para preencher endereço, cidade e estado.
 - Consultar, atualizar e excluir cliente por identificador.
 - Health check em `/health`.
 
@@ -34,7 +35,7 @@ O `main.py` da raiz mantém compatibilidade com `uvicorn main:app` no Docker e i
 - Todas as consultas e alterações filtram por `tenant_id`; para advogado, também por `advogado_id` derivado do token.
 - Apenas papéis `admin` e `advogado` podem acessar as rotas protegidas.
 - A criação não permite duplicar e-mail dentro do mesmo tenant.
-- Respostas mantêm campos camelCase, como `tenantId`, `advogadoId`, `cpfCnpj`, `createdAt` e `updatedAt`.
+- Respostas mantêm campos camelCase, como `tenantId`, `advogadoId`, `cpfCnpj`, `createdAt` e `updatedAt`; os campos do endereço são `cep`, `endereco`, `cidade` e `estado`.
 - Não altere schema sem migração versionada. `Base.metadata.create_all()` cria tabelas ausentes, mas não migra tabelas existentes.
 
 ## Como alterar
