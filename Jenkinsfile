@@ -110,7 +110,7 @@ pipeline {
                     for SERVICE in $SERVICES; do
                         echo "Verificando serviço Compose $SERVICE..."
                         SERVICE_READY=0
-                        for i in 1 2 3 4 5 6 7 8 9 10; do
+                        for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
                             CONTAINER_IDS=$($DOCKER compose -f "$COMPOSE_FILE" -p "$PROJETO" ps -q "$SERVICE")
                             ALL_READY=1
                             if [ -z "$CONTAINER_IDS" ]; then
@@ -118,7 +118,7 @@ pipeline {
                             else
                                 for CONTAINER_ID in $CONTAINER_IDS; do
                                     CONTAINER_STATE=$($DOCKER inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$CONTAINER_ID" 2>/dev/null || echo "missing")
-                                    echo "    Tentativa $i/10: $SERVICE ($CONTAINER_ID) = $CONTAINER_STATE"
+                                    echo "    Tentativa $i/20: $SERVICE ($CONTAINER_ID) = $CONTAINER_STATE"
                                     if [ "$CONTAINER_STATE" != "healthy" ] && [ "$CONTAINER_STATE" != "running" ]; then ALL_READY=0; fi
                                 done
                             fi
