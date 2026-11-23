@@ -90,6 +90,9 @@ services:
       - KEALEX_DB_PASSWORD=${KEALEX_DB_PASSWORD}
       - KEALEX_DATABASE_URL=${KEALEX_DATABASE_URL:-}
       - FISCALAPI_ENABLED=${FISCALAPI_ENABLED:-false}
+      - ESCAVADOR_API_ENABLED=${ESCAVADOR_API_ENABLED:-false}
+      - ESCAVADOR_API_TOKEN=${ESCAVADOR_API_TOKEN:-}
+      - ESCAVADOR_API_TIMEOUT=${ESCAVADOR_API_TIMEOUT:-30}
       - FISCALAPI_BASE_URL=${FISCALAPI_BASE_URL:-https://api.fiscalapi.com.br}
       - FISCALAPI_API_KEY=${FISCALAPI_API_KEY:-}
       - FISCALAPI_TIMEOUT=${FISCALAPI_TIMEOUT:-75}
@@ -97,7 +100,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=easypanel"
-      - "traefik.http.routers.kealex-integracoes.rule=Host(`${KEALEX_PUBLIC_API_HOST}`) && PathPrefix(`/api/v1/certidoes`)"
+      - "traefik.http.routers.kealex-integracoes.rule=Host(`${KEALEX_PUBLIC_API_HOST}`) && (PathPrefix(`/api/v1/certidoes`) || PathPrefix(`/api/v1/escavador`))"
       - "traefik.http.routers.kealex-integracoes.entrypoints=websecure"
       - "traefik.http.routers.kealex-integracoes.tls=true"
       - "traefik.http.routers.kealex-integracoes.middlewares=kealex-cors"

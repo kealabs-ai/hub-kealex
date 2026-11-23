@@ -23,3 +23,5 @@ class AppIntegrationTests(unittest.TestCase):
         paths = {route.path for route in app.routes}
         self.assertIn("/k1/lex/processos", paths)
         self.assertIn("/k1/lex/processos/avancar-fase", paths)
+        self.assertIn("/k1/lex/processos-acompanhados", paths)
+        self.assertIn("/k1/lex/processos-acompanhados/consultar", paths)

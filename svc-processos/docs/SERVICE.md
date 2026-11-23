@@ -15,6 +15,7 @@ Gerenciar processos jurídicos por tenant, incluindo vínculo com cliente/advoga
 ## Componentes
 
 - `process_routes.py`: listagem e CRUD de processos.
+- `tracked_process_routes.py`: consulta, atualiza??o sob demanda e listagem paginada de processos acompanhados.
 - `phase_routes.py`: avanço e consulta das próximas fases.
 - `debug_routes.py`: endpoints de diagnóstico já existentes.
 - `process_schema.py`: contratos Pydantic.

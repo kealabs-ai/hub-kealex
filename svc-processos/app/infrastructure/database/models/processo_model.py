@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, Enum as SAEnum
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, Enum as SAEnum, JSON, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, relationship
 from app.domain.entities.process_status import StatusEnum
 
@@ -51,3 +51,38 @@ class Fase(Base):
     updated_at    = Column(DateTime,     default=datetime.utcnow, onupdate=datetime.utcnow)
     processo      = relationship("Processo", back_populates="fases")
 
+
+
+class ProcessoAcompanhado(Base):
+    __tablename__ = "processos_acompanhados"
+    __table_args__ = (UniqueConstraint("tenant_id", "scope_key", "numero_processo", name="uq_processo_acompanhado_scope_numero"),)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id = Column(String(36), nullable=False, index=True)
+    user_id = Column(String(36), nullable=False)
+    scope_key = Column(String(36), nullable=False)
+    numero_processo = Column(String(20), nullable=False)
+    tribunal = Column(String(255), nullable=True)
+    classe_processual = Column(String(255), nullable=True)
+    assunto = Column(String(1000), nullable=True)
+    fase_atual = Column(String(255), nullable=True)
+    situacao = Column(String(255), nullable=True)
+    data_ultima_movimentacao = Column(String(100), nullable=True)
+    ultima_consulta_em = Column(DateTime, nullable=False, default=datetime.utcnow)
+    dados = Column(JSON, nullable=False, default=dict)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class HistoricoConsultaProcessual(Base):
+    __tablename__ = "historico_consultas_processuais"
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id = Column(String(36), nullable=False, index=True)
+    processo_id = Column(String(36), ForeignKey("processos_acompanhados.id"), nullable=True, index=True)
+    numero_processo = Column(String(20), nullable=False)
+    usuario_solicitante_id = Column(String(36), nullable=False)
+    fornecedor = Column(String(80), nullable=False, default="escavador")
+    status_http = Column(Integer, nullable=True)
+    status_consulta = Column(String(255), nullable=False)
+    houve_alteracao = Column(Integer, nullable=True)
+    data_ultima_movimentacao = Column(String(100), nullable=True)
+    consultado_em = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
