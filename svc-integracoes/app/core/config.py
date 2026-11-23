@@ -36,3 +36,7 @@ FISCALAPI_API_KEY = os.getenv("FISCALAPI_API_KEY", "").strip()
 FISCALAPI_TIMEOUT = os.getenv("FISCALAPI_TIMEOUT", "75")
 FISCALAPI_ENABLED = os.getenv("FISCALAPI_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
 FISCALAPI_RATE_LIMIT_PER_MINUTE = max(0, int(os.getenv("FISCALAPI_RATE_LIMIT_PER_MINUTE", "30")))
+
+ESCAVADOR_API_TOKEN = os.getenv('ESCAVADOR_API_TOKEN', '').strip()
+ESCAVADOR_API_ENABLED = os.getenv('ESCAVADOR_API_ENABLED', 'false').strip().lower() in {'1', 'true', 'yes', 'on'}
+ESCAVADOR_API_TIMEOUT = os.getenv('ESCAVADOR_API_TIMEOUT', '30')

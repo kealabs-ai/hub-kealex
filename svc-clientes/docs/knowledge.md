@@ -22,7 +22,7 @@
 
 ## Modelo e isolamento
 
-A tabela `clientes` contém `tenant_id`, `advogado_id`, nome, e-mail e campos de contato. `tenant_id` e `advogado_id` são vínculos lógicos ao restante do banco compartilhado.
+A tabela `clientes` contém `tenant_id`, `advogado_id`, nome, e-mail, campos de contato e endereço (`cep`, `endereco`, `cidade`, `estado`). `tenant_id` e `advogado_id` são vínculos lógicos ao restante do banco compartilhado. A migração `migrations/add_cliente_address_fields.sql` adiciona os campos de endereço sem substituir dados existentes.
 
 Todas as consultas restringem por tenant. Quando o token pertence a um advogado, as consultas e alterações também filtram por `advogado_id` do token. Não confie em identificadores de escopo enviados pelo cliente.
 
@@ -33,13 +33,14 @@ Prefixo: `/v1/lex/clientes`.
 | Método | Rota | Ação |
 |---|---|---|
 | GET | `/v1/lex/clientes` | Lista clientes do escopo autorizado. |
+| GET | `/v1/lex/clientes/cep/{cep}` | Consulta o ViaCEP e retorna CEP, endereço, cidade e UF. |
 | POST | `/v1/lex/clientes` | Cria cliente; responde HTTP 201. |
 | POST | `/v1/lex/clientes/get` | Consulta cliente por `id`. |
 | POST | `/v1/lex/clientes/update` | Atualiza campos fornecidos. |
 | POST | `/v1/lex/clientes/delete` | Exclui cliente por `id`. |
 | GET | `/health` | Retorna status do serviço. |
 
-O cadastro impede e-mail duplicado dentro do tenant. Respostas mantêm nomes camelCase (`tenantId`, `advogadoId`, `cpfCnpj`, `createdAt`, `updatedAt`).
+O cadastro impede e-mail duplicado dentro do tenant. Respostas mantêm nomes camelCase (`tenantId`, `advogadoId`, `cpfCnpj`, `createdAt`, `updatedAt`) e incluem os campos de endereço. O formulário pode consultar o endpoint de CEP após 8 dígitos para preencher endereço, cidade e estado automaticamente.
 
 ## Autorização
 
