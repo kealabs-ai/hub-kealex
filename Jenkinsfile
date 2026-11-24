@@ -105,7 +105,7 @@ pipeline {
 
                     cd "$DEPLOY_PATH"
                     COMPOSE_FILE="docker-compose.yml"
-                    SERVICES="rabbitmq hubkealex kealex-svc-auth kealex-svc-auth-worker kealex-svc-usuarios kealex-svc-escritorios svc-activities svc-cobrancas kealex-svc-configuracoes svc-arquivos"
+                    SERVICES="rabbitmq hubkealex kealex-svc-auth kealex-svc-auth-worker kealex-svc-usuarios kealex-svc-escritorios kealex-svc-clientes svc-activities svc-cobrancas kealex-svc-configuracoes svc-arquivos"
 
                     for SERVICE in $SERVICES; do
                         echo "Verificando serviço Compose $SERVICE..."
