@@ -15,6 +15,7 @@ from app.infrastructure.database.session import get_db
 router = APIRouter()
 
 
+@router.get("/v1/lex/clientes/cep/{cep}")
 @router.get("/k1/lex/clientes/cep/{cep}")
 @router.get("/clientes/cep/{cep}")
 def lookup_cep(cep: str, payload=Depends(client_access_guard)):
@@ -35,6 +36,7 @@ def lookup_cep(cep: str, payload=Depends(client_access_guard)):
         "estado": result.get("uf", ""),
     }
 
+@router.get("/v1/lex/clientes")
 @router.get("/k1/lex/clientes")
 @router.get("/clientes")
 def list_clientes(db: Session = Depends(get_db), payload=Depends(client_access_guard)):
@@ -47,6 +49,7 @@ def list_clientes(db: Session = Depends(get_db), payload=Depends(client_access_g
     return [client_to_dict(c) for c in q.all()]
 
 
+@router.post("/v1/lex/clientes/get")
 @router.post("/k1/lex/clientes/get")
 @router.post("/clientes/get")
 def get_cliente(body: ClienteGetIn, db: Session = Depends(get_db), payload=Depends(client_access_guard)):
@@ -60,6 +63,7 @@ def get_cliente(body: ClienteGetIn, db: Session = Depends(get_db), payload=Depen
     return client_to_dict(c)
 
 
+@router.post("/v1/lex/clientes", status_code=201)
 @router.post("/k1/lex/clientes", status_code=201)
 @router.post("/clientes", status_code=201)
 def create_cliente(body: ClienteIn, db: Session = Depends(get_db), payload=Depends(client_access_guard)):
@@ -77,6 +81,7 @@ def create_cliente(body: ClienteIn, db: Session = Depends(get_db), payload=Depen
     return client_to_dict(c)
 
 
+@router.post("/v1/lex/clientes/update")
 @router.post("/k1/lex/clientes/update")
 @router.post("/clientes/update")
 def update_cliente(body: ClienteUpdate, db: Session = Depends(get_db), payload=Depends(client_access_guard)):
@@ -112,6 +117,7 @@ def update_cliente(body: ClienteUpdate, db: Session = Depends(get_db), payload=D
     return client_to_dict(c)
 
 
+@router.post("/v1/lex/clientes/delete")
 @router.post("/k1/lex/clientes/delete")
 @router.post("/clientes/delete")
 def delete_cliente(body: ClienteDeleteIn, db: Session = Depends(get_db), payload=Depends(client_access_guard)):
