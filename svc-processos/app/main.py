@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes.debug_routes import router as debug_router
 from app.api.routes.phase_routes import router as phase_router
 from app.api.routes.process_routes import router as process_router
+from app.api.routes.process_client_routes import router as process_client_router
 from app.api.routes.tracked_process_routes import router as tracked_process_router
 from app.infrastructure.database.models.processo_model import Base
 from app.infrastructure.database.session import engine
@@ -18,6 +19,7 @@ logging.basicConfig(
 app = FastAPI(title="svc-processos")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 app.include_router(process_router)
+app.include_router(process_client_router)
 app.include_router(tracked_process_router)
 app.include_router(phase_router)
 app.include_router(debug_router)

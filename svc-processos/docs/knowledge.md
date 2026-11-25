@@ -9,6 +9,8 @@ API FastAPI para processos jurídicos e seu fluxo de fases. `main.py` na raiz co
 - `processos`: tenant, usuário, escritório, número, título, descrição, status, advogado, cliente, vara, tribunal e fase atual.
 - `fases`: fases ordenadas do processo, com estado, data de conclusão e relação com `processos`.
 - `clientes`: modelo local usado para enriquecer respostas; os dados são compartilhados com `svc-clientes`.
+- `processo_clientes`: relação entre processos e clientes existentes, com posição/polo processual, cliente principal e snapshot cadastral.
+- `processo_partes`: demais partes envolvidas, sem exigir cadastro de cliente.
 
 Os nomes de tabelas, colunas, enums e relacionamento devem permanecer compatíveis com os serviços que consomem o banco compartilhado.
 
@@ -16,6 +18,8 @@ Os nomes de tabelas, colunas, enums e relacionamento devem permanecer compatíve
 
 - CRUD e listagem: `/k1/lex/processos`, `/get`, `/update` e `/delete`.
 - Avanço de fase: `POST /k1/lex/processos/avancar-fase`.
+- Clientes vinculados: `GET/POST/PUT /k1/lex/processos/{id}/clients`, `PATCH/DELETE /k1/lex/processos/{id}/clients/{clientId}`.
+- Demais partes: `GET/POST/PUT /k1/lex/processos/{id}/parties`.
 - Próximas fases: `POST /k1/lex/processos/{processo_id}/proximas-fases`.
 - Diagnóstico autenticado: `/k1/lex/processos/{processo_id}/debug-fases`, `/k1/lex/debug/todas-fases`, `/k1/lex/debug/todos-processos` e `/k1/lex/debug/status-completo`.
 - Health check: `GET /health`, resposta `{"status":"healthy","service":"svc-processos"}`.
@@ -25,6 +29,8 @@ As respostas usam camelCase nos campos públicos. A criação verifica o cliente
 ## Autorização
 
 As rotas validam JWT e o estado atual do tenant no MySQL. O escopo do processo depende do papel: administradores têm acesso no tenant, advogados aos processos de sua autoria/atribuição e clientes aos próprios processos. Não remova o filtro por tenant.
+
+Os vínculos a clientes filtram também por tenant e, para advogados, pelo advogado responsável. O cadastro original não é duplicado nem excluído ao desvincular. Antes de publicar, aplique primeiro `migrations/20261125_client_qualification_fields.sql` no banco compartilhado e depois `migrations/process_client_link.sql`; a segunda migração cria os relacionamentos e converte os vínculos antigos de `processos.cliente_id` em cliente principal.
 
 ## Configuração e execução
 

@@ -15,6 +15,7 @@ Gerenciar processos jurídicos por tenant, incluindo vínculo com cliente/advoga
 ## Componentes
 
 - `process_routes.py`: listagem e CRUD de processos.
+- `process_client_routes.py`: pesquisa paginada e vínculos processuais de clientes e demais partes.
 - `tracked_process_routes.py`: consulta, atualiza??o sob demanda e listagem paginada de processos acompanhados.
 - `phase_routes.py`: avanço e consulta das próximas fases.
 - `debug_routes.py`: endpoints de diagnóstico já existentes.
@@ -39,6 +40,7 @@ Gerenciar processos jurídicos por tenant, incluindo vínculo com cliente/advoga
 - O avanço atualiza status de fases e `fase_atual` do processo.
 - Preserve tabelas, relacionamentos, status, caminhos `/k1/lex/processos` e respostas atuais.
 - Mudanças de schema compartilhado exigem migração versionada.
+- Para adicionar vínculos cliente-processo ou demais partes, aplique `migrations/20261125_client_qualification_fields.sql` e depois `migrations/process_client_link.sql` antes da publicação.
 
 ## Como alterar
 

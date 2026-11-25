@@ -17,8 +17,9 @@ O `main.py` da raiz mantém compatibilidade com `uvicorn main:app` no Docker e i
 ## Funcionalidades
 
 - Listar clientes do tenant autenticado.
+- Pesquisar clientes no tenant autenticado com paginação para seletores processuais.
 - Advogados veem e alteram apenas seus próprios clientes; administradores podem gerenciar os clientes do tenant.
-- Criar cliente com validação de e-mail e campos opcionais de contato e endereço (`cep`, `endereco`, `cidade`, `estado`).
+- Criar cliente com validação de e-mail, contato, endereço e qualificação pessoal/empresarial; aplicar `migrations/20261125_client_qualification_fields.sql` em bancos existentes.
 - Consultar CEP pelo ViaCEP para preencher endereço, cidade e estado.
 - Consultar, atualizar e excluir cliente por identificador.
 - Health check em `/health`.

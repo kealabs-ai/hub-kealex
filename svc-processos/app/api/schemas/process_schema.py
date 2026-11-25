@@ -1,5 +1,5 @@
-from typing import Optional
-from pydantic import BaseModel
+from typing import Optional, List
+from pydantic import BaseModel, Field
 from app.domain.entities.process_status import StatusEnum
 
 class ProcessoIn(BaseModel):
@@ -10,6 +10,7 @@ class ProcessoIn(BaseModel):
     vara:         str = ""
     tribunal:     str = ""
     escritorioId: Optional[str] = None
+    clientesVinculados: List[dict] = Field(default_factory=list)
 
 class ProcessoGetIn(BaseModel):
     id: str
@@ -33,4 +34,38 @@ class FaseIn(BaseModel):
 class AvancarFaseIn(BaseModel):
     processoId: str
     faseAtual: int
+
+
+class ProcessoClienteIn(BaseModel):
+    clienteId: str
+    proceduralRole: str = "Interessado"
+    proceduralPole: Optional[str] = None
+    isPrimary: bool = False
+    notes: Optional[str] = None
+
+
+class ProcessoClientesReplaceIn(BaseModel):
+    clientes: List[ProcessoClienteIn]
+
+
+class ProcessoClienteUpdate(BaseModel):
+    proceduralRole: Optional[str] = None
+    proceduralPole: Optional[str] = None
+    isPrimary: Optional[bool] = None
+    notes: Optional[str] = None
+
+
+class ProcessoParteIn(BaseModel):
+    name: str
+    personType: str = "fisica"
+    document: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    proceduralRole: str = "Interessado"
+    isUnknown: bool = False
+
+
+class ProcessoPartesReplaceIn(BaseModel):
+    partes: List[ProcessoParteIn] = Field(default_factory=list)
 

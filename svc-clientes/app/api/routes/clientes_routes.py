@@ -3,7 +3,8 @@ import re
 from urllib.error import HTTPError as URLHTTPError, URLError
 from urllib.request import urlopen
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from app.api.dependencies import client_access_guard
@@ -49,6 +50,30 @@ def list_clientes(db: Session = Depends(get_db), payload=Depends(client_access_g
     return [client_to_dict(c) for c in q.all()]
 
 
+@router.get("/v1/lex/clientes/search")
+@router.get("/k1/lex/clientes/search")
+@router.get("/clientes/search")
+def search_clientes(
+    q: str = Query("", max_length=120), page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db), payload=Depends(client_access_guard),
+):
+    tid, role, uid = payload.get("tenant_id"), payload.get("role"), payload.get("sub")
+    query = db.query(Cliente).filter_by(tenant_id=tid)
+    if role == "advogado":
+        query = query.filter_by(advogado_id=uid)
+    term = q.strip()
+    if term:
+        pattern = f"%{term}%"
+        query = query.filter(or_(Cliente.nome.ilike(pattern), Cliente.razao_social.ilike(pattern),
+                                 Cliente.nome_fantasia.ilike(pattern), Cliente.email.ilike(pattern),
+                                 Cliente.cpf_cnpj.ilike(pattern), Cliente.id.ilike(pattern)))
+    total = query.count()
+    clients = query.order_by(Cliente.nome.asc()).offset((page - 1) * page_size).limit(page_size).all()
+    return {"items": [client_to_dict(c) for c in clients], "total": total,
+            "page": page, "pageSize": page_size}
+
+
 @router.post("/v1/lex/clientes/get")
 @router.post("/k1/lex/clientes/get")
 @router.post("/clientes/get")
@@ -75,7 +100,13 @@ def create_cliente(body: ClienteIn, db: Session = Depends(get_db), payload=Depen
         tenant_id=tid, advogado_id=uid,
         nome=body.nome, email=body.email, telefone=body.telefone,
         cpf_cnpj=body.cpfCnpj, cep=body.cep, endereco=body.endereco,
-        cidade=body.cidade, estado=body.estado, observacoes=body.observacoes,
+        cidade=body.cidade, estado=body.estado, rg=body.rg,
+        orgao_expedidor=body.orgaoExpedidor, nacionalidade=body.nacionalidade,
+        estado_civil=body.estadoCivil, profissao=body.profissao,
+        data_nascimento=body.dataNascimento, razao_social=body.razaoSocial,
+        nome_fantasia=body.nomeFantasia, inscricao_estadual=body.inscricaoEstadual,
+        inscricao_municipal=body.inscricaoMunicipal, representante_legal=body.representanteLegal,
+        whatsapp=body.whatsapp, observacoes=body.observacoes,
     )
     db.add(c); db.commit(); db.refresh(c)
     return client_to_dict(c)
@@ -100,8 +131,15 @@ def update_cliente(body: ClienteUpdate, db: Session = Depends(get_db), payload=D
         if duplicate:
             raise HTTPException(409, "Este e-mail j? est? cadastrado para outro cliente.")
 
-    field_map = {"cpfCnpj": "cpf_cnpj"}
-    allowed_fields = {"nome", "email", "telefone", "cpf_cnpj", "cep", "endereco", "cidade", "estado", "observacoes"}
+    field_map = {"cpfCnpj": "cpf_cnpj", "orgaoExpedidor": "orgao_expedidor",
+                 "estadoCivil": "estado_civil", "dataNascimento": "data_nascimento",
+                 "razaoSocial": "razao_social", "nomeFantasia": "nome_fantasia",
+                 "inscricaoEstadual": "inscricao_estadual", "inscricaoMunicipal": "inscricao_municipal",
+                 "representanteLegal": "representante_legal"}
+    allowed_fields = {"nome", "email", "telefone", "cpf_cnpj", "cep", "endereco", "cidade", "estado",
+        "rg", "orgao_expedidor", "nacionalidade", "estado_civil", "profissao", "data_nascimento",
+        "razao_social", "nome_fantasia", "inscricao_estadual", "inscricao_municipal", "representante_legal",
+        "whatsapp", "observacoes"}
     for key, value in data.items():
         field = field_map.get(key, key)
         if field not in allowed_fields:
