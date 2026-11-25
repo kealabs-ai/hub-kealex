@@ -10,7 +10,7 @@ from app.application.use_cases.process_access import _scoped_process
 from app.application.use_cases.process_presenter import _enrich, _to_dict
 from app.application.use_cases.phase_queries import build_next_phases
 from app.domain.entities.process_status import StatusEnum
-from app.infrastructure.database.models.processo_model import Cliente, Fase, Processo
+from app.infrastructure.database.models.processo_model import Cliente, Fase, Processo, ProcessClient
 from app.infrastructure.database.session import get_db
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -75,6 +75,37 @@ def create_processo(body: ProcessoIn, db: Session = Depends(get_db), payload=Dep
             fase_atual=0
         )
         db.add(p)
+        requested_links = body.clientesVinculados or [{"clienteId": body.clienteId, "proceduralRole": "Interessado", "isPrimary": True}]
+        if not any(link.get("clienteId") == body.clienteId and link.get("isPrimary") for link in requested_links):
+            requested_links = [{"clienteId": body.clienteId, "proceduralRole": "Interessado", "isPrimary": True}, *requested_links]
+        if sum(bool(link.get("isPrimary")) for link in requested_links) != 1:
+            raise HTTPException(422, "O processo deve ter exatamente um cliente principal")
+        if len({link.get("clienteId") for link in requested_links}) != len(requested_links):
+            raise HTTPException(422, "Não repita clientes no mesmo processo")
+        for link in requested_links:
+            linked_query = db.query(Cliente).filter_by(id=link.get("clienteId"), tenant_id=tenant_id)
+            if payload.get("role") == "advogado":
+                linked_query = linked_query.filter_by(advogado_id=payload.get("sub"))
+            linked_client = linked_query.first()
+            if not linked_client:
+                raise HTTPException(404, "Cliente vinculado não encontrado neste escritório")
+            db.add(ProcessClient(
+                id=str(uuid.uuid4()), tenant_id=tenant_id, processo_id=process_id,
+                cliente_id=linked_client.id, posicao_processual=link.get("proceduralRole") or "Interessado",
+                polo_processual=link.get("proceduralPole"), cliente_principal=int(bool(link.get("isPrimary"))),
+                snapshot_qualificacao={"nome": linked_client.nome, "email": linked_client.email,
+                    "telefone": linked_client.telefone, "cpfCnpj": linked_client.cpf_cnpj,
+                    "cep": linked_client.cep, "endereco": linked_client.endereco,
+                    "cidade": linked_client.cidade, "estado": linked_client.estado,
+                    "rg": linked_client.rg, "orgaoExpedidor": linked_client.orgao_expedidor,
+                    "nacionalidade": linked_client.nacionalidade, "estadoCivil": linked_client.estado_civil,
+                    "profissao": linked_client.profissao, "dataNascimento": linked_client.data_nascimento,
+                    "razaoSocial": linked_client.razao_social, "nomeFantasia": linked_client.nome_fantasia,
+                    "inscricaoEstadual": linked_client.inscricao_estadual,
+                    "inscricaoMunicipal": linked_client.inscricao_municipal,
+                    "representanteLegal": linked_client.representante_legal, "whatsapp": linked_client.whatsapp},
+                observacoes=link.get("notes"), criado_por=payload["sub"], ativo=1,
+            ))
         db.commit()
         logger.info(f"[CREATE_PROCESSO] Processo criado com sucesso: {processo_id}")
         
@@ -109,6 +140,9 @@ def create_processo(body: ProcessoIn, db: Session = Depends(get_db), payload=Dep
         logger.info(f"[CREATE_PROCESSO] Processo criado com sucesso com {len(resultado.get('fases', []))} fases")
         return resultado
         
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         logger.error(f"[CREATE_PROCESSO] ERRO: {str(e)}", exc_info=True)
         db.rollback()
