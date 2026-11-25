@@ -46,7 +46,7 @@ class ModalConfig(BaseModel):
     """Configuração do modal"""
     tamanho: str = "md"  # sm, md, lg, xl
     centralizacao: bool = True
-    fechar_ao_clicar_fora: bool = True
+    fechar_ao_clicar_fora: bool = False
     mostrar_header: bool = True
     mostrar_footer: bool = True
     animacao: str = "fade"  # fade, slide, zoom
