@@ -1,4 +1,5 @@
 import uuid
+from typing import Union
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -103,13 +104,11 @@ def _save_links(process_id: str, body: ProcessoClientesReplaceIn, db: Session, p
     return [_link_dict(link, clients[link.cliente_id]) for link in db.query(ProcessClient).filter_by(processo_id=process.id, tenant_id=process.tenant_id, ativo=1).all()]
 
 
-@router.put("/k1/lex/processos/{process_id}/clients")
-def replace_process_clients(process_id: str, body: ProcessoClientesReplaceIn, db: Session = Depends(get_db), payload=Depends(auth_guard)):
-    return _save_links(process_id, body, db, payload)
-
-
 @router.post("/k1/lex/processos/{process_id}/clients")
-def add_process_client(process_id: str, body: ProcessoClienteIn, db: Session = Depends(get_db), payload=Depends(auth_guard)):
+def save_process_clients(process_id: str, body: Union[ProcessoClientesReplaceIn, ProcessoClienteIn], db: Session = Depends(get_db), payload=Depends(auth_guard)):
+    if isinstance(body, ProcessoClientesReplaceIn):
+        return _save_links(process_id, body, db, payload)
+
     existing = list_process_clients(process_id, db, payload)
     items = [ProcessoClienteIn(clienteId=x["id"], proceduralRole=x["proceduralRole"], proceduralPole=x["proceduralPole"], isPrimary=x["isPrimary"], notes=x["notes"]) for x in existing]
     if any(item.clienteId == body.clienteId for item in items):
