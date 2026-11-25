@@ -116,7 +116,7 @@ Todas as respostas com modal seguem este padrão:
     "config": {
       "tamanho": "md",
       "centralizacao": true,
-      "fechar_ao_clicar_fora": true,
+      "fechar_ao_clicar_fora": false,
       "mostrar_header": true,
       "mostrar_footer": true,
       "animacao": "fade"
